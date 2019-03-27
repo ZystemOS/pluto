@@ -33,3 +33,7 @@
 
 # Images
 *.iso
+*.bin
+
+# Intellij
+.idea/
