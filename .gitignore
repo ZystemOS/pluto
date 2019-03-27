@@ -33,3 +33,15 @@
 
 # Images
 *.iso
+*.bin
+
+# Intellij
+.idea/
+
+# Zig
+zig-cache
+
+# Build dir
+bin/*
+*.pyc
+__pycache__
