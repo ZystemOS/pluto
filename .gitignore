@@ -37,3 +37,6 @@
 
 # Intellij
 .idea/
+
+# Zig
+zig-cache/
