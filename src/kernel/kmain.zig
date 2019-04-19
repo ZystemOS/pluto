@@ -1,6 +1,6 @@
 //
 // kmain
-// Zig version: 
+// Zig version:
 // Author: DrDeano
 // Date: 2019-03-30
 //
@@ -17,17 +17,89 @@ const MEMINFO = 1 << 1;
 const MAGIC = 0x1BADB002;
 const FLAGS = ALIGN | MEMINFO;
 
-export var multiboot align(4) linksection(".multiboot") = MultiBoot {
+export var multiboot align(4) linksection(".rodata.boot") = MultiBoot{
     .magic = MAGIC,
     .flags = FLAGS,
     .checksum = -(MAGIC + FLAGS),
 };
 
-export var stack_bytes: [16 * 1024]u8 align(16) linksection(".bss") = undefined;
-const stack_bytes_slice = stack_bytes[0..];
+const KERNEL_ADDR_OFFSET = 0xC0000000;
+const KERNEL_PAGE_NUMBER = KERNEL_ADDR_OFFSET >> 22;
+// The number of pages occupied by the kernel, will need to be increased as we add a heap etc.
+const KERNEL_NUM_PAGES = 1;
 
-export nakedcc fn _start() noreturn {
-    @newStackCall(stack_bytes_slice, kmain);
+// The initial page directory used for booting into the higher half. Should be overwritten later
+export var boot_page_directory: [1024]u32 align(4096) linksection(".rodata.boot") = init: {
+    // Temp value
+    var dir: [1024]u32 = undefined;
+
+    // Page for 0 -> 4 MiB. Gets unmapped later
+    dir[0] = 0x00000083;
+
+    var i = 0;
+    var idx = 1;
+
+    // Fill preceding pages with zeroes. May not be unecessary but incurs no runtime cost
+    while (i < KERNEL_PAGE_NUMBER - 1) {
+        dir[idx] = 0;
+        i += 1;
+        idx += 1;
+    }
+
+    // Map the kernel's higher half pages increasing by 4 MiB every time
+    i = 0;
+    while (i < KERNEL_NUM_PAGES) {
+        dir[idx] = 0x00000083 | (i << 22);
+        i += 1;
+        idx += 1;
+    }
+    // Increase max number of branches done by comptime evaluator
+    @setEvalBranchQuota(1024);
+    // Fill suceeding pages with zeroes. May not be unecessary but incurs no runtime cost
+    i = 0;
+    while (i < 1024 - KERNEL_PAGE_NUMBER - KERNEL_NUM_PAGES) {
+        dir[idx] = 0;
+        i += 1;
+        idx += 1;
+    }
+    break :init dir;
+};
+
+export var kernel_stack: [16 * 1024]u8 align(16) linksection(".bss.stack") = undefined;
+
+export nakedcc fn _start() align(16) linksection(".text.boot") noreturn {
+    // Seth the page directory to the boot directory
+    asm volatile (
+        \\.extern boot_page_directory
+        \\mov $boot_page_directory, %%ecx
+        \\mov %%ecx, %%cr3
+    );
+    // Enable 4 MiB pages
+    asm volatile (
+        \\mov %%cr4, %%ecx
+        \\or $0x00000010, %%ecx
+        \\mov %%ecx, %%cr4
+    );
+    // Enable paging
+    asm volatile (
+        \\mov %%cr0, %%ecx
+        \\or $0x80000000, %%ecx
+        \\mov %%ecx, %%cr0
+    );
+    asm volatile ("jmp start_higher_half");
+    while (true) {}
+}
+
+export nakedcc fn start_higher_half() noreturn {
+    // Invalidate the page for the first 4MiB as it's no longer needed
+    asm volatile ("invlpg (0)");
+    // Setup the stack
+    asm volatile (
+        \\.extern KERNEL_STACK_END
+        \\mov $KERNEL_STACK_END, %%esp
+        \\mov %%esp, %%ebp
+    );
+    kmain();
     while (true) {}
 }
 
@@ -79,7 +151,7 @@ const terminal = struct {
     var column = usize(0);
     var colour = vga_entry_colour(VGA_COLOUR.VGA_COLOUR_LIGHT_GREY, VGA_COLOUR.VGA_COLOUR_BLACK);
 
-    const buffer = @intToPtr([*]volatile u16, 0xB8000);
+    const buffer = @intToPtr([*]volatile u16, 0xC00B8000);
 
     fn initialize() void {
         var y = usize(0);
