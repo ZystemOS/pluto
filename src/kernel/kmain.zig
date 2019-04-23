@@ -30,6 +30,8 @@ const KERNEL_NUM_PAGES = 1;
 
 // The initial page directory used for booting into the higher half. Should be overwritten later
 export var boot_page_directory: [1024]u32 align(4096) linksection(".rodata.boot") = init: {
+    // Increase max number of branches done by comptime evaluator
+    @setEvalBranchQuota(1024);
     // Temp value
     var dir: [1024]u32 = undefined;
 
