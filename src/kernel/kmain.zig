@@ -41,28 +41,29 @@ export var boot_page_directory: [1024]u32 align(4096) linksection(".rodata.boot"
     var i = 0;
     var idx = 1;
 
-    // Fill preceding pages with zeroes. May not be unecessary but incurs no runtime cost
-    while (i < KERNEL_PAGE_NUMBER - 1) {
-        dir[idx] = 0;
+    // Fill preceding pages with zeroes. May be unecessary but incurs no runtime cost
+    while (i < KERNEL_PAGE_NUMBER - 1) : ({
         i += 1;
         idx += 1;
+    }) {
+        dir[idx] = 0;
     }
 
     // Map the kernel's higher half pages increasing by 4 MiB every time
     i = 0;
-    while (i < KERNEL_NUM_PAGES) {
+    while (i < KERNEL_NUM_PAGES) : ({
+        i += 1;
+        idx += 1;
+    }) {
         dir[idx] = 0x00000083 | (i << 22);
-        i += 1;
-        idx += 1;
     }
-    // Increase max number of branches done by comptime evaluator
-    @setEvalBranchQuota(1024);
-    // Fill suceeding pages with zeroes. May not be unecessary but incurs no runtime cost
+    // Fill suceeding pages with zeroes. May be unecessary but incurs no runtime cost
     i = 0;
-    while (i < 1024 - KERNEL_PAGE_NUMBER - KERNEL_NUM_PAGES) {
-        dir[idx] = 0;
+    while (i < 1024 - KERNEL_PAGE_NUMBER - KERNEL_NUM_PAGES) : ({
         i += 1;
         idx += 1;
+    }) {
+        dir[idx] = 0;
     }
     break :init dir;
 };
