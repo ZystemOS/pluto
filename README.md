@@ -1,5 +1,26 @@
-Compile: zig build-exe kmain.zig -target i386-freestanding --linker-script link.ld
+# Pluto
 
-Run: qemu-system-i386 -kernel kmain -curses
+## Build
+Requires *xorriso* and the grub tools (such as *grub-mkrescue*).
+```
+mkdir -p bin/kernel
+mkdir -p bin/iso/boot/grub
+zig build
+```
 
-To exit qemu: Esc + 2, type `quit`
+Note that the `mkdir` invocations are only needed once. See `zig build --help` for a list of options.
+
+## Run
+```
+zig build run
+```
+To debug the kernel:
+```
+zig build run -Ddebug=true
+zig build debug
+```
+
+# Test
+```
+zig build test
+```
