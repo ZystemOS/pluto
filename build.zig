@@ -8,7 +8,7 @@ const ArrayList = std.ArrayList;
 const warn = std.debug.warn;
 const mem = std.mem;
 
-const src_files = [][]const u8{"kernel/kmain"};
+var src_files: ArrayList([]const u8) = undefined;
 
 fn concat(allocator: *std.mem.Allocator, str: []const u8, str2: []const u8) !std.Buffer {
     var b = try std.Buffer.init(allocator, str);
@@ -17,6 +17,7 @@ fn concat(allocator: *std.mem.Allocator, str: []const u8, str2: []const u8) !std
 }
 
 pub fn build(b: *Builder) void {
+    src_files = ArrayList([]const u8).init(b.allocator);
     const debug = b.option(bool, "debug", "build with debug symbols / make qemu wait for a debug connection") orelse false;
     var build_path = b.option([]const u8, "build-path", "path to build to") orelse "bin";
     var src_path = b.option([]const u8, "source-path", "path to source") orelse "src";
@@ -24,6 +25,13 @@ pub fn build(b: *Builder) void {
     const builtin_target = if (mem.eql(u8, target, "x86")) builtin.Arch.i386 else unreachable;
 
     const iso_path = concat(b.allocator, build_path, "/pluto.iso") catch unreachable;
+
+    src_files.append("kernel/kmain") catch unreachable;
+
+    // Add the architecture init file to the source files
+    var arch_init = concat(b.allocator, "kernel/arch/", target) catch unreachable;
+    arch_init.append("/arch") catch unreachable;
+    src_files.append(arch_init.toSlice()) catch unreachable;
 
     var objects_steps = buildObjects(b, builtin_target, build_path, src_path);
     var link_step = buildLink(b, builtin_target, build_path);
@@ -41,7 +49,7 @@ pub fn build(b: *Builder) void {
 fn buildTest(b: *Builder, src_path: []const u8) void {
     const step = b.step("test", "Run all tests");
     const src_path2 = concat(b.allocator, src_path, "/") catch unreachable;
-    for (src_files) |file| {
+    for (src_files.toSlice()) |file| {
         var file_src = concat(b.allocator, src_path2.toSlice(), file) catch unreachable;
         file_src.append(".zig") catch unreachable;
         const tst = b.addTest(file_src.toSlice());
@@ -100,7 +108,7 @@ fn buildLink(b: *Builder, target: builtin.Arch, build_path: []const u8) *Step {
     exec.setOutputDir(elf_path.toSlice());
     exec.setLinkerScriptPath("link.ld");
     exec.setTarget(target, builtin.Os.freestanding, builtin.Abi.gnu);
-    for (src_files) |file| {
+    for (src_files.toSlice()) |file| {
         var file_obj = concat(b.allocator, build_path, "/") catch unreachable;
         file_obj.append(file) catch unreachable;
         file_obj.append(".o") catch unreachable;
@@ -112,7 +120,7 @@ fn buildLink(b: *Builder, target: builtin.Arch, build_path: []const u8) *Step {
 fn buildObjects(b: *Builder, target: builtin.Arch, build_path: []const u8, src_path: []const u8) ArrayList(*Step) {
     var objects = ArrayList(*Step).init(b.allocator);
     const src_path2 = concat(b.allocator, src_path, "/") catch unreachable;
-    for (src_files) |file| {
+    for (src_files.toSlice()) |file| {
         var file_src = concat(b.allocator, src_path2.toSlice(), file) catch unreachable;
         file_src.append(".zig") catch unreachable;
         const obj = b.addObject(file, file_src.toSlice());
