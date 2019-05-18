@@ -6,6 +6,7 @@
 //
 const builtin = @import("builtin");
 const arch = @import("arch.zig");
+const multiboot = @import("multiboot.zig");
 
 pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {
     @setCold(true);
@@ -14,10 +15,13 @@ pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn
     while (true) {}
 }
 
-pub export fn kmain() void {
-    arch.init();
-    terminal.initialize();
-    terminal.write("Hello, kernel World!");
+pub export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
+    if (mb_magic == multiboot.MULTIBOOT_BOOTLOADER_MAGIC) {
+        // Booted with compatible bootloader
+        arch.init();
+        terminal.initialize();
+        terminal.write("Hello, kernel World!");
+    }
 }
 
 // Hardware text mode color constants
