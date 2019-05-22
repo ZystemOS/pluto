@@ -3,7 +3,7 @@
 ///
 /// Initialise the architecture
 ///
-pub extern fn init() void;
+pub fn init() void {}
 
 ///
 /// Inline assembly to write to a given port with a byte of data.
@@ -12,7 +12,7 @@ pub extern fn init() void;
 ///     IN port: u16 - The port to write to.
 ///     IN data: u8  - The byte of data that will be sent.
 ///
-pub extern fn outb(port: u16, data: u8) void;
+pub fn outb(port: u16, data: u8) void {}
 
 ///
 /// Inline assembly that reads data from a given port and returns its value.
@@ -23,10 +23,10 @@ pub extern fn outb(port: u16, data: u8) void;
 /// Return:
 ///     The data that the port returns.
 ///
-pub extern fn inb(port: u16) u8;
+pub fn inb(port: u16) u8 {return 0;}
 
 ///
 /// A simple way of waiting for I/O event to happen by doing an I/O event to flush the I/O
 /// event being waited.
 ///
-pub extern fn ioWait() void;
+pub fn ioWait() void {}
