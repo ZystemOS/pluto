@@ -53,6 +53,7 @@ fn buildTest(b: *Builder, src_path: []const u8) void {
         var file_src = concat(b.allocator, src_path2.toSlice(), file) catch unreachable;
         file_src.append(".zig") catch unreachable;
         const tst = b.addTest(file_src.toSlice());
+        tst.setMainPkgPath(".");
         step.dependOn(&tst.step);
     }
 }
