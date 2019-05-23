@@ -1,6 +1,7 @@
 ENTRY(_start)
 
 KERNEL_ADDR_OFFSET = 0xC0000000;
+KERNEL_VADDR_START = 0xC0100000;
 
 SECTIONS {
 	. = 1M;
@@ -14,8 +15,7 @@ SECTIONS {
 		*(.text.boot)
 	}
 
-	. = KERNEL_ADDR_OFFSET;
-	KERNEL_VADDR_START = .;
+	. += KERNEL_ADDR_OFFSET;
 
 	.text ALIGN(4K) : AT (ADDR(.text) - KERNEL_ADDR_OFFSET) {
 		*(.text)

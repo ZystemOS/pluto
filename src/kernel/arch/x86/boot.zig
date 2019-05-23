@@ -1,10 +1,11 @@
+const constants = @import("constants.zig");
+
 const ALIGN = 1 << 0;
 const MEMINFO = 1 << 1;
 const MAGIC = 0x1BADB002;
 const FLAGS = ALIGN | MEMINFO;
 
-const KERNEL_ADDR_OFFSET = 0xC0000000;
-const KERNEL_PAGE_NUMBER = KERNEL_ADDR_OFFSET >> 22;
+const KERNEL_PAGE_NUMBER = constants.KERNEL_ADDR_OFFSET >> 22;
 // The number of pages occupied by the kernel, will need to be increased as we add a heap etc.
 const KERNEL_NUM_PAGES = 1;
 
