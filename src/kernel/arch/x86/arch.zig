@@ -1,17 +1,3 @@
-// Zig version: 0.4.0
-
-const is_test = @import("builtin").is_test;
-
-const ALIGN = 1 << 0;
-const MEMINFO = 1 << 1;
-const MAGIC = 0x1BADB002;
-const FLAGS = ALIGN | MEMINFO;
-
-const KERNEL_ADDR_OFFSET = 0xC0000000;
-const KERNEL_PAGE_NUMBER = KERNEL_ADDR_OFFSET >> 22;
-// The number of pages occupied by the kernel, will need to be increased as we add a heap etc.
-const KERNEL_NUM_PAGES = 1;
-
 extern fn kmain() void;
 
 const MultiBoot = packed struct {
@@ -20,11 +6,21 @@ const MultiBoot = packed struct {
     checksum: i32,
 };
 
-export var multiboot align(4) linksection(".rodata.boot") = MultiBoot {
+const ALIGN = 1 << 0;
+const MEMINFO = 1 << 1;
+const MAGIC = 0x1BADB002;
+const FLAGS = ALIGN | MEMINFO;
+
+export var multiboot align(4) linksection(".rodata.boot") = MultiBoot{
     .magic = MAGIC,
     .flags = FLAGS,
     .checksum = -(MAGIC + FLAGS),
 };
+
+const KERNEL_ADDR_OFFSET = 0xC0000000;
+const KERNEL_PAGE_NUMBER = KERNEL_ADDR_OFFSET >> 22;
+// The number of pages occupied by the kernel, will need to be increased as we add a heap etc.
+const KERNEL_NUM_PAGES = 1;
 
 // The initial page directory used for booting into the higher half. Should be overwritten later
 export var boot_page_directory: [1024]u32 align(4096) linksection(".rodata.boot") = init: {
@@ -39,7 +35,7 @@ export var boot_page_directory: [1024]u32 align(4096) linksection(".rodata.boot"
     var i = 0;
     var idx = 1;
 
-    // Fill preceding pages with zeroes. May be unnecessary but incurs no runtime cost
+    // Fill preceding pages with zeroes. May be unecessary but incurs no runtime cost
     while (i < KERNEL_PAGE_NUMBER - 1) : ({
         i += 1;
         idx += 1;
@@ -55,7 +51,7 @@ export var boot_page_directory: [1024]u32 align(4096) linksection(".rodata.boot"
     }) {
         dir[idx] = 0x00000083 | (i << 22);
     }
-    // Fill succeeding pages with zeroes. May be unnecessary but incurs no runtime cost
+    // Fill suceeding pages with zeroes. May be unecessary but incurs no runtime cost
     i = 0;
     while (i < 1024 - KERNEL_PAGE_NUMBER - KERNEL_NUM_PAGES) : ({
         i += 1;
@@ -111,43 +107,4 @@ export nakedcc fn start_higher_half() noreturn {
     while (true) {}
 }
 
-///
-/// Initialise the architecture
-///
 export fn init() void {}
-
-///
-/// Inline assembly to write to a given port with a byte of data.
-///
-/// Arguments:
-///     IN port: u16 - The port to write to.
-///     IN data: u8  - The byte of data that will be sent.
-///
-export fn outb(port: u16, data: u8) void {
-    asm volatile ("outb %[data], %[port]"
-        :
-        : [port] "{dx}" (port), [data] "{al}" (data));
-}
-
-///
-/// Inline assembly that reads data from a given port and returns its value.
-///
-/// Arguments:
-///     IN port: u16 - The port to read data from.
-///
-/// Return:
-///     The data that the port returns.
-///
-export fn inb(port: u16) u8 {
-    return asm volatile ("inb %[port], %[result]"
-        : [result] "={al}" (-> u8)
-        : [port] "N{dx}" (port));
-}
-
-///
-/// A simple way of waiting for I/O event to happen by doing an I/O event to flush the I/O
-/// event being waited.
-///
-export fn ioWait() void {
-    outb(0x80, 0);
-}
