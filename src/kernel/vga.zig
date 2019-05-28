@@ -1,8 +1,7 @@
 // Zig version: 0.4.0
 
 const builtin = @import("builtin");
-const arch = if (builtin.is_test) @import("../../test/kernel/arch_mock.zig")
-             else @import("arch.zig");
+const arch = @import("arch.zig").internals;
 
 const expectEqual = @import("std").testing.expectEqual;
 const warn = @import("std").debug.warn;
@@ -207,7 +206,7 @@ pub fn disableCursor() void {
 ///     IN shape: CURSOR_SHAPE - The enum CURSOR_SHAPE that selects which shape to use.
 ///
 pub fn setCursorShape(shape: CursorShape) void {
-    switch(shape) {
+    switch (shape) {
         CursorShape.UNDERLINE => {
             arch.outb(PORT_ADDRESS, REG_CURSOR_START);
             arch.outb(PORT_DATA, CURSOR_SCANLINE_MIDDLE);
@@ -280,7 +279,7 @@ test "entry" {
 }
 
 fn testOutOfBounds(x: u16, y: u16) bool {
-    if(x < HEIGHT and y < WIDTH) {
+    if (x < HEIGHT and y < WIDTH) {
         return true;
     }
     return false;
