@@ -29,9 +29,9 @@ pub fn build(b: *Builder) void {
     src_files.append("kernel/kmain") catch unreachable;
 
     // Add the architecture init file to the source files
-    var arch_init = concat(b.allocator, "kernel/arch/", target) catch unreachable;
-    arch_init.append("/arch") catch unreachable;
-    src_files.append(arch_init.toSlice()) catch unreachable;
+    var arch_boot = concat(b.allocator, "kernel/arch/", target) catch unreachable;
+    arch_boot.append("/boot") catch unreachable;
+    src_files.append(arch_boot.toSlice()) catch unreachable;
 
     var objects_steps = buildObjects(b, builtin_target, build_path, src_path);
     var link_step = buildLink(b, builtin_target, build_path);
