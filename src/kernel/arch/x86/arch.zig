@@ -1,11 +1,54 @@
 // Zig version: 0.4.0
 
-const is_test = @import("builtin").is_test;
+const builtin = @import("builtin");
+const gdt = @import("gdt.zig");
+const idt = @import("idt.zig");
+const irq = @import("irq.zig");
+const isr = @import("isr.zig");
+
+pub const InterruptContext = struct {
+    // Extra segments
+    gs: u32,
+    fs: u32,
+    es: u32,
+    ds: u32,
+
+    // Destination, source, base pointer
+    edi: u32,
+    esi: u32,
+    ebp: u32,
+    esp: u32,
+
+    // General registers
+    ebx: u32,
+    edx: u32,
+    ecx: u32,
+    eax: u32,
+
+    // Interrupt number and error code
+    int_num: u32,
+    error_code: u32,
+
+    // Instruction pointer, code segment and flags
+    eip: u32,
+    cs: u32,
+    eflags: u32,
+    user_esp: u32,
+    ss: u32,
+};
 
 ///
 /// Initialise the architecture
 ///
-pub fn init() void {}
+pub fn init() void {
+    disableInterrupts();
+
+    gdt.init();
+    idt.init();
+
+    isr.init();
+    irq.init();
+}
 
 ///
 /// Inline assembly to write to a given port with a byte of data.
@@ -44,4 +87,82 @@ pub fn inb(port: u16) u8 {
 ///
 pub fn ioWait() void {
     outb(0x80, 0);
+}
+
+///
+/// Load the GDT and refreshing the code segment with the code segment offset of the kernel as we
+/// are still in kernel land. Also loads the kernel data segment into all the other segment
+/// registers.
+///
+/// Arguments:
+///     IN gdt_ptr: *gdt.GdtPtr - The address to the GDT.
+///
+pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
+    // Load the GDT into the CPU
+    asm volatile ("lgdt (%%eax)" : : [gdt_ptr] "{eax}" (gdt_ptr));
+    // Load the kernel data segment, index into the GDT
+    asm volatile ("mov %%bx, %%ds" : : [KERNEL_DATA_OFFSET] "{bx}" (gdt.KERNEL_DATA_OFFSET));
+    asm volatile ("mov %%bx, %%es");
+    asm volatile ("mov %%bx, %%fs");
+    asm volatile ("mov %%bx, %%gs");
+    asm volatile ("mov %%bx, %%ss");
+    // Load the kernel code segment into the CS register
+    asm volatile (
+        \\ljmp $0x08, $1f
+        \\1:
+    );
+}
+
+///
+/// Load the TSS into the CPU.
+///
+pub fn ltr() void {
+    asm volatile ("ltr %%ax" : : [TSS_OFFSET] "{ax}" (gdt.TSS_OFFSET));
+}
+
+/// Load the IDT into the CPU.
+pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
+    asm volatile ("lidt (%%eax)" : : [idt_ptr] "{eax}" (idt_ptr));
+}
+
+///
+/// Enable interrupts
+///
+pub fn enableInterrupts() void {
+    asm volatile ("sti");
+}
+
+///
+/// Disable interrupts
+///
+pub fn disableInterrupts() void {
+    asm volatile ("cli");
+}
+
+///
+/// Halt the CPU, but interrupts will still be called
+///
+pub fn halt() void {
+    asm volatile ("hlt");
+}
+
+///
+/// Wait the kernel but still can handle interrupts.
+///
+pub fn spinWait() noreturn {
+    while (true) {
+        enableInterrupts();
+        halt();
+        disableInterrupts();
+    }
+}
+
+///
+/// Halt the kernel.
+///
+pub fn haltNoInterrupts() noreturn {
+    while (true) {
+        disableInterrupts();
+        halt();
+    }
 }

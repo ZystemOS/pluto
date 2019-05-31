@@ -4,11 +4,13 @@ const Builder = @import("std").build.Builder;
 const Step = @import("std").build.Step;
 const builtin = @import("builtin");
 const std = @import("std");
+const os = std.os;
 const ArrayList = std.ArrayList;
 const warn = std.debug.warn;
 const mem = std.mem;
 
 var src_files: ArrayList([]const u8) = undefined;
+var src_files_asm: ArrayList([]const u8) = undefined;
 
 fn concat(allocator: *std.mem.Allocator, str: []const u8, str2: []const u8) !std.Buffer {
     var b = try std.Buffer.init(allocator, str);
@@ -18,21 +20,38 @@ fn concat(allocator: *std.mem.Allocator, str: []const u8, str2: []const u8) !std
 
 pub fn build(b: *Builder) void {
     src_files = ArrayList([]const u8).init(b.allocator);
+    src_files_asm = ArrayList([]const u8).init(b.allocator);
     const debug = b.option(bool, "debug", "build with debug symbols / make qemu wait for a debug connection") orelse false;
     var build_path = b.option([]const u8, "build-path", "path to build to") orelse "bin";
     var src_path = b.option([]const u8, "source-path", "path to source") orelse "src";
     var target = b.option([]const u8, "target", "target to build/run for") orelse "x86";
     const builtin_target = if (mem.eql(u8, target, "x86")) builtin.Arch.i386 else unreachable;
 
-    const iso_path = concat(b.allocator, build_path, "/pluto.iso") catch unreachable;
+    b.makePath(build_path) catch unreachable;
+    var grub_path = concat(b.allocator, build_path, "/iso/boot/grub") catch unreachable;
+    var kern_path = concat(b.allocator, build_path, "/kernel") catch unreachable;
+    var a_path = concat(b.allocator, build_path, "/kernel/arch/") catch unreachable;
+    a_path = concat(b.allocator, a_path.toSlice(), target) catch unreachable;
+    b.makePath(grub_path.toSlice()) catch unreachable;
+    b.makePath(kern_path.toSlice()) catch unreachable;
+    b.makePath(a_path.toSlice()) catch unreachable;
 
     src_files.append("kernel/kmain") catch unreachable;
 
-    // Add the architecture init file to the source files
+    // Add the assemblies
+    switch (builtin_target) {
+        builtin.Arch.i386 => {
+            src_files_asm.append("kernel/arch/x86/irq_asm") catch unreachable;
+            src_files_asm.append("kernel/arch/x86/isr_asm") catch unreachable;
+        },
+        else => {},
+    }
+
     var arch_boot = concat(b.allocator, "kernel/arch/", target) catch unreachable;
     arch_boot.append("/boot") catch unreachable;
     src_files.append(arch_boot.toSlice()) catch unreachable;
 
+    const iso_path = concat(b.allocator, build_path, "/pluto.iso") catch unreachable;
     var objects_steps = buildObjects(b, builtin_target, build_path, src_path);
     var link_step = buildLink(b, builtin_target, build_path);
     const iso_step = buildISO(b, build_path, iso_path.toSlice());
@@ -114,6 +133,13 @@ fn buildLink(b: *Builder, target: builtin.Arch, build_path: []const u8) *Step {
         file_obj.append(file) catch unreachable;
         file_obj.append(".o") catch unreachable;
         exec.addObjectFile(file_obj.toSlice());
+        exec.setMainPkgPath(".");
+    }
+    for (src_files_asm.toSlice()) |file| {
+        var file_obj = concat(b.allocator, build_path, "/") catch unreachable;
+        file_obj.append(file) catch unreachable;
+        file_obj.append(".o") catch unreachable;
+        exec.addObjectFile(file_obj.toSlice());
     }
     return &exec.step;
 }
@@ -125,6 +151,15 @@ fn buildObjects(b: *Builder, target: builtin.Arch, build_path: []const u8, src_p
         var file_src = concat(b.allocator, src_path2.toSlice(), file) catch unreachable;
         file_src.append(".zig") catch unreachable;
         const obj = b.addObject(file, file_src.toSlice());
+        obj.setMainPkgPath(".");
+        obj.setOutputDir(build_path);
+        obj.setTarget(target, builtin.Os.freestanding, builtin.Abi.gnu);
+        objects.append(&obj.step) catch unreachable;
+    }
+    for (src_files_asm.toSlice()) |file| {
+        var file_src = concat(b.allocator, src_path2.toSlice(), file) catch unreachable;
+        file_src.append(".s") catch unreachable;
+        const obj = b.addAssemble(file, file_src.toSlice());
         obj.setOutputDir(build_path);
         obj.setTarget(target, builtin.Os.freestanding, builtin.Abi.gnu);
         objects.append(&obj.step) catch unreachable;
