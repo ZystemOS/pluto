@@ -14,7 +14,6 @@ const PORT_DATA: u16 = 0x03D5;
 
 // The indexes that is passed to the address port to select the register for the data to be
 // read or written to.
-
 const REG_HORIZONTAL_TOTAL: u8                = 0x00;
 const REG_HORIZONTAL_DISPLAY_ENABLE_END: u8   = 0x01;
 const REG_START_HORIZONTAL_BLINKING: u8       = 0x02;
@@ -144,7 +143,7 @@ pub fn updateCursor(x: u16, y: u16) void {
     var pos_lower: u16 = undefined;
 
     // Make sure new cursor position is within the screen
-    if (x < HEIGHT and y < WIDTH) {
+    if (x < WIDTH and y < HEIGHT) {
         pos = y * WIDTH + x;
     } else {
         // If not within the screen, then just put the cursor at the very end
@@ -240,8 +239,6 @@ pub fn init() void {
 
     // Set by default the underline cursor
     setCursorShape(CursorShape.UNDERLINE);
-    cursor_scanline_start = CURSOR_SCANLINE_MIDDLE;
-    cursor_scanline_end = CURSOR_SCANLINE_END;
 }
 
 test "entryColour" {
