@@ -4,11 +4,13 @@ const panic = @import("../../panic.zig");
 const tty = @import("../../tty.zig");
 const idt = @import("idt.zig");
 const arch = @import("arch.zig");
+const pic = @import("pic.zig");
 
 const NUMBER_OF_ENTRIES: u16 = 16;
 
 const IRQ_OFFSET: u16 = 32;
 
+// The external assembly that is fist called to set up the interrupt handler.
 extern fn irq0() void;
 extern fn irq1() void;
 extern fn irq2() void;
@@ -26,114 +28,69 @@ extern fn irq13() void;
 extern fn irq14() void;
 extern fn irq15() void;
 
-// Keep track of the number of spurious irq's
-var spurious_irq_counter: u32 = 0;
-
+/// The list of IRQ handlers initialised to unhandled.
 var irq_handlers: [NUMBER_OF_ENTRIES]fn(*arch.InterruptContext)void = []fn(*arch.InterruptContext)void {unhandled} ** NUMBER_OF_ENTRIES;
 
+///
+/// A dummy handler that will make a call to panic as it is a unhandled interrupt.
+///
+/// Arguments:
+///     IN context: *arch.InterruptContext - Pointer to the interrupt context containing the
+///                                          contents of the register at the time of the interrupt.
+///
 fn unhandled(context: *arch.InterruptContext) void {
     const interrupt_num: u8 = @truncate(u8, context.int_num - IRQ_OFFSET);
     panic.panicFmt(null, "Unhandled IRQ number {}", interrupt_num);
 }
 
-// TODO Move to PIC
-fn sendEndOfInterrupt(irq_num: u8) void {
-    if (irq_num >= 8) {
-        arch.outb(0xA0, 0x20);
-    }
-
-    arch.outb(0x20, 0x20);
-}
-
-// TODO Move to PIC
-fn spuriousIrq(irq_num: u8) bool {
-    // Only for IRQ 7 and 15
-    if(irq_num == 7) {
-        // Read master ISR
-        arch.outb(0x20, 0x0B);
-        const in_service = arch.inb(0x21);
-        // Check the MSB is zero, if so, then is a spurious irq
-        if ((in_service & 0x80) == 0) {
-            spurious_irq_counter += 1;
-            return true;
-        }
-    } else if (irq_num == 15) {
-        // Read slave ISR
-        arch.outb(0xA0, 0x0B);
-        const in_service = arch.inb(0xA1);
-        // Check the MSB is zero, if so, then is a spurious irq
-        if ((in_service & 0x80) == 0) {
-            // Need to send EOI to the master
-            arch.outb(0x20, 0x20);
-            spurious_irq_counter += 1;
-            return true;
-        }
-    }
-
-    return false;
-}
-
+///
+/// The IRQ handler that each of the IRQ's will call when a interrupt happens.
+///
+/// Arguments:
+///     IN context: *arch.InterruptContext - Pointer to the interrupt context containing the
+///                                          contents of the register at the time of the interrupt.
+///
 export fn irqHandler(context: *arch.InterruptContext) void {
     const irq_num: u8 = @truncate(u8, context.int_num - IRQ_OFFSET);
     // Make sure it isn't a spurious irq
-    if (!spuriousIrq(irq_num)) {
+    if (!pic.spuriousIrq(irq_num)) {
         irq_handlers[irq_num](context);
         // Send the end of interrupt command
-        sendEndOfInterrupt(irq_num);
+        pic.sendEndOfInterrupt(irq_num);
     }
 }
 
+///
+/// Register a IRQ by setting its interrupt handler to the given function. This will also clear the
+/// mask bit in the PIC so interrupts can happen.
+///
+/// Arguments:
+///     IN irq_num: u16 - The IRQ number to register.
+///
 pub fn registerIrq(irq_num: u16, handler: fn(*arch.InterruptContext)void) void {
     irq_handlers[irq_num] = handler;
-    clearMask(irq_num);
+    pic.clearMask(irq_num);
 }
 
+///
+/// Unregister a IRQ by setting its interrupt handler to the unhandled function call to panic. This
+/// will also set the mask bit in the PIC so no interrupts can happen anyway.
+///
+/// Arguments:
+///     IN irq_num: u16 - The IRQ number to unregister.
+///
 pub fn unregisterIrq(irq_num: u16) void {
     irq_handlers[irq_num] = unhandled;
-    setMask(irq_num);
+    pic.setMask(irq_num);
 }
 
-pub fn setMask(irq_num: u16) void {
-    // TODO Change to PIC constants
-    const port: u16 = if (irq_num < 8) 0x20 else 0xA0;
-    const value = arch.inb(port) | (1 << irq_num);
-    arch.outb(port, value);
-}
-
-pub fn clearMask(irq_num: u16) void {
-    // TODO Change to PIC constants
-    const port: u16 = if (irq_num < 8) 0x20 else 0xA0;
-    const value = arch.inb(port) & ~(1 << irq_num);
-    arch.outb(port, value);
-}
-
-// TODO Move this to the PIC once got one
-fn remapIrq() void {
-    // Initiate
-    arch.outb(0x20, 0x11);
-    arch.outb(0xA0, 0x11);
-
-    // Offsets
-    arch.outb(0x21, IRQ_OFFSET);
-    arch.outb(0xA1, IRQ_OFFSET + 8);
-
-    // IRQ lines
-    arch.outb(0x21, 0x04);
-    arch.outb(0xA1, 0x02);
-
-    // 80x86 mode
-    arch.outb(0x21, 0x01);
-    arch.outb(0xA1, 0x01);
-
-    // Mask
-    arch.outb(0x21, 0xFF);
-    arch.outb(0xA1, 0xFF);
-
-}
-
+///
+/// Initialise the IRQ interrupts by first remapping the port addresses and then opening up all
+/// the IDT interrupt gates for each IRQ.
+///
 pub fn init() void {
     // Remap the PIC IRQ so not to overlap with other exceptions
-    remapIrq();
+    pic.remapIrq();
 
     // Open all the IRQ's
     idt.openInterruptGate(32, irq0);
