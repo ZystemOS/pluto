@@ -50,8 +50,8 @@ pub const TSS_OFFSET: u16           = 0x28;
 const ACCESSED_BIT              = 0x01; // 00000001
 const WRITABLE_BIT              = 0x02; // 00000010
 const DIRECTION_CONFORMING_BIT  = 0x04; // 00000100
-const EXECUTABLE_BIT            =  0x08; // 00001000
-const DESCRIPTOR_BIT            =  0x10; // 00010000
+const EXECUTABLE_BIT            = 0x08; // 00001000
+const DESCRIPTOR_BIT            = 0x10; // 00010000
 
 const PRIVILEGE_RING_0          = 0x00; // 00000000
 const PRIVILEGE_RING_1          = 0x20; // 00100000
@@ -115,6 +115,9 @@ pub const GdtPtr = packed struct {
     base: *GdtEntry,
 };
 
+///
+/// The TSS entry structure
+///
 const TtsEntry = packed struct {
     /// Pointer to the previous TSS entry
     prev_tss: u32,
@@ -240,7 +243,8 @@ var gdt_entries: [NUMBER_OF_ENTRIES]GdtEntry = []GdtEntry {
     makeEntry(0, 0, 0, 0),
 };
 
-/// The GDT pointer that the CPU is loaded with that contains the base address of the GDT and the size.
+/// The GDT pointer that the CPU is loaded with that contains the base address of the GDT and the
+/// size.
 const gdt_ptr: GdtPtr = GdtPtr {
     .limit = TABLE_SIZE,
     .base = &gdt_entries[0],
@@ -277,10 +281,19 @@ var tss: TtsEntry = TtsEntry {
     .io_permissions_base_offset = @sizeOf(TtsEntry),
 };
 
+///
+/// Set the stack pointer in the TSS entry
+///
+/// Arguments:
+///     IN esp0: u32 - The stack pointer
+///
 pub fn setTssStack(esp0: u32) void {
     tss.esp0 = esp0;
 }
 
+///
+/// Initialise the Global Descriptor table
+///
 pub fn init() void {
     // Initiate TSS
     gdt_entries[TSS_INDEX] = makeEntry(@ptrToInt(&tss), @sizeOf(TtsEntry) - 1, TSS_SEGMENT, 0);

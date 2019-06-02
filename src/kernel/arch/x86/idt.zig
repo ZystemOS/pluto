@@ -13,11 +13,13 @@ const TRAP_GATE_16BIT: u4 = 0x7;
 const INTERRUPT_GATE_32BIT: u4 = 0xE;
 const TRAP_GATE_32BIT: u4 = 0xF;
 
+// Privilege levels
 const PRIVILEGE_RING_0: u2 = 0x0;
 const PRIVILEGE_RING_1: u2 = 0x1;
 const PRIVILEGE_RING_2: u2 = 0x2;
 const PRIVILEGE_RING_3: u2 = 0x3;
 
+/// The structure that contains all the information that each IDT entry needs.
 const IdtEntry = packed struct {
     /// The lower 16 bits of the base address of the interrupt handler offset.
     base_low: u16,
@@ -44,6 +46,8 @@ const IdtEntry = packed struct {
     base_high: u16,
 };
 
+/// The IDT pointer structure that contains the pointer to the beginning of the IDT and the number
+/// of the table (minus 1). Used to load the IST with LIDT instruction.
 pub const IdtPtr = packed struct {
     /// The total size of the IDT (minus 1) in bytes.
     limit: u16,
@@ -52,13 +56,31 @@ pub const IdtPtr = packed struct {
     base: *IdtEntry,
 };
 
+/// The IDT entry table of NUMBER_OF_ENTRIES entries.
 var idt: [NUMBER_OF_ENTRIES]IdtEntry = []IdtEntry{makeEntry(0, 0, 0, 0, 0)} ** NUMBER_OF_ENTRIES;
 
+/// The IDT pointer that the CPU is loaded with that contains the base address of the IDT and the
+/// size.
 const idt_ptr: IdtPtr = IdtPtr {
     .limit = TABLE_SIZE,
     .base = &idt[0],
 };
 
+///
+/// Make a IDT entry.
+///
+/// Arguments:
+///     IN base: u32     - The pointer to the interrupt handler.
+///     IN selector: u16 - The segment the interrupt is in. This will usually be the
+///                        kernels code segment.
+///     IN gate_type: u4 - The type of interrupt.
+///     IN privilege: u2 - What privilege to call the interrupt in. This will usually be
+///                        the kernel ring level 0.
+///     IN present: u1   - Whether a interrupt handler is present to be called..
+///
+/// Return:
+///     A new IDT entry.
+///
 fn makeEntry(base: u32, selector: u16, gate_type: u4, privilege: u2, present: u1) IdtEntry {
     return IdtEntry {
         .base_low = @truncate(u16, base),
@@ -72,14 +94,30 @@ fn makeEntry(base: u32, selector: u16, gate_type: u4, privilege: u2, present: u1
     };
 }
 
+///
+/// Open a interrupt gate with a given index and a handler to call.
+///
+/// Arguments:
+///     IN index: u8             - The interrupt number to close.
+///     IN base: extern fn()void - The function handler for the interrupt.
+///
 pub fn openInterruptGate(index: u8, base: extern fn()void) void {
     idt[index] = makeEntry(@ptrToInt(base), gdt.KERNEL_CODE_OFFSET, INTERRUPT_GATE_32BIT, PRIVILEGE_RING_0, 1);
 }
 
+///
+/// Close a interrupt gate with a given index
+///
+/// Arguments:
+///     IN index: u8 - The interrupt number to close.
+///
 pub fn closeInterruptGate(index: u8) void {
     idt[index] = makeEntry(0, 0, 0, 0, 0);
 }
 
+///
+/// Initialise the Interrupt descriptor table
+///
 pub fn init() void {
     arch.lidt(&idt_ptr);
 }

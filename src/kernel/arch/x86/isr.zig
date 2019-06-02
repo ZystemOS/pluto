@@ -7,6 +7,7 @@ const arch = @import("arch.zig");
 
 const NUMBER_OF_ENTRIES: u16 = 32;
 
+// The external assembly that is fist called to set up the exception handler.
 extern fn isr0() void;
 extern fn isr1() void;
 extern fn isr2() void;
@@ -40,6 +41,7 @@ extern fn isr29() void;
 extern fn isr30() void;
 extern fn isr31() void;
 
+/// The exception messaged that is printed when a exception happens
 const exception_msg: [NUMBER_OF_ENTRIES][]const u8 = [NUMBER_OF_ENTRIES][]const u8 {
     "Divide By Zero",
     "Single Step (Debugger)",
@@ -75,26 +77,57 @@ const exception_msg: [NUMBER_OF_ENTRIES][]const u8 = [NUMBER_OF_ENTRIES][]const 
     "Reserved"
 };
 
+// The of exception handlers initialised to unhandled.
 var isr_handlers: [NUMBER_OF_ENTRIES]fn(*arch.InterruptContext)void = []fn(*arch.InterruptContext)void{unhandled} ** NUMBER_OF_ENTRIES;
 
+///
+/// A dummy handler that will make a call to panic as it is a unhandled exception.
+///
+/// Arguments:
+///     IN context: *arch.InterruptContext - Pointer to the exception context containing the
+///                                          contents of the register at the time of the exception.
+///
 fn unhandled(context: *arch.InterruptContext) void {
     const interrupt_num = context.int_num;
     panic.panicFmt(null, "Unhandled exception: {}, number {}", exception_msg[interrupt_num], interrupt_num);
 }
 
+///
+/// The exception handler that each of the exceptions will call when a exception happens.
+///
+/// Arguments:
+///     IN context: *arch.InterruptContext - Pointer to the exception context containing the
+///                                          contents of the register at the time of the exception.
+///
 export fn isrHandler(context: *arch.InterruptContext) void {
     const isr_num = context.int_num;
     isr_handlers[isr_num](context);
 }
 
+///
+/// Register an exception by setting its exception handler to the given function.
+///
+/// Arguments:
+///     IN irq_num: u16 - The exception number to register.
+///
 pub fn registerIsr(isr_num: u16, handler: fn(*arch.InterruptContext)void) void {
     isr_handlers[isr_num] = handler;
 }
 
+///
+/// Unregister an exception by setting its exception handler to the unhandled function call to
+/// panic.
+///
+/// Arguments:
+///     IN irq_num: u16 - The exception number to unregister.
+///
 pub fn unregisterIsr(isr_num: u16) void {
     isr_handlers[isr_num] = unhandled;
 }
 
+///
+/// Initialise the exception and opening up all the IDT interrupt gates for each exception.
+///
 pub fn init() void {
     idt.openInterruptGate(0, isr0);
     idt.openInterruptGate(1, isr1);
