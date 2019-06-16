@@ -5,6 +5,7 @@ const arch = if (builtin.is_test) @import("../../test/kernel/arch_mock.zig") els
 const multiboot = @import("multiboot.zig");
 const tty = @import("tty.zig");
 const vga = @import("vga.zig");
+const serial = @import("serial.zig");
 
 // Need to import this as we need the panic to be in the root source file, or zig will just use the
 // builtin panic and just loop, which is what we don't want
@@ -23,6 +24,8 @@ pub export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
         arch.init();
         vga.init();
         tty.init();
+        serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch unreachable;
+
         tty.print("Hello Pluto from kernel :)\n");
 
         // Enable interrupts
