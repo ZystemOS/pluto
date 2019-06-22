@@ -2,6 +2,7 @@
 
 const gdt = @import("gdt.zig");
 const arch = @import("arch.zig");
+const log = @import("../../log.zig");
 
 const NUMBER_OF_ENTRIES: u16 = 256;
 const TABLE_SIZE: u16 = @sizeOf(IdtEntry) * NUMBER_OF_ENTRIES - 1;
@@ -119,5 +120,6 @@ pub fn closeInterruptGate(index: u8) void {
 /// Initialise the Interrupt descriptor table
 ///
 pub fn init() void {
+    log.logInfo("Init idt\n");
     arch.lidt(&idt_ptr);
 }

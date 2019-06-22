@@ -1,6 +1,7 @@
 // Zig version: 0.4.0
 
 const arch = @import("arch.zig");
+const log = @import("../../log.zig");
 
 const NUMBER_OF_ENTRIES: u16 = 0x06;
 const TABLE_SIZE: u16 = @sizeOf(GdtEntry) * NUMBER_OF_ENTRIES - 1;
@@ -295,6 +296,7 @@ pub fn setTssStack(esp0: u32) void {
 /// Initialise the Global Descriptor table
 ///
 pub fn init() void {
+    log.logInfo("Init gdt\n");
     // Initiate TSS
     gdt_entries[TSS_INDEX] = makeEntry(@ptrToInt(&tss), @sizeOf(TtsEntry) - 1, TSS_SEGMENT, 0);
 
