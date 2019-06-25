@@ -1,6 +1,7 @@
 // Zig version: 0.4.0
 
 const vga = @import("vga.zig");
+const log = @import("log.zig");
 
 const expectEqual = @import("std").testing.expectEqual;
 const expectError = @import("std").testing.expectError;
@@ -594,6 +595,7 @@ pub fn setColour(new_colour: u8) void {
 ///     blank
 ///
 pub fn init() void {
+    log.logInfo("Init tty\n");
     // Video buffer in higher half
     video_buffer = @intToPtr([*]volatile u16, 0xC00B8000)[0..VIDEO_BUFFER_SIZE];
     setColour(vga.entryColour(vga.COLOUR_LIGHT_GREY, vga.COLOUR_BLACK));
