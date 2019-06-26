@@ -31,8 +31,5 @@ pub export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
 
         log.logInfo("Finished init\n");
         tty.print("Hello Pluto from kernel :)\n");
-
-        // Enable interrupts
-        arch.enableInterrupts();
     }
 }
