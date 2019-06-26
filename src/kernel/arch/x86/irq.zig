@@ -1,7 +1,6 @@
 // Zig version: 0.4.0
 
 const panic = @import("../../panic.zig");
-const tty = @import("../../tty.zig");
 const idt = @import("idt.zig");
 const arch = @import("arch.zig");
 const pic = @import("pic.zig");

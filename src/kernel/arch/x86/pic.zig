@@ -167,7 +167,7 @@ inline fn readDataSlave() u8 {
     return arch.inb(SLAVE_DATA_REG);
 }
 
-fn readMasterIrr() u8 {
+inline fn readMasterIrr() u8 {
     sendCommandSlave(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_IRR);
     return arch.inb(SLAVE_STATUS_REG);
 }
@@ -220,14 +220,16 @@ pub fn spuriousIrq(irq_num: u8) bool {
 }
 
 pub fn setMask(irq_num: u16) void {
-    const port: u16 = if (irq_num < 8) MASTER_COMMAND_REG else SLAVE_COMMAND_REG;
-    const value = arch.inb(port) | (1 << irq_num);
+    const port: u16 = if (irq_num < 8) MASTER_DATA_REG else SLAVE_DATA_REG;
+    const shift = @intCast(u3, irq_num % 8);
+    const value: u8 = arch.inb(port) | (u8(1) << shift);
     arch.outb(port, value);
 }
 
 pub fn clearMask(irq_num: u16) void {
-    const port: u16 = if (irq_num < 8) MASTER_COMMAND_REG else SLAVE_COMMAND_REG;
-    const value = arch.inb(port) & ~(1 << irq_num);
+    const port: u16 = if (irq_num < 8) MASTER_DATA_REG else SLAVE_DATA_REG;
+    const shift = @intCast(u3, irq_num % 8);
+    const value: u8 = arch.inb(port) & ~(u8(1) << shift);
     arch.outb(port, value);
 }
 
