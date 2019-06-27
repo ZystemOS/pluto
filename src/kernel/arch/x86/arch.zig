@@ -6,6 +6,7 @@ const idt = @import("idt.zig");
 const irq = @import("irq.zig");
 const isr = @import("isr.zig");
 const log = @import("../../log.zig");
+const pit = @import("pit.zig");
 
 pub const InterruptContext = struct {
     // Extra segments
@@ -49,6 +50,11 @@ pub fn init() void {
 
     isr.init();
     irq.init();
+
+    pit.init();
+
+    // Enable interrupts
+    enableInterrupts();
 }
 
 ///
