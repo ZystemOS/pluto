@@ -32,10 +32,11 @@ pub export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
 
         log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n");
         arch.init(&mem_profile, &fixed_allocator.allocator);
+        log.logInfo("Arch init done\n");
         vga.init();
         tty.init();
 
-        log.logInfo("Finished init\n");
+        log.logInfo("Init done\n");
         tty.print("Hello Pluto from kernel :)\n");
     }
 }
