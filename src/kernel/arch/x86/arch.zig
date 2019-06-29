@@ -38,11 +38,14 @@ pub const InterruptContext = struct {
     user_esp: u32,
     ss: u32,
 };
+const paging = @import("paging.zig");
+const std = @import("std");
+const MemProfile = @import("../../mem.zig").MemProfile;
 
 ///
 /// Initialise the architecture
 ///
-pub fn init() void {
+pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
     disableInterrupts();
 
     gdt.init();
@@ -52,6 +55,8 @@ pub fn init() void {
     irq.init();
 
     pit.init();
+
+    paging.init(mem_profile, allocator);
 
     // Enable interrupts
     enableInterrupts();
