@@ -305,4 +305,5 @@ pub fn init() void {
 
     // Load the TSS
     arch.ltr();
+    log.logInfo("Done\n");
 }

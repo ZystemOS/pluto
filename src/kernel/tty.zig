@@ -644,6 +644,7 @@ pub fn init() void {
     printLogo();
     displayPageNumber();
     updateCursor();
+    log.logInfo("Done\n");
 }
 
 fn resetGlobals() void {
