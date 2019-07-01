@@ -178,3 +178,14 @@ pub fn haltNoInterrupts() noreturn {
         halt();
     }
 }
+
+///
+/// Register an interrupt handler. The interrupt number should be the arch-specific number.
+///
+/// Arguments:
+///     IN int: u16 - The arch-specific interrupt number to register for.
+///     IN handler: fn (ctx: *InterruptContext) void - The handler to assign to the interrupt.
+///
+pub fn registerInterruptHandler(int: u16, handler: fn (ctx: *InterruptContext) void) void {
+    irq.registerIrq(int, handler);
+}
