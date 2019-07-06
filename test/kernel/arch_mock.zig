@@ -30,3 +30,12 @@ pub fn inb(port: u16) u8 {return 0;}
 /// event being waited.
 ///
 pub fn ioWait() void {}
+
+///
+/// Register an interrupt handler. The interrupt number should be the arch-specific number.
+///
+/// Arguments:
+///     IN int: u16 - The arch-specific interrupt number to register for.
+///     IN handler: fn (ctx: *InterruptContext) void - The handler to assign to the interrupt.
+///
+pub fn registerInterruptHandler(int: u16, ctx: fn (ctx: *InterruptContext) void) void {}
