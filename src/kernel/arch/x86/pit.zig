@@ -273,6 +273,7 @@ pub fn getFrequency() u32 {
 /// Initialise the PIT with a handler to IRQ 0.
 ///
 pub fn init() void {
+    log.logInfo("Init pit\n");
     // Set up counter 0 at 1000hz in a square wave mode counting in binary
     const f: u32 = 10000;
     setupCounter(OCW_SELECT_COUNTER_0, f, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY);
@@ -281,4 +282,5 @@ pub fn init() void {
 
     // Installs 'pitHandler' to IRQ0 (pic.IRQ_PIT)
     irq.registerIrq(pic.IRQ_PIT, pitHandler);
+    log.logInfo("Done\n");
 }
