@@ -122,4 +122,5 @@ pub fn closeInterruptGate(index: u8) void {
 pub fn init() void {
     log.logInfo("Init idt\n");
     arch.lidt(&idt_ptr);
+    log.logInfo("Done\n");
 }

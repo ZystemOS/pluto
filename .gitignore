@@ -43,3 +43,5 @@ zig-cache
 
 # Build dir
 bin/*
+*.pyc
+__pycache__
