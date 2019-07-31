@@ -142,7 +142,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
     mapDir(kernel_directory, p_start, p_end, v_start, v_end, allocator) catch unreachable;
     const dir_physaddr = @ptrToInt(kernel_directory) - constants.KERNEL_ADDR_OFFSET;
     asm volatile ("mov %[addr], %%cr3" :: [addr] "{eax}" (dir_physaddr));
-    isr.registerIsr(14, pageFault);
+    isr.registerIsr(14, pageFault) catch unreachable;
 }
 
 test "isAligned" {
