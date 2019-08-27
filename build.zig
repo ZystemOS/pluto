@@ -37,6 +37,7 @@ pub fn build(b: *Builder) void {
     b.makePath(grub_path.toSlice()) catch unreachable;
     b.makePath(kern_path.toSlice()) catch unreachable;
     b.makePath(a_path.toSlice()) catch unreachable;
+    b.makePath("zig-cache/kernel") catch unreachable;
 
     src_files.append("kernel/kmain") catch unreachable;
 
@@ -54,11 +55,17 @@ pub fn build(b: *Builder) void {
     src_files.append(arch_boot.toSlice()) catch unreachable;
 
     const iso_path = concat(b.allocator, build_path, "/pluto.iso") catch unreachable;
-    var objects_steps = buildObjects(b, builtin_target, build_path, src_path);
+    var objects = buildObjects(b, builtin_target, build_path, src_path);
     var link_step = buildLink(b, builtin_target, build_path);
     const iso_step = buildISO(b, build_path, iso_path.toSlice());
 
-    for (objects_steps.toSlice()) |step| b.default_step.dependOn(step);
+    for (objects.toSlice()) |obj| {
+        if (std.mem.eql(u8, obj.name, "kernel/kmain")) {
+            // Add build options here
+            obj.addBuildOption(bool, "rt_test", rt_test);
+        }
+        b.default_step.dependOn(&obj.step);
+    }
     b.default_step.dependOn(link_step);
     for (iso_step.toSlice()) |step| b.default_step.dependOn(step);
 
@@ -156,8 +163,8 @@ fn buildLink(b: *Builder, target: builtin.Arch, build_path: []const u8) *Step {
     return &exec.step;
 }
 
-fn buildObjects(b: *Builder, target: builtin.Arch, build_path: []const u8, src_path: []const u8) ArrayList(*Step) {
-    var objects = ArrayList(*Step).init(b.allocator);
+fn buildObjects(b: *Builder, target: builtin.Arch, build_path: []const u8, src_path: []const u8) ArrayList(*std.build.LibExeObjStep) {
+    var objects = ArrayList(*std.build.LibExeObjStep).init(b.allocator);
     const src_path2 = concat(b.allocator, src_path, "/") catch unreachable;
     for (src_files.toSlice()) |file| {
         var file_src = concat(b.allocator, src_path2.toSlice(), file) catch unreachable;
@@ -166,7 +173,7 @@ fn buildObjects(b: *Builder, target: builtin.Arch, build_path: []const u8, src_p
         obj.setMainPkgPath(".");
         obj.setOutputDir(build_path);
         obj.setTarget(target, builtin.Os.freestanding, builtin.Abi.gnu);
-        objects.append(&obj.step) catch unreachable;
+        objects.append(obj) catch unreachable;
     }
     for (src_files_asm.toSlice()) |file| {
         var file_src = concat(b.allocator, src_path2.toSlice(), file) catch unreachable;
@@ -174,7 +181,7 @@ fn buildObjects(b: *Builder, target: builtin.Arch, build_path: []const u8, src_p
         const obj = b.addAssemble(file, file_src.toSlice());
         obj.setOutputDir(build_path);
         obj.setTarget(target, builtin.Os.freestanding, builtin.Abi.gnu);
-        objects.append(&obj.step) catch unreachable;
+        objects.append(obj) catch unreachable;
     }
     return objects;
 }

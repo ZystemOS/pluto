@@ -36,5 +36,7 @@ steps:
     sudo apt-get install qemu qemu-system --fix-missing
   displayName: 'Download qemu'
   
-- script: zig*/zig build test -Drt-test=true -Dzig-path=zig*/zig
+- script: |
+    zig*/zig build -Drt-test=true
+    zig*/zig build test -Drt-test=true -Dzig-path=zig*/zig
   displayName: 'Runtime tests'

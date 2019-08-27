@@ -9,6 +9,7 @@ const vga = @import("vga.zig");
 const log = @import("log.zig");
 const serial = @import("serial.zig");
 const mem = @import("mem.zig");
+const options = @import("build_options");
 
 // Need to import this as we need the panic to be in the root source file, or zig will just use the
 // builtin panic and just loop, which is what we don't want
@@ -31,7 +32,7 @@ pub export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
         serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch unreachable;
 
         log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n");
-        arch.init(&mem_profile, &fixed_allocator.allocator);
+        arch.init(&mem_profile, &fixed_allocator.allocator, options);
         log.logInfo("Arch init done\n");
         vga.init();
         tty.init();
