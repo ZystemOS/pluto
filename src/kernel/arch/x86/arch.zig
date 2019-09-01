@@ -45,7 +45,7 @@ const MemProfile = @import("../../mem.zig").MemProfile;
 ///
 /// Initialise the architecture
 ///
-pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
+pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator, comptime options: type) void {
     disableInterrupts();
 
     gdt.init();
