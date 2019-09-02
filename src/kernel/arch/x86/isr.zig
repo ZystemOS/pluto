@@ -3,6 +3,7 @@
 const panic = @import("../../panic.zig");
 const idt = @import("idt.zig");
 const arch = @import("arch.zig");
+const syscalls = @import("syscalls.zig");
 
 const NUMBER_OF_ENTRIES: u16 = 32;
 
@@ -39,6 +40,7 @@ extern fn isr28() void;
 extern fn isr29() void;
 extern fn isr30() void;
 extern fn isr31() void;
+extern fn isr128() void;
 
 /// The exception messaged that is printed when a exception happens
 const exception_msg: [NUMBER_OF_ENTRIES][]const u8 = [NUMBER_OF_ENTRIES][]const u8 {
@@ -76,8 +78,18 @@ const exception_msg: [NUMBER_OF_ENTRIES][]const u8 = [NUMBER_OF_ENTRIES][]const 
     "Reserved"
 };
 
+/// Errors that an isr function can return
+pub const IsrError = error {
+    UnrecognisedIsr
+};
+
+/// An isr handler. Takes an interrupt context and returns void.
+/// Should finish quickly to avoid delaying further interrupts and the previously running code
+pub const IsrHandler = fn(*arch.InterruptContext)void;
+
 // The of exception handlers initialised to unhandled.
-var isr_handlers: [NUMBER_OF_ENTRIES]fn(*arch.InterruptContext)void = []fn(*arch.InterruptContext)void{unhandled} ** NUMBER_OF_ENTRIES;
+var isr_handlers: [NUMBER_OF_ENTRIES]IsrHandler = []IsrHandler{unhandled} ** NUMBER_OF_ENTRIES;
+var syscall_handler: IsrHandler = unhandled;
 
 ///
 /// A dummy handler that will make a call to panic as it is a unhandled exception.
@@ -92,6 +104,17 @@ fn unhandled(context: *arch.InterruptContext) void {
 }
 
 ///
+/// Checks if the isr is valid and returns true if it is, else false.
+/// To be valid it must be greater than or equal to 0 and less than NUMBER_OF_ENTRIES.
+///
+/// Arguments:
+///     IN isr_num: u16 - The isr number to check
+///
+pub fn isValidIsr(isr_num: u32) bool {
+    return isr_num >= 0 and isr_num < NUMBER_OF_ENTRIES;
+}
+
+///
 /// The exception handler that each of the exceptions will call when a exception happens.
 ///
 /// Arguments:
@@ -100,7 +123,13 @@ fn unhandled(context: *arch.InterruptContext) void {
 ///
 export fn isrHandler(context: *arch.InterruptContext) void {
     const isr_num = context.int_num;
-    isr_handlers[isr_num](context);
+    if (isr_num == syscalls.INTERRUPT) {
+        syscall_handler(context);
+    } else if (isValidIsr(isr_num)) {
+        isr_handlers[isr_num](context);
+    } else {
+        panic.panicFmt(null, "Unrecognised isr: {}\n", isr_num);
+    }
 }
 
 ///
@@ -109,8 +138,17 @@ export fn isrHandler(context: *arch.InterruptContext) void {
 /// Arguments:
 ///     IN irq_num: u16 - The exception number to register.
 ///
-pub fn registerIsr(isr_num: u16, handler: fn(*arch.InterruptContext)void) void {
-    isr_handlers[isr_num] = handler;
+/// Errors:
+///     IsrError.UnrecognisedIsr - If `isr_num` is invalid (see isValidIsr)
+///
+pub fn registerIsr(isr_num: u16, handler: fn(*arch.InterruptContext)void) !void {
+    if (isr_num == syscalls.INTERRUPT) {
+        syscall_handler = handler;
+    } else if (isValidIsr(isr_num)) {
+        isr_handlers[isr_num] = handler;
+    } else {
+        return IsrError.UnrecognisedIsr;
+    }
 }
 
 ///
@@ -160,4 +198,5 @@ pub fn init() void {
     idt.openInterruptGate(29, isr29);
     idt.openInterruptGate(30, isr30);
     idt.openInterruptGate(31, isr31);
+    idt.openInterruptGate(syscalls.INTERRUPT, isr128);
 }
