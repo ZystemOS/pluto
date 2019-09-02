@@ -7,6 +7,7 @@ const irq = @import("irq.zig");
 const isr = @import("isr.zig");
 const log = @import("../../log.zig");
 const pit = @import("pit.zig");
+const syscalls = @import("syscalls.zig");
 
 pub const InterruptContext = struct {
     // Extra segments
@@ -57,6 +58,8 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator, compt
     pit.init();
 
     paging.init(mem_profile, allocator);
+
+    syscalls.init(options);
 
     // Enable interrupts
     enableInterrupts();
