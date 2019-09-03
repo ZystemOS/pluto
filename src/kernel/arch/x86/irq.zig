@@ -28,7 +28,7 @@ extern fn irq14() void;
 extern fn irq15() void;
 
 /// The list of IRQ handlers initialised to unhandled.
-var irq_handlers: [NUMBER_OF_ENTRIES]fn(*arch.InterruptContext)void = []fn(*arch.InterruptContext)void {unhandled} ** NUMBER_OF_ENTRIES;
+var irq_handlers: [NUMBER_OF_ENTRIES]fn (*arch.InterruptContext) void = [_]fn (*arch.InterruptContext) void{unhandled} ** NUMBER_OF_ENTRIES;
 
 ///
 /// A dummy handler that will make a call to panic as it is a unhandled interrupt.
@@ -66,7 +66,7 @@ export fn irqHandler(context: *arch.InterruptContext) void {
 /// Arguments:
 ///     IN irq_num: u16 - The IRQ number to register.
 ///
-pub fn registerIrq(irq_num: u16, handler: fn(*arch.InterruptContext)void) void {
+pub fn registerIrq(irq_num: u16, handler: fn (*arch.InterruptContext) void) void {
     irq_handlers[irq_num] = handler;
     pic.clearMask(irq_num);
 }

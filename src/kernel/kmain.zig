@@ -11,6 +11,13 @@ const serial = @import("serial.zig");
 const mem = @import("mem.zig");
 const options = @import("build_options");
 
+comptime {
+    switch (builtin.arch) {
+        .i386 => _ = @import("arch/x86/boot.zig"),
+        else => {},
+    }
+}
+
 // Need to import this as we need the panic to be in the root source file, or zig will just use the
 // builtin panic and just loop, which is what we don't want
 const panic_root = @import("panic.zig");
