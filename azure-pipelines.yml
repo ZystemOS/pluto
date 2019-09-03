@@ -15,7 +15,7 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  zig_version: 0.4.0
+  zig_version: master
 
 steps:
 - script: |
@@ -37,6 +37,5 @@ steps:
   displayName: 'Download qemu'
   
 - script: |
-    zig*/zig build -Drt-test=true
-    zig*/zig build test -Drt-test=true -Dzig-path=zig*/zig
+    zig*/zig build test -Drt-test=true
   displayName: 'Runtime tests'

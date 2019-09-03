@@ -29,9 +29,7 @@ const START_OF_DISPLAYABLE_REGION: u16 = vga.WIDTH * ROW_MIN;
 /// The total number of VGA elements (or characters) the video buffer can display
 const VIDEO_BUFFER_SIZE: u16 = vga.WIDTH * vga.HEIGHT;
 
-const PrintError = error {
-    OutOfBounds,
-};
+const PrintError = error{OutOfBounds};
 
 /// The current x position of the cursor.
 var column: u8 = 0;
@@ -55,7 +53,7 @@ var pages: [TOTAL_NUM_PAGES][TOTAL_CHAR_ON_PAGE]u16 = init: {
     var p: [TOTAL_NUM_PAGES][TOTAL_CHAR_ON_PAGE]u16 = undefined;
 
     for (p) |*page| {
-        page.* = []u16{0} ** TOTAL_CHAR_ON_PAGE;
+        page.* = [_]u16{0} ** TOTAL_CHAR_ON_PAGE;
     }
 
     break :init p;
@@ -82,8 +80,9 @@ var page_index: u8 = 0;
 fn videoCopy(video_buf_offset: u16, data: []const u16, size: u16) PrintError!void {
     // Secure programming ;)
     if (video_buf_offset >= video_buffer.len and
-            size > video_buffer.len - video_buf_offset and
-            size > data.len) {
+        size > video_buffer.len - video_buf_offset and
+        size > data.len)
+    {
         return PrintError.OutOfBounds;
     }
 
@@ -357,7 +356,7 @@ fn putChar(char: u8) PrintError!void {
                     row -= 1;
                 }
             } else {
-                column -=  1;
+                column -= 1;
             }
         },
         else => {
@@ -496,7 +495,7 @@ pub fn pageDown() void {
         page_index -= 1;
         videoCopy(START_OF_DISPLAYABLE_REGION, pages[page_index][0..TOTAL_CHAR_ON_PAGE], TOTAL_CHAR_ON_PAGE) catch unreachable;
         displayPageNumber();
-        if(page_index == 0) {
+        if (page_index == 0) {
             vga.enableCursor();
             updateCursor();
         } else {
@@ -608,7 +607,7 @@ pub fn init() void {
         // Copy rows 7 down to make room for logo
         // If there isn't enough room, only take the bottom rows
         var row_offset: u16 = 0;
-        if(vga.HEIGHT - 1 - row < ROW_MIN) {
+        if (vga.HEIGHT - 1 - row < ROW_MIN) {
             row_offset = u16(ROW_MIN - (vga.HEIGHT - 1 - row));
         }
 
@@ -761,31 +760,21 @@ fn defaultAllTesting(p_i: u8, r: u8, c: u8) void {
 }
 
 test "updateCursor" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Call function
     //
 
     updateCursor();
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Tear down
     //
 
@@ -797,27 +786,19 @@ test "getCursor all" {
 }
 
 test "displayPageNumber column and row is reset" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = 5;
     row = 6;
     defaultAllTesting(0, 6, 5);
-
-    //
     // Call function
     //
 
     displayPageNumber();
-
-    //
     // Post test
     //
 
@@ -835,8 +816,6 @@ test "displayPageNumber column and row is reset" {
             expectEqual(blank, b);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -844,31 +823,21 @@ test "displayPageNumber column and row is reset" {
 }
 
 test "putEntryAt out of bounds" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Call function
     //
 
     expectError(PrintError.OutOfBounds, putEntryAt('A', 100, 100));
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Tear down (resets globals)
     //
 
@@ -876,19 +845,13 @@ test "putEntryAt out of bounds" {
 }
 
 test "putEntryAt not in displayable region" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Call function
     //
 
@@ -896,8 +859,6 @@ test "putEntryAt not in displayable region" {
     const y: u8 = 0;
     const char: u8 = 'A';
     putEntryAt(char, x, y) catch unreachable;
-
-    //
     // Post test
     //
 
@@ -911,8 +872,6 @@ test "putEntryAt not in displayable region" {
             expectEqual(vga.entry(0, test_colour), b);
         }
     }
-
-    //
     // Tear down (resets globals)
     //
 
@@ -920,19 +879,13 @@ test "putEntryAt not in displayable region" {
 }
 
 test "putEntryAt in displayable region page_index is 0" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Call function
     //
 
@@ -940,8 +893,6 @@ test "putEntryAt in displayable region page_index is 0" {
     const y: u16 = ROW_MIN;
     const char: u8 = 'A';
     putEntryAt(char, x, y) catch unreachable;
-
-    //
     // Post test
     //
 
@@ -963,8 +914,6 @@ test "putEntryAt in displayable region page_index is 0" {
             expectEqual(vga.entry(0, test_colour), b);
         }
     }
-
-    //
     // Tear down (resets globals)
     //
 
@@ -972,10 +921,8 @@ test "putEntryAt in displayable region page_index is 0" {
 }
 
 test "putEntryAt in displayable region page_index is not 0" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
 
     // Fill the 1'nd page (index 1) will all 1's
@@ -991,8 +938,6 @@ test "putEntryAt in displayable region page_index is not 0" {
     }
 
     page_index = 1;
-
-    //
     // Pre testing
     //
 
@@ -1008,8 +953,6 @@ test "putEntryAt in displayable region page_index is not 0" {
             }
         }
     }
-
-    //
     // Call function
     //
 
@@ -1017,8 +960,6 @@ test "putEntryAt in displayable region page_index is not 0" {
     const y: u16 = ROW_MIN;
     const char: u8 = 'A';
     putEntryAt(char, x, y) catch unreachable;
-
-    //
     // Post test
     //
 
@@ -1050,8 +991,6 @@ test "putEntryAt in displayable region page_index is not 0" {
             expectEqual(ones, b);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1059,37 +998,27 @@ test "putEntryAt in displayable region page_index is not 0" {
 }
 
 test "pagesMoveRowsUp out of bounds" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Call function
     //
 
     const rows_to_move: u16 = ROW_TOTAL + 1;
     expectError(PrintError.OutOfBounds, pagesMoveRowsUp(rows_to_move));
-
-    //
     // Post test
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Tear down
     //
 
@@ -1097,37 +1026,27 @@ test "pagesMoveRowsUp out of bounds" {
 }
 
 test "pagesMoveRowsUp 0 rows" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Call function
     //
 
     const rows_to_move: u16 = 0;
     pagesMoveRowsUp(rows_to_move) catch unreachable;
-
-    //
     // Post test
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Tear down
     //
 
@@ -1135,29 +1054,21 @@ test "pagesMoveRowsUp 0 rows" {
 }
 
 test "pagesMoveRowsUp 1 rows" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Call function
     //
 
     const rows_to_move: u16 = 1;
     pagesMoveRowsUp(rows_to_move) catch unreachable;
-
-    //
     // Post test
     //
 
@@ -1182,8 +1093,6 @@ test "pagesMoveRowsUp 1 rows" {
             }
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1191,29 +1100,21 @@ test "pagesMoveRowsUp 1 rows" {
 }
 
 test "pagesMoveRowsUp ROW_TOTAL - 1 rows" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Call function
     //
 
     const rows_to_move: u16 = ROW_TOTAL - 1;
     pagesMoveRowsUp(rows_to_move) catch unreachable;
-
-    //
     // Post test
     //
 
@@ -1238,8 +1139,6 @@ test "pagesMoveRowsUp ROW_TOTAL - 1 rows" {
             }
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1247,29 +1146,21 @@ test "pagesMoveRowsUp ROW_TOTAL - 1 rows" {
 }
 
 test "pagesMoveRowsUp ROW_TOTAL rows" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Call function
     //
 
     const rows_to_move: u16 = ROW_TOTAL;
     pagesMoveRowsUp(rows_to_move) catch unreachable;
-
-    //
     // Post test
     //
 
@@ -1288,8 +1179,6 @@ test "pagesMoveRowsUp ROW_TOTAL rows" {
             }
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1297,36 +1186,26 @@ test "pagesMoveRowsUp ROW_TOTAL rows" {
 }
 
 test "scroll row is less then max height" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Call function
     //
 
     scroll();
-
-    //
     // Post test
     //
 
     defaultVariablesTesting(0, 0, 0);
     defaultVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Tear down
     //
 
@@ -1334,32 +1213,24 @@ test "scroll row is less then max height" {
 }
 
 test "scroll row is equal to height" {
-    //
     // Set up
     //
-
     setVideoBufferIncrementingBlankPages();
     setPagesIncrementing();
 
     const row_test: u16 = vga.HEIGHT;
     row = row_test;
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, row_test, 0);
     incrementingPagesTesting();
     incrementingVideoBufferTesting();
-
-    //
     // Call function
     //
 
     // Rows move up one
     scroll();
-
-    //
     // Post test
     //
 
@@ -1394,8 +1265,6 @@ test "scroll row is equal to height" {
             expectEqual(k + to_add, video_buffer[k]);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1403,32 +1272,24 @@ test "scroll row is equal to height" {
 }
 
 test "scroll row is more than height" {
-    //
     // Set up
     //
-
     setVideoBufferIncrementingBlankPages();
     setPagesIncrementing();
 
     const row_test: u16 = vga.HEIGHT + 5;
     row = row_test;
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, row_test, 0);
     incrementingPagesTesting();
     incrementingVideoBufferTesting();
-
-    //
     // Call function
     //
 
     // Rows move up 5
     scroll();
-
-    //
     // Post test
     //
 
@@ -1463,8 +1324,6 @@ test "scroll row is more than height" {
             expectEqual(k + to_add, video_buffer[k]);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1472,33 +1331,23 @@ test "scroll row is more than height" {
 }
 
 test "putChar new line within screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = 5;
     row = 5;
     defaultAllTesting(0, 5, 5);
-
-    //
     // Call function
     //
 
     putChar('\n') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 6, 0);
-
-    //
     // Tear down
     //
 
@@ -1506,33 +1355,23 @@ test "putChar new line within screen" {
 }
 
 test "putChar new line outside screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = 5;
     row = vga.HEIGHT - 1;
     defaultAllTesting(0, vga.HEIGHT - 1, 5);
-
-    //
     // Call function
     //
 
     putChar('\n') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, vga.HEIGHT - 1, 0);
-
-    //
     // Tear down
     //
 
@@ -1540,33 +1379,23 @@ test "putChar new line outside screen" {
 }
 
 test "putChar tab within line" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = 5;
     row = 6;
     defaultAllTesting(0, 6, 5);
-
-    //
     // Call function
     //
 
     putChar('\t') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 6, 9);
-
-    //
     // Tear down
     //
 
@@ -1574,33 +1403,23 @@ test "putChar tab within line" {
 }
 
 test "putChar tab end of line" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = vga.WIDTH - 1;
     row = 6;
     defaultAllTesting(0, 6, vga.WIDTH - 1);
-
-    //
     // Call function
     //
 
     putChar('\t') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 7, 3);
-
-    //
     // Tear down
     //
 
@@ -1608,33 +1427,23 @@ test "putChar tab end of line" {
 }
 
 test "putChar tab end of screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = vga.WIDTH - 1;
     row = vga.HEIGHT - 1;
     defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
-
-    //
     // Call function
     //
 
     putChar('\t') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, vga.HEIGHT - 1, 3);
-
-    //
     // Tear down
     //
 
@@ -1642,33 +1451,23 @@ test "putChar tab end of screen" {
 }
 
 test "putChar line feed" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = vga.WIDTH - 1;
     row = vga.HEIGHT - 1;
     defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
-
-    //
     // Call function
     //
 
     putChar('\r') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, vga.HEIGHT - 1, 0);
-
-    //
     // Tear down
     //
 
@@ -1676,31 +1475,21 @@ test "putChar line feed" {
 }
 
 test "putChar back char top left of screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Call function
     //
 
     putChar('\x08') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Tear down
     //
 
@@ -1708,32 +1497,22 @@ test "putChar back char top left of screen" {
 }
 
 test "putChar back char top row" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = 8;
     defaultAllTesting(0, 0, 8);
-
-    //
     // Call function
     //
 
     putChar('\x08') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 0, 7);
-
-    //
     // Tear down
     //
 
@@ -1741,32 +1520,22 @@ test "putChar back char top row" {
 }
 
 test "putChar back char beginning of row" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     row = 1;
     defaultAllTesting(0, 1, 0);
-
-    //
     // Call function
     //
 
     putChar('\x08') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 0, vga.WIDTH - 1);
-
-    //
     // Tear down
     //
 
@@ -1774,25 +1543,17 @@ test "putChar back char beginning of row" {
 }
 
 test "putChar any char in row" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Call function
     //
 
     putChar('A') catch unreachable;
-
-    //
     // Post test
     //
 
@@ -1807,8 +1568,6 @@ test "putChar any char in row" {
             expectEqual(blank, video_buffer[k]);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1816,26 +1575,18 @@ test "putChar any char in row" {
 }
 
 test "putChar any char end of row" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = vga.WIDTH - 1;
     defaultAllTesting(0, 0, vga.WIDTH - 1);
-
-    //
     // Call function
     //
 
     putChar('A') catch unreachable;
-
-    //
     // Post test
     //
 
@@ -1850,8 +1601,6 @@ test "putChar any char end of row" {
             expectEqual(blank, video_buffer[k]);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1859,41 +1608,32 @@ test "putChar any char end of row" {
 }
 
 test "putChar any char end of screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     row = vga.HEIGHT - 1;
     column = vga.WIDTH - 1;
     defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
-
-    //
     // Call function
     //
 
     putChar('A') catch unreachable;
-
-    //
     // Post test
     //
 
     defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
     for (pages) |page, i| {
-            for (page) |c, j| {
-                if ((i == 0) and (j == TOTAL_CHAR_ON_PAGE - vga.WIDTH - 1)) {
-                    expectEqual(vga.entry('A', colour), c);
-                } else {
-                    expectEqual(blank, c);
-                }
+        for (page) |c, j| {
+            if ((i == 0) and (j == TOTAL_CHAR_ON_PAGE - vga.WIDTH - 1)) {
+                expectEqual(vga.entry('A', colour), c);
+            } else {
+                expectEqual(blank, c);
             }
         }
-
+    }
 
     var k: u16 = 0;
     while (k < VIDEO_BUFFER_SIZE) : (k += 1) {
@@ -1903,8 +1643,6 @@ test "putChar any char end of screen" {
             expectEqual(blank, video_buffer[k]);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1912,13 +1650,9 @@ test "putChar any char end of screen" {
 }
 
 test "printLogo all" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
@@ -1926,14 +1660,10 @@ test "printLogo all" {
     row = ROW_MIN;
 
     defaultAllTesting(0, ROW_MIN, 0);
-
-    //
     // Call function
     //
 
     printLogo();
-
-    //
     // Post test
     //
 
@@ -1949,8 +1679,6 @@ test "printLogo all" {
             expectEqual(blank, video_buffer[k]);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -1958,14 +1686,10 @@ test "printLogo all" {
 }
 
 test "pageUp top page" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
@@ -1974,22 +1698,16 @@ test "pageUp top page" {
     defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
     incrementingPagesTesting();
     defaultVideoBufferTesting();
-
-    //
     // Call function
     //
 
     pageUp();
-
-    //
     // Post test
     //
 
     defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
     incrementingPagesTesting();
     defaultVideoBufferTesting();
-
-    //
     // Tear down
     //
 
@@ -1997,28 +1715,20 @@ test "pageUp top page" {
 }
 
 test "pageUp bottom page" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     incrementingPagesTesting();
     defaultVideoBufferTesting();
-
-    //
     // Call function
     //
 
     pageUp();
-
-    //
     // Post test
     //
 
@@ -2038,8 +1748,6 @@ test "pageUp bottom page" {
             expectEqual(i - START_OF_DISPLAYABLE_REGION + TOTAL_CHAR_ON_PAGE, b);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -2047,36 +1755,26 @@ test "pageUp bottom page" {
 }
 
 test "pageDown bottom page" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     incrementingPagesTesting();
     defaultVideoBufferTesting();
-
-    //
     // Call function
     //
 
     pageDown();
-
-    //
     // Post test
     //
 
     defaultVariablesTesting(0, 0, 0);
     incrementingPagesTesting();
     defaultVideoBufferTesting();
-
-    //
     // Tear down
     //
 
@@ -2084,14 +1782,10 @@ test "pageDown bottom page" {
 }
 
 test "pageDown top page" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
@@ -2100,14 +1794,10 @@ test "pageDown top page" {
     defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
     incrementingPagesTesting();
     defaultVideoBufferTesting();
-
-    //
     // Call function
     //
 
     pageDown();
-
-    //
     // Post test
     //
 
@@ -2127,8 +1817,6 @@ test "pageDown top page" {
             expectEqual((i - START_OF_DISPLAYABLE_REGION) + (TOTAL_CHAR_ON_PAGE * page_index), b);
         }
     }
-
-    //
     // Tear down
     //
 
@@ -2136,28 +1824,20 @@ test "pageDown top page" {
 }
 
 test "clearScreen all" {
-    //
     // Set up
     //
-
     setVideoBufferIncrementingBlankPages();
     setPagesIncrementing();
-
-    //
     // Pre testing
     //
 
     defaultVariablesTesting(0, 0, 0);
     incrementingVideoBufferTesting();
     incrementingPagesTesting();
-
-    //
     // Call function
     //
 
     clearScreen();
-
-    //
     // Post test
     //
 
@@ -2183,8 +1863,6 @@ test "clearScreen all" {
             }
         }
     }
-
-    //
     // Tear down
     //
 
@@ -2192,31 +1870,21 @@ test "clearScreen all" {
 }
 
 test "moveCursorLeft top left of screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Call function
     //
 
     moveCursorLeft();
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 0, 0);
-
-    //
     // Tear down
     //
 
@@ -2224,32 +1892,22 @@ test "moveCursorLeft top left of screen" {
 }
 
 test "moveCursorLeft top screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = 5;
     defaultAllTesting(0, 0, 5);
-
-    //
     // Call function
     //
 
     moveCursorLeft();
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 0, 4);
-
-    //
     // Tear down
     //
 
@@ -2257,32 +1915,22 @@ test "moveCursorLeft top screen" {
 }
 
 test "moveCursorLeft start of row" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     row = 5;
     defaultAllTesting(0, 5, 0);
-
-    //
     // Call function
     //
 
     moveCursorLeft();
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 4, vga.WIDTH - 1);
-
-    //
     // Tear down
     //
 
@@ -2290,33 +1938,23 @@ test "moveCursorLeft start of row" {
 }
 
 test "moveCursorRight bottom right of screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     row = vga.HEIGHT - 1;
     column = vga.WIDTH - 1;
     defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
-
-    //
     // Call function
     //
 
     moveCursorRight();
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
-
-    //
     // Tear down
     //
 
@@ -2324,32 +1962,22 @@ test "moveCursorRight bottom right of screen" {
 }
 
 test "moveCursorRight top screen" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     column = 5;
     defaultAllTesting(0, 0, 5);
-
-    //
     // Call function
     //
 
     moveCursorRight();
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 0, 6);
-
-    //
     // Tear down
     //
 
@@ -2357,33 +1985,23 @@ test "moveCursorRight top screen" {
 }
 
 test "moveCursorRight end of row" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
 
     row = 5;
     column = vga.WIDTH - 1;
     defaultAllTesting(0, 5, vga.WIDTH - 1);
-
-    //
     // Call function
     //
 
     moveCursorRight();
-
-    //
     // Post test
     //
 
     defaultAllTesting(0, 6, 0);
-
-    //
     // Tear down
     //
 
@@ -2391,7 +2009,6 @@ test "moveCursorRight end of row" {
 }
 
 test "setColour all" {
-    //
     // Set up
     //
 
@@ -2402,43 +2019,30 @@ test "setColour all" {
     //
     // Call function
     //
-
     const new_colour: u8 = vga.entryColour(vga.COLOUR_WHITE, vga.COLOUR_WHITE);
     setColour(new_colour);
-
-    //
     // Post test
     //
 
     expectEqual(new_colour, colour);
     expectEqual(vga.entry(0, new_colour), blank);
-
-    //
     // Tear down
     //
     resetGlobals();
 }
 
 test "writeString all" {
-    //
     // Set up
     //
-
     setVideoBufferBlankPages();
-
-    //
     // Pre testing
     //
     row = ROW_MIN;
     defaultAllTesting(0, ROW_MIN, 0);
-
-    //
     // Call function
     //
 
     writeString("ABC") catch unreachable;
-
-    //
     // Post test
     //
 
@@ -2457,7 +2061,6 @@ test "writeString all" {
         }
     }
 
-
     var k: u16 = 0;
     while (k < VIDEO_BUFFER_SIZE) : (k += 1) {
         if (k == START_OF_DISPLAYABLE_REGION) {
@@ -2470,8 +2073,6 @@ test "writeString all" {
             expectEqual(blank, video_buffer[k]);
         }
     }
-
-    //
     // Tear down
     //
 

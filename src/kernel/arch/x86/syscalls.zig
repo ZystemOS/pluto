@@ -14,13 +14,13 @@ pub const NUM_HANDLERS: u16 = 256;
 pub const SyscallHandler = fn (ctx: *arch.InterruptContext) u32;
 
 /// Errors that syscall utility functions can throw
-pub const SyscallError = error {
+pub const SyscallError = error{
     SyscallExists,
-    InvalidSyscall
+    InvalidSyscall,
 };
 
 /// The array of registered syscalls
-var handlers: [NUM_HANDLERS]?SyscallHandler = []?SyscallHandler{null} ** NUM_HANDLERS;
+var handlers: [NUM_HANDLERS]?SyscallHandler = [_]?SyscallHandler{null} ** NUM_HANDLERS;
 
 ///
 /// Returns true if the syscall is valid, else false.
@@ -84,7 +84,7 @@ inline fn syscall0(syscall: u32) u32 {
     return asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> u32)
-        : [syscall] "{eax}" (syscall),
+        : [syscall] "{eax}" (syscall)
     );
 }
 
@@ -100,7 +100,7 @@ inline fn syscall1(syscall: u32, arg: u32) u32 {
         \\int $0x80
         : [ret] "={eax}" (-> u32)
         : [syscall] "{eax}" (syscall),
-          [arg1] "{ebx}" (arg),
+          [arg1] "{ebx}" (arg)
     );
 }
 
@@ -118,7 +118,7 @@ inline fn syscall2(syscall: u32, arg1: u32, arg2: u32) u32 {
         : [ret] "={eax}" (-> u32)
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
-          [arg2] "{ecx}" (arg2),
+          [arg2] "{ecx}" (arg2)
     );
 }
 
@@ -138,7 +138,7 @@ inline fn syscall3(syscall: u32, arg1: u32, arg2: u32, arg3: u32) u32 {
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
-          [arg3] "{edx}" (arg3),
+          [arg3] "{edx}" (arg3)
     );
 }
 
@@ -160,7 +160,7 @@ inline fn syscall4(syscall: u32, arg1: u32, arg2: u32, arg3: u32, arg4: u32) u32
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
-          [arg4] "{esi}" (arg4),
+          [arg4] "{esi}" (arg4)
     );
 }
 
@@ -184,7 +184,7 @@ inline fn syscall5(syscall: u32, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
           [arg4] "{esi}" (arg4),
-          [arg5] "{edi}" (arg5),
+          [arg5] "{edi}" (arg5)
     );
 }
 
@@ -202,7 +202,7 @@ inline fn syscallArg(ctx: *arch.InterruptContext, comptime arg_idx: u32) u32 {
         2 => ctx.edx,
         3 => ctx.esi,
         4 => ctx.edi,
-        else => @compileError("Arg index must be between 0 and 4")
+        else => @compileError("Arg index must be between 0 and 4"),
     };
 }
 
@@ -217,7 +217,6 @@ pub fn init(comptime options: type) void {
 }
 
 /// Tests
-
 var testInt: u32 = 0;
 
 fn testHandler0(ctx: *arch.InterruptContext) u32 {
