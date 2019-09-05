@@ -9,58 +9,56 @@ const TABLE_SIZE: u16 = @sizeOf(GdtEntry) * NUMBER_OF_ENTRIES - 1;
 // The indexes into the GDT where each segment resides.
 
 /// The index of the NULL GDT entry.
-const NULL_INDEX: u16           = 0x00;
+const NULL_INDEX: u16 = 0x00;
 
 /// The index of the kernel code GDT entry.
-const KERNEL_CODE_INDEX: u16    = 0x01;
+const KERNEL_CODE_INDEX: u16 = 0x01;
 
 /// The index of the kernel data GDT entry.
-const KERNEL_DATA_INDEX: u16    = 0x02;
+const KERNEL_DATA_INDEX: u16 = 0x02;
 
 /// The index of the user code GDT entry.
-const USER_CODE_INDEX: u16      = 0x03;
+const USER_CODE_INDEX: u16 = 0x03;
 
 /// The index of the user data GDT entry.
-const USER_DATA_INDEX: u16      = 0x04;
+const USER_DATA_INDEX: u16 = 0x04;
 
 /// The index of the task state segment GDT entry.
-const TSS_INDEX: u16            = 0x05;
-
+const TSS_INDEX: u16 = 0x05;
 
 // The offsets into the GDT where each segment resides.
 
 /// The offset of the NULL GDT entry.
-pub const NULL_OFFSET: u16          = 0x00;
+pub const NULL_OFFSET: u16 = 0x00;
 
 /// The offset of the kernel code GDT entry.
-pub const KERNEL_CODE_OFFSET: u16   = 0x08;
+pub const KERNEL_CODE_OFFSET: u16 = 0x08;
 
 /// The offset of the kernel data GDT entry.
-pub const KERNEL_DATA_OFFSET: u16   = 0x10;
+pub const KERNEL_DATA_OFFSET: u16 = 0x10;
 
 /// The offset of the user code GDT entry.
-pub const USER_CODE_OFFSET: u16     = 0x18;
+pub const USER_CODE_OFFSET: u16 = 0x18;
 
 /// The offset of the user data GDT entry.
-pub const USER_DATA_OFFSET: u16     = 0x20;
+pub const USER_DATA_OFFSET: u16 = 0x20;
 
 /// The offset of the TTS GDT entry.
-pub const TSS_OFFSET: u16           = 0x28;
+pub const TSS_OFFSET: u16 = 0x28;
 
 // The access bits
-const ACCESSED_BIT              = 0x01; // 00000001
-const WRITABLE_BIT              = 0x02; // 00000010
-const DIRECTION_CONFORMING_BIT  = 0x04; // 00000100
-const EXECUTABLE_BIT            = 0x08; // 00001000
-const DESCRIPTOR_BIT            = 0x10; // 00010000
+const ACCESSED_BIT = 0x01; // 00000001
+const WRITABLE_BIT = 0x02; // 00000010
+const DIRECTION_CONFORMING_BIT = 0x04; // 00000100
+const EXECUTABLE_BIT = 0x08; // 00001000
+const DESCRIPTOR_BIT = 0x10; // 00010000
 
-const PRIVILEGE_RING_0          = 0x00; // 00000000
-const PRIVILEGE_RING_1          = 0x20; // 00100000
-const PRIVILEGE_RING_2          = 0x40; // 01000000
-const PRIVILEGE_RING_3          = 0x60; // 01100000
+const PRIVILEGE_RING_0 = 0x00; // 00000000
+const PRIVILEGE_RING_1 = 0x20; // 00100000
+const PRIVILEGE_RING_2 = 0x40; // 01000000
+const PRIVILEGE_RING_3 = 0x60; // 01100000
 
-const PRESENT_BIT               = 0x80; // 10000000
-
+const PRESENT_BIT = 0x80; // 10000000
 
 const KERNEL_SEGMENT = PRESENT_BIT | PRIVILEGE_RING_0 | DESCRIPTOR_BIT;
 const USER_SEGMENT = PRESENT_BIT | PRIVILEGE_RING_3 | DESCRIPTOR_BIT;
@@ -70,11 +68,10 @@ const DATA_SEGMENT = WRITABLE_BIT;
 
 const TSS_SEGMENT = PRESENT_BIT | EXECUTABLE_BIT | ACCESSED_BIT;
 
-
 // The flag bits
-const IS_64_BIT         = 0x02; // 0010
-const IS_32_BIT         = 0x04; // 0100
-const IS_LIMIT_4K_BIT   = 0x08; // 1000
+const IS_64_BIT = 0x02; // 0010
+const IS_32_BIT = 0x04; // 0100
+const IS_LIMIT_4K_BIT = 0x08; // 1000
 
 /// The structure that contains all the information that each GDT entry needs.
 const GdtEntry = packed struct {
@@ -213,7 +210,7 @@ const TtsEntry = packed struct {
 ///     A new GDT entry with the give access and flag bits set with the base at 0x00000000 and limit at 0xFFFFF.
 ///
 fn makeEntry(base: u32, limit: u20, access: u8, flags: u4) GdtEntry {
-    return GdtEntry {
+    return GdtEntry{
         .limit_low = @truncate(u16, limit),
         .base_low = @truncate(u24, base),
         .access = access,
@@ -224,7 +221,7 @@ fn makeEntry(base: u32, limit: u20, access: u8, flags: u4) GdtEntry {
 }
 
 /// The GDT entry table of NUMBER_OF_ENTRIES entries.
-var gdt_entries: [NUMBER_OF_ENTRIES]GdtEntry = []GdtEntry {
+var gdt_entries: [NUMBER_OF_ENTRIES]GdtEntry = [_]GdtEntry{
     // Null descriptor
     makeEntry(0, 0, 0, 0),
 
@@ -246,13 +243,13 @@ var gdt_entries: [NUMBER_OF_ENTRIES]GdtEntry = []GdtEntry {
 
 /// The GDT pointer that the CPU is loaded with that contains the base address of the GDT and the
 /// size.
-const gdt_ptr: GdtPtr = GdtPtr {
+const gdt_ptr: GdtPtr = GdtPtr{
     .limit = TABLE_SIZE,
     .base = &gdt_entries[0],
 };
 
 /// The task state segment entry.
-var tss: TtsEntry = TtsEntry {
+var tss: TtsEntry = TtsEntry{
     .prev_tss = 0,
     .esp0 = undefined,
     .ss0 = KERNEL_DATA_OFFSET,

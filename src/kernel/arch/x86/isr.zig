@@ -43,7 +43,7 @@ extern fn isr31() void;
 extern fn isr128() void;
 
 /// The exception messaged that is printed when a exception happens
-const exception_msg: [NUMBER_OF_ENTRIES][]const u8 = [NUMBER_OF_ENTRIES][]const u8 {
+const exception_msg: [NUMBER_OF_ENTRIES][]const u8 = [NUMBER_OF_ENTRIES][]const u8{
     "Divide By Zero",
     "Single Step (Debugger)",
     "Non Maskable Interrupt",
@@ -75,20 +75,18 @@ const exception_msg: [NUMBER_OF_ENTRIES][]const u8 = [NUMBER_OF_ENTRIES][]const 
     "Reserved",
     "Reserved",
     "Security",
-    "Reserved"
+    "Reserved",
 };
 
 /// Errors that an isr function can return
-pub const IsrError = error {
-    UnrecognisedIsr
-};
+pub const IsrError = error{UnrecognisedIsr};
 
 /// An isr handler. Takes an interrupt context and returns void.
 /// Should finish quickly to avoid delaying further interrupts and the previously running code
-pub const IsrHandler = fn(*arch.InterruptContext)void;
+pub const IsrHandler = fn (*arch.InterruptContext) void;
 
 // The of exception handlers initialised to unhandled.
-var isr_handlers: [NUMBER_OF_ENTRIES]IsrHandler = []IsrHandler{unhandled} ** NUMBER_OF_ENTRIES;
+var isr_handlers: [NUMBER_OF_ENTRIES]IsrHandler = [_]IsrHandler{unhandled} ** NUMBER_OF_ENTRIES;
 var syscall_handler: IsrHandler = unhandled;
 
 ///
@@ -141,7 +139,7 @@ export fn isrHandler(context: *arch.InterruptContext) void {
 /// Errors:
 ///     IsrError.UnrecognisedIsr - If `isr_num` is invalid (see isValidIsr)
 ///
-pub fn registerIsr(isr_num: u16, handler: fn(*arch.InterruptContext)void) !void {
+pub fn registerIsr(isr_num: u16, handler: fn (*arch.InterruptContext) void) !void {
     if (isr_num == syscalls.INTERRUPT) {
         syscall_handler = handler;
     } else if (isValidIsr(isr_num)) {
