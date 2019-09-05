@@ -58,11 +58,11 @@ pub const IdtPtr = packed struct {
 };
 
 /// The IDT entry table of NUMBER_OF_ENTRIES entries.
-var idt: [NUMBER_OF_ENTRIES]IdtEntry = []IdtEntry{makeEntry(0, 0, 0, 0, 0)} ** NUMBER_OF_ENTRIES;
+var idt: [NUMBER_OF_ENTRIES]IdtEntry = [_]IdtEntry{makeEntry(0, 0, 0, 0, 0)} ** NUMBER_OF_ENTRIES;
 
 /// The IDT pointer that the CPU is loaded with that contains the base address of the IDT and the
 /// size.
-const idt_ptr: IdtPtr = IdtPtr {
+const idt_ptr: IdtPtr = IdtPtr{
     .limit = TABLE_SIZE,
     .base = &idt[0],
 };
@@ -83,7 +83,7 @@ const idt_ptr: IdtPtr = IdtPtr {
 ///     A new IDT entry.
 ///
 fn makeEntry(base: u32, selector: u16, gate_type: u4, privilege: u2, present: u1) IdtEntry {
-    return IdtEntry {
+    return IdtEntry{
         .base_low = @truncate(u16, base),
         .selector = selector,
         .zero = 0,
@@ -102,7 +102,7 @@ fn makeEntry(base: u32, selector: u16, gate_type: u4, privilege: u2, present: u1
 ///     IN index: u8             - The interrupt number to close.
 ///     IN base: extern fn()void - The function handler for the interrupt.
 ///
-pub fn openInterruptGate(index: u8, base: extern fn()void) void {
+pub fn openInterruptGate(index: u8, base: extern fn () void) void {
     idt[index] = makeEntry(@ptrToInt(base), gdt.KERNEL_CODE_OFFSET, INTERRUPT_GATE_32BIT, PRIVILEGE_RING_0, 1);
 }
 
