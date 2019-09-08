@@ -1,4 +1,4 @@
-const constants = @import("constants.zig");
+const constants = @import("constants");
 
 const ALIGN = 1 << 0;
 const MEMINFO = 1 << 1;

@@ -5,7 +5,7 @@ pub const Level = enum {
     INFO,
     DEBUG,
     WARNING,
-    ERROR
+    ERROR,
 };
 
 fn logCallback(context: void, str: []const u8) anyerror!void {
@@ -23,9 +23,11 @@ pub fn logInfo(comptime format: []const u8, args: ...) void {
 pub fn logDebug(comptime format: []const u8, args: ...) void {
     log(Level.DEBUG, format, args);
 }
+
 pub fn logWarning(comptime format: []const u8, args: ...) void {
     log(Level.WARNING, format, args);
 }
+
 pub fn logError(comptime format: []const u8, args: ...) void {
     log(Level.ERROR, format, args);
 }

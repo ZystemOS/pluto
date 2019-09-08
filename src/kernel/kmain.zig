@@ -2,13 +2,13 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const arch = if (builtin.is_test) @import("../../test/kernel/arch_mock.zig") else @import("arch.zig").internals;
+const arch = @import("arch.zig").internals;
 const multiboot = @import("multiboot.zig");
 const tty = @import("tty.zig");
 const vga = @import("vga.zig");
 const log = @import("log.zig");
 const serial = @import("serial.zig");
-const mem = @import("mem.zig");
+const mem = if (builtin.is_test) @import("mocking").mem else @import("mem.zig");
 const options = @import("build_options");
 
 comptime {
@@ -18,9 +18,13 @@ comptime {
     }
 }
 
+// This is for unit testing as we need to export KERNEL_ADDR_OFFSET as it is no longer available
+// from the linker script
+export var KERNEL_ADDR_OFFSET: u32 = if (builtin.is_test) 0xC0000000 else undefined;
+
 // Need to import this as we need the panic to be in the root source file, or zig will just use the
 // builtin panic and just loop, which is what we don't want
-const panic_root = @import("panic.zig");
+const panic_root = if (builtin.is_test) @import("mocking").panic else @import("panic.zig");
 
 // Just call the panic function, as this need to be in the root source file
 pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {

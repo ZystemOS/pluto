@@ -7,7 +7,8 @@ const MemProfile = @import("../../mem.zig").MemProfile;
 const testing = @import("std").testing;
 const expectEqual = testing.expectEqual;
 const expect = testing.expect;
-const constants = @import("constants.zig");
+
+extern var KERNEL_ADDR_OFFSET: *u32;
 
 const ENTRIES_PER_DIRECTORY = 1024;
 
@@ -34,7 +35,7 @@ const ENTRY_AVAILABLE = 0xE00;
 const ENTRY_PAGE_ADDR = 0xFFC00000;
 
 const Directory = packed struct {
-    entries: [ENTRIES_PER_DIRECTORY]DirectoryEntry
+    entries: [ENTRIES_PER_DIRECTORY]DirectoryEntry,
 };
 
 const PagingError = error {
@@ -42,7 +43,7 @@ const PagingError = error {
     InvalidVirtAddresses,
     PhysicalVirtualMismatch,
     UnalignedPhysAddresses,
-    UnalignedVirtAddresses
+    UnalignedVirtAddresses,
 };
 
 ///
@@ -140,7 +141,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
     @memset(@ptrCast([*]u8, kernel_directory), 0, @sizeOf(Directory));
 
     mapDir(kernel_directory, p_start, p_end, v_start, v_end, allocator) catch unreachable;
-    const dir_physaddr = @ptrToInt(kernel_directory) - constants.KERNEL_ADDR_OFFSET;
+    const dir_physaddr = @ptrToInt(kernel_directory) - @ptrToInt(&KERNEL_ADDR_OFFSET);
     asm volatile ("mov %[addr], %%cr3" :: [addr] "{eax}" (dir_physaddr));
     isr.registerIsr(14, pageFault) catch unreachable;
 }
