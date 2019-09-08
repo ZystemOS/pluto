@@ -1,5 +1,6 @@
 // Zig version: 0.4.0
 
+const std = @import("std");
 const builtin = @import("builtin");
 const gdt = @import("gdt.zig");
 const idt = @import("idt.zig");
@@ -7,6 +8,8 @@ const irq = @import("irq.zig");
 const isr = @import("isr.zig");
 const log = @import("../../log.zig");
 const pit = @import("pit.zig");
+const paging = @import("paging.zig");
+const MemProfile = @import("../../mem.zig").MemProfile;
 const syscalls = @import("syscalls.zig");
 
 pub const InterruptContext = struct {
@@ -39,9 +42,6 @@ pub const InterruptContext = struct {
     user_esp: u32,
     ss: u32,
 };
-const paging = @import("paging.zig");
-const std = @import("std");
-const MemProfile = @import("../../mem.zig").MemProfile;
 
 ///
 /// Initialise the architecture
