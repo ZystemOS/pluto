@@ -27,15 +27,14 @@ steps:
 - script: zig*/zig build
   displayName: 'Build kernel'
 
-# Uncomment once mock testing is finished
-#- script: zig*/zig build test
-#  displayName: 'Mocked tests'
+- script: zig*/zig build test
+  displayName: 'Unit tests'
 
 - script: |
     sudo apt-get update
     sudo apt-get install qemu qemu-system --fix-missing
   displayName: 'Download qemu'
-  
+
 - script: |
     zig*/zig build test -Drt-test=true
   displayName: 'Runtime tests'
