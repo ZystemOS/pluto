@@ -7,6 +7,7 @@ pub const MemProfile = struct {
     physaddr_start: [*]u8,
     mem_kb: u32,
     fixed_alloc_size: u32,
+    mem_map: []multiboot.multiboot_memory_map_t,
 };
 
 // The virtual/physical start/end of the kernel code
@@ -28,5 +29,6 @@ pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
         // Total memory available including the initial 1MiB that grub doesn't include
         .mem_kb = mb_info.mem_upper + mb_info.mem_lower + 1024,
         .fixed_alloc_size = FIXED_ALLOC_SIZE,
+        .mem_map = undefined,
     };
 }

@@ -4,13 +4,30 @@ const expectEqual = std.testing.expectEqual;
 const log = @import("log.zig");
 
 pub const MemProfile = struct {
+    /// The virtual end address of the kernel code.
     vaddr_end: [*]u8,
+
+    /// The virtual end address of the kernel code.
     vaddr_start: [*]u8,
+
+    /// The physical end address of the kernel code.
     physaddr_end: [*]u8,
+
+    /// The physical start address of the kernel code.
     physaddr_start: [*]u8,
+
+    /// The amount of memory in the system, in kilobytes.
     mem_kb: u32,
+
+    /// The size of the fixed buffer allocator used as the first memory allocator.
     fixed_alloc_size: u32,
+
+    /// The boot modules provided by the bootloader.
     boot_modules: []multiboot.multiboot_module_t,
+
+    /// The memory map provided by the bootloader. Desribes which areas of memory are available and
+    /// which are reserved.
+    mem_map: []multiboot.multiboot_memory_map_t,
 };
 
 /// The virtual end of the kernel code
@@ -47,8 +64,11 @@ var ADDR_OFFSET: usize = undefined;
 ///
 pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
     log.logInfo("Init mem\n", .{});
+    defer log.logInfo("Done\n", .{});
     const mods_count = mb_info.mods_count;
     ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
+    const mmap_addr = mb_info.mmap_addr;
+    const num_mmap_entries = mb_info.mmap_length / @sizeOf(multiboot.multiboot_memory_map_t);
     const mem_profile = MemProfile{
         .vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END),
         .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
@@ -58,8 +78,8 @@ pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
         .mem_kb = mb_info.mem_upper + mb_info.mem_lower + 1024,
         .fixed_alloc_size = FIXED_ALLOC_SIZE,
         .boot_modules = @intToPtr([*]multiboot.multiboot_mod_list, physToVirt(mb_info.mods_addr))[0..mods_count],
+        .mem_map = @intToPtr([*]multiboot.multiboot_memory_map_t, mmap_addr)[0..num_mmap_entries],
     };
-    log.logInfo("Done\n", .{});
     return mem_profile;
 }
 
