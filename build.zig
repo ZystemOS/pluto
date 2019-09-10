@@ -48,8 +48,9 @@ pub fn build(b: *Builder) !void {
     grub_cmd.step.dependOn(&mkdir_cmd.step);
 
     const cp_elf_cmd = b.addSystemCommand([_][]const u8{"cp"});
+    const elf_path = try fs.path.join(b.allocator, [_][]const u8{ grub_build_path, "pluto.elf" });
     cp_elf_cmd.addArtifactArg(exec);
-    cp_elf_cmd.addArg(try fs.path.join(b.allocator, [_][]const u8{ grub_build_path, "pluto.elf" }));
+    cp_elf_cmd.addArg(elf_path);
     cp_elf_cmd.step.dependOn(&grub_cmd.step);
     cp_elf_cmd.step.dependOn(&exec.step);
 
@@ -94,12 +95,12 @@ pub fn build(b: *Builder) !void {
     }
 
     const debug_step = b.step("debug", "Debug with gdb");
+    const symbol_file_arg = try std.mem.join(b.allocator, " ", [_][]const u8{ "symbol-file", elf_path });
     const debug_cmd = b.addSystemCommand([_][]const u8{
         "gdb",
         "-ex",
-        "symbol-file",
     });
-    debug_cmd.addArtifactArg(exec);
+    debug_cmd.addArg(symbol_file_arg);
     debug_cmd.addArgs([_][]const u8{
         "-ex",
         "target remote localhost:1234",
