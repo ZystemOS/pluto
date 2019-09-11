@@ -99,8 +99,8 @@ pub fn build(b: *Builder) !void {
     const debug_cmd = b.addSystemCommand([_][]const u8{
         "gdb",
         "-ex",
+        symbol_file_arg,
     });
-    debug_cmd.addArg(symbol_file_arg);
     debug_cmd.addArgs([_][]const u8{
         "-ex",
         "target remote localhost:1234",
