@@ -38,7 +38,7 @@ const Directory = packed struct {
     entries: [ENTRIES_PER_DIRECTORY]DirectoryEntry,
 };
 
-const PagingError = error {
+const PagingError = error{
     InvalidPhysAddresses,
     InvalidVirtAddresses,
     PhysicalVirtualMismatch,
@@ -87,10 +87,10 @@ fn mapDir(dir: *Directory, phys_start: u32, phys_end: u32, virt_start: u32, virt
     if (phys_end - phys_start != virt_end - virt_start) {
         return PagingError.PhysicalVirtualMismatch;
     }
-    if (!isAligned(phys_start, PAGE_SIZE) or !isAligned(phys_end, PAGE_SIZE)) {
+    if (!std.mem.isAligned(phys_start, PAGE_SIZE) or !std.mem.isAligned(phys_end, PAGE_SIZE)) {
         return PagingError.UnalignedPhysAddresses;
     }
-    if (!isAligned(virt_start, PAGE_SIZE) or !isAligned(virt_end, PAGE_SIZE)) {
+    if (!std.mem.isAligned(virt_start, PAGE_SIZE) or !std.mem.isAligned(virt_end, PAGE_SIZE)) {
         return PagingError.UnalignedVirtAddresses;
     }
 
@@ -106,18 +106,6 @@ fn mapDir(dir: *Directory, phys_start: u32, phys_end: u32, virt_start: u32, virt
     }
 }
 
-/// Round an address up to the previous aligned address
-/// The alignment must be a power of 2 and greater than 0.
-fn alignBackward(addr: usize, alignment: usize) usize {
-    return addr & ~(alignment - 1);
-}
-
-/// Given an address and an alignment, return true if the address is a multiple of the alignment
-/// The alignment must be a power of 2 and greater than 0.
-fn isAligned(addr: usize, alignment: usize) bool {
-    return alignBackward(addr, alignment) == addr;
-}
-
 fn pageFault(state: *arch.InterruptContext) void {
     @panic("Page fault");
 }
@@ -131,9 +119,9 @@ fn pageFault(state: *arch.InterruptContext) void {
 ///
 pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
     // Calculate start and end of mapping
-    const v_start = alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE);
+    const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE);
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE);
-    const p_start = alignBackward(@ptrToInt(mem_profile.physaddr_start), PAGE_SIZE);
+    const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), PAGE_SIZE);
     const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE);
 
     var tmp = allocator.alignedAlloc(Directory, PAGE_SIZE_4KB, 1) catch unreachable;
@@ -142,22 +130,11 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
 
     mapDir(kernel_directory, p_start, p_end, v_start, v_end, allocator) catch unreachable;
     const dir_physaddr = @ptrToInt(kernel_directory) - @ptrToInt(&KERNEL_ADDR_OFFSET);
-    asm volatile ("mov %[addr], %%cr3" :: [addr] "{eax}" (dir_physaddr));
+    asm volatile ("mov %[addr], %%cr3"
+        :
+        : [addr] "{eax}" (dir_physaddr)
+    );
     isr.registerIsr(14, pageFault) catch unreachable;
-}
-
-test "isAligned" {
-    expect(isAligned(PAGE_SIZE, PAGE_SIZE));
-    expect(isAligned(2048, 1024));
-    expect(isAligned(0, 512));
-    expect(!isAligned(123, 1024));
-}
-
-test "alignBackward" {
-    expectEqual(alignBackward(PAGE_SIZE, PAGE_SIZE), PAGE_SIZE);
-    expectEqual(alignBackward(0, 123), 0);
-    expectEqual(alignBackward(1024 + 456, 1024), 1024);
-    expectEqual(alignBackward(2048, 1024), 2048);
 }
 
 fn checkDirEntry(entry: DirectoryEntry, phys: u32) void {
@@ -184,7 +161,7 @@ test "mapDir" {
     var direct = std.heap.DirectAllocator.init();
     defer direct.deinit();
     var allocator = &direct.allocator;
-    var dir = Directory { .entries = []DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY };
+    var dir = Directory{ .entries = []DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY };
     const phys_start = PAGE_SIZE * 2;
     const virt_start = PAGE_SIZE * 4;
     const phys_end = PAGE_SIZE * 4;
