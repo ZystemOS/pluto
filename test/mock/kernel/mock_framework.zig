@@ -1,11 +1,11 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const StringHashMap = std.StringHashMap;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const GlobalAllocator = std.debug.global_allocator;
 const TailQueue = std.TailQueue;
 const warn = std.debug.warn;
+const gdt = @import("gdt_mock.zig");
 
 ///
 /// The enumeration of types that the mocking framework supports. These include basic types like u8
@@ -16,14 +16,17 @@ const DataElementType = enum {
     U8,
     U16,
     U32,
+    PTR_CONST_GdtPtr,
     FN_OVOID,
     FN_OUSIZE,
     FN_OU16,
+    FN_IU16_OVOID,
     FN_IU16_OU8,
     FN_IU4_IU4_OU8,
     FN_IU8_IU8_OU16,
     FN_IU16_IU8_OVOID,
     FN_IU16_IU16_OVOID,
+    FN_IPTRCONSTGDTPTR_OVOID,
 };
 
 ///
@@ -36,14 +39,17 @@ const DataElement = union(DataElementType) {
     U8: u8,
     U16: u16,
     U32: u32,
+    PTR_CONST_GdtPtr: *const gdt.GdtPtr,
     FN_OVOID: fn () void,
     FN_OUSIZE: fn () usize,
     FN_OU16: fn () u16,
+    FN_IU16_OVOID: fn (u16) void,
     FN_IU16_OU8: fn (u16) u8,
     FN_IU4_IU4_OU8: fn (u4, u4) u8,
     FN_IU8_IU8_OU16: fn (u8, u8) u16,
     FN_IU16_IU8_OVOID: fn (u16, u8) void,
     FN_IU16_IU16_OVOID: fn (u16, u16) void,
+    FN_IPTRCONSTGDTPTR_OVOID: fn (*const gdt.GdtPtr) void,
 };
 
 ///
@@ -123,14 +129,17 @@ fn Mock() type {
                 u8 => DataElement{ .U8 = arg },
                 u16 => DataElement{ .U16 = arg },
                 u32 => DataElement{ .U32 = arg },
+                *const gdt.GdtPtr => DataElement{ .PTR_CONST_GdtPtr = arg },
                 fn () void => DataElement{ .FN_OVOID = arg },
                 fn () usize => DataElement{ .FN_OUSIZE = arg },
                 fn () u16 => DataElement{ .FN_OU16 = arg },
+                fn (u16) void => DataElement{ .FN_IU16_OVOID = arg },
                 fn (u16) u8 => DataElement{ .FN_IU16_OU8 = arg },
                 fn (u4, u4) u8 => DataElement{ .FN_IU4_IU4_OU8 = arg },
                 fn (u8, u8) u16 => DataElement{ .FN_IU8_IU8_OU16 = arg },
                 fn (u16, u8) void => DataElement{ .FN_IU16_IU8_OVOID = arg },
                 fn (u16, u16) void => DataElement{ .FN_IU16_IU16_OVOID = arg },
+                fn (*const gdt.GdtPtr) void => DataElement{ .FN_IPTRCONSTGDTPTR_OVOID = arg },
                 else => @compileError("Type not supported: " ++ @typeName(@typeOf(arg))),
             };
         }
@@ -150,13 +159,16 @@ fn Mock() type {
                 u8 => DataElementType.U8,
                 u16 => DataElementType.U16,
                 u32 => DataElementType.U32,
+                *const gdt.GdtPtr => DataElement.PTR_CONST_GdtPtr,
                 fn () void => DataElementType.FN_OVOID,
                 fn () u16 => DataElementType.FN_OU16,
+                fn (u16) void => DataElementType.FN_IU16_OVOID,
                 fn (u16) u8 => DataElementType.FN_IU16_OU8,
                 fn (u4, u4) u8 => DataElementType.FN_IU4_IU4_OU8,
                 fn (u8, u8) u16 => DataElementType.FN_IU8_IU8_OU16,
                 fn (u16, u8) void => DataElementType.FN_IU16_IU8_OVOID,
                 fn (u16, u16) void => DataElementType.FN_IU16_IU16_OVOID,
+                fn (*const gdt.GdtPtr) void => DataElementType.FN_IPTRCONSTGDTPTR_OVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
@@ -178,13 +190,16 @@ fn Mock() type {
                 u8 => element.U8,
                 u16 => element.U16,
                 u32 => element.U32,
+                *const gdt.GdtPtr => element.PTR_CONST_GdtPtr,
                 fn () void => element.FN_OVOID,
                 fn () u16 => element.FN_OU16,
+                fn (u16) void => element.FN_IU16_OVOID,
                 fn (u16) u8 => element.FN_IU16_OU8,
                 fn (u4, u4) u8 => element.FN_IU4_IU4_OU8,
                 fn (u8, u8) u16 => element.FN_IU8_IU8_OU16,
                 fn (u16, u8) void => element.FN_IU16_IU8_OVOID,
                 fn (u16, u16) void => element.FN_IU16_IU16_OVOID,
+                fn (*const gdt.GdtPtr) void => element.FN_IPTRCONSTGDTPTR_OVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
