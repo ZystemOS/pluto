@@ -246,4 +246,5 @@ test "" {
     _ = @import("gdt.zig");
     _ = @import("idt.zig");
     _ = @import("syscalls.zig");
+    _ = @import("paging.zig");
 }
