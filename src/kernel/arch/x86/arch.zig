@@ -1,17 +1,19 @@
-// Zig version: 0.4.0
-
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 const gdt = @import("gdt.zig");
 const idt = @import("idt.zig");
 const irq = @import("irq.zig");
 const isr = @import("isr.zig");
-const log = @import("../../log.zig");
 const pit = @import("pit.zig");
 const paging = @import("paging.zig");
-const MemProfile = @import("../../mem.zig").MemProfile;
 const syscalls = @import("syscalls.zig");
+const mem = @import("../../mem.zig");
+const log = @import("../../log.zig");
+const MemProfile = mem.MemProfile;
 
+/// The interrupt context that is given to a interrupt handler. It contains most of the registers
+/// and the interrupt number and error code (if there is one).
 pub const InterruptContext = struct {
     // Extra segments
     gs: u32,
@@ -44,29 +46,7 @@ pub const InterruptContext = struct {
 };
 
 ///
-/// Initialise the architecture
-///
-pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator, comptime options: type) void {
-    disableInterrupts();
-
-    gdt.init();
-    idt.init();
-
-    isr.init();
-    irq.init();
-
-    pit.init();
-
-    paging.init(mem_profile, allocator);
-
-    syscalls.init(options);
-
-    // Enable interrupts
-    enableInterrupts();
-}
-
-///
-/// Inline assembly to write to a given port with a byte of data.
+/// Assembly to write to a given port with a byte of data.
 ///
 /// Arguments:
 ///     IN port: u16 - The port to write to.
@@ -81,12 +61,12 @@ pub fn outb(port: u16, data: u8) void {
 }
 
 ///
-/// Inline assembly that reads data from a given port and returns its value.
+/// Assembly that reads data from a given port and returns its value.
 ///
 /// Arguments:
 ///     IN port: u16 - The port to read data from.
 ///
-/// Return:
+/// Return: u8
 ///     The data that the port returns.
 ///
 pub fn inb(port: u16) u8 {
@@ -101,6 +81,7 @@ pub fn inb(port: u16) u8 {
 /// event being waited.
 ///
 pub fn ioWait() void {
+    // Port 0x80 is free to use
     outb(0x80, 0);
 }
 
@@ -114,13 +95,22 @@ pub fn ioWait() void {
 ///
 pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
     // Load the GDT into the CPU
-    asm volatile ("lgdt (%%eax)" : : [gdt_ptr] "{eax}" (gdt_ptr));
+    asm volatile ("lgdt (%%eax)"
+        :
+        : [gdt_ptr] "{eax}" (gdt_ptr)
+    );
+
     // Load the kernel data segment, index into the GDT
-    asm volatile ("mov %%bx, %%ds" : : [KERNEL_DATA_OFFSET] "{bx}" (gdt.KERNEL_DATA_OFFSET));
+    asm volatile ("mov %%bx, %%ds"
+        :
+        : [KERNEL_DATA_OFFSET] "{bx}" (gdt.KERNEL_DATA_OFFSET)
+    );
+
     asm volatile ("mov %%bx, %%es");
     asm volatile ("mov %%bx, %%fs");
     asm volatile ("mov %%bx, %%gs");
     asm volatile ("mov %%bx, %%ss");
+
     // Load the kernel code segment into the CS register
     asm volatile (
         \\ljmp $0x08, $1f
@@ -129,33 +119,61 @@ pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
 }
 
 ///
-/// Load the TSS into the CPU.
+/// Get the previously loaded GDT from the CPU.
 ///
-pub fn ltr() void {
-    asm volatile ("ltr %%ax" : : [TSS_OFFSET] "{ax}" (gdt.TSS_OFFSET));
+/// Return: gdt.GdtPtr
+///     The previously loaded GDT from the CPU.
+///
+pub fn sgdt() gdt.GdtPtr {
+    var gdt_ptr: gdt.GdtPtr = gdt.GdtPtr{ .limit = 0, .base = 0 };
+    asm volatile ("sgdt %[tab]"
+        : [tab] "=m" (gdt_ptr)
+    );
+    return gdt_ptr;
 }
 
+///
+/// Tell the CPU where the TSS is located in the GDT.
+///
+/// Arguments:
+///     IN offset: u16 - The offset in the GDT where the TSS segment is located.
+///
+pub fn ltr(offset: u16) void {
+    asm volatile ("ltr %%ax"
+        :
+        : [offset] "{ax}" (offset)
+    );
+}
+
+///
 /// Load the IDT into the CPU.
+///
+/// Arguments:
+///     IN idt_ptr: *const idt.IdtPtr - The address of the iDT.
+///
 pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
-    asm volatile ("lidt (%%eax)" : : [idt_ptr] "{eax}" (idt_ptr));
+    asm volatile ("lidt (%%eax)"
+        :
+        : [idt_ptr] "{eax}" (idt_ptr)
+    );
 }
 
 ///
-/// Enable interrupts
+/// Enable interrupts.
 ///
 pub fn enableInterrupts() void {
     asm volatile ("sti");
 }
 
 ///
-/// Disable interrupts
+/// Disable interrupts.
 ///
 pub fn disableInterrupts() void {
     asm volatile ("cli");
 }
 
 ///
-/// Halt the CPU, but interrupts will still be called
+/// Halt the CPU, but interrupts will still be called.
 ///
 pub fn halt() void {
     asm volatile ("hlt");
@@ -173,7 +191,7 @@ pub fn spinWait() noreturn {
 }
 
 ///
-/// Halt the kernel.
+/// Halt the kernel. No interrupts will be handled.
 ///
 pub fn haltNoInterrupts() noreturn {
     while (true) {
@@ -183,12 +201,29 @@ pub fn haltNoInterrupts() noreturn {
 }
 
 ///
-/// Register an interrupt handler. The interrupt number should be the arch-specific number.
+/// Initialise the architecture
 ///
 /// Arguments:
-///     IN int: u16 - The arch-specific interrupt number to register for.
-///     IN handler: fn (ctx: *InterruptContext) void - The handler to assign to the interrupt.
+///     IN mem_profile: *const MemProfile - The memory profile of the computer. Used to set up
+///                                         paging.
+///     IN allocator: *Allocator          - The allocator use to handle memory.
+///     IN comptime options: type         - The build options that is passed to the kernel to be
+///                                         used for run time testing.
 ///
-pub fn registerInterruptHandler(int: u16, handler: fn (ctx: *InterruptContext) void) void {
-    irq.registerIrq(int, handler);
+pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime options: type) void {
+    disableInterrupts();
+
+    gdt.init();
+    idt.init();
+
+    isr.init();
+    irq.init();
+
+    pit.init();
+
+    paging.init(mem_profile, allocator);
+
+    syscalls.init(options);
+
+    enableInterrupts();
 }
