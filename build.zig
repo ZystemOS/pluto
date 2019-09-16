@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Builder = std.build.Builder;
+const LibExeObjStep = std.build.LibExeObjStep;
 const Step = std.build.Step;
 const Target = std.build.Target;
 const fs = std.fs;
@@ -16,17 +17,18 @@ pub fn build(b: *Builder) !void {
     };
 
     const target_str = switch (target.getArch()) {
-        builtin.Arch.i386 => "x86",
+        .i386 => "x86",
         else => unreachable,
     };
+
     const debug = b.option(bool, "debug", "build with debug symbols / make qemu wait for a debug connection") orelse false;
     const rt_test = b.option(bool, "rt-test", "enable/disable runtime testing") orelse false;
 
     const main_src = "src/kernel/kmain.zig";
+
     const exec = b.addExecutable("pluto", main_src);
-    exec.setMainPkgPath(".");
-    const const_path = try fs.path.join(b.allocator, [_][]const u8{ "src/kernel/arch/", target_str, "/constants.zig" });
-    exec.addPackagePath("constants", const_path);
+    const constants_path = try fs.path.join(b.allocator, [_][]const u8{ "src/kernel/arch", target_str, "constants.zig" });
+    exec.addPackagePath("constants", constants_path);
     exec.addBuildOption(bool, "rt_test", rt_test);
     exec.setLinkerScriptPath("link.ld");
     exec.setTheTarget(target);
@@ -35,12 +37,12 @@ pub fn build(b: *Builder) !void {
             exec.addAssemblyFile("src/kernel/arch/x86/irq_asm.s");
             exec.addAssemblyFile("src/kernel/arch/x86/isr_asm.s");
         },
-        else => {},
+        else => unreachable,
     }
 
-    const iso_path = fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "pluto.iso" }) catch unreachable;
-    const grub_build_path = fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "iso", "boot" }) catch unreachable;
-    const iso_dir_path = fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "iso" }) catch unreachable;
+    const iso_path = try fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "pluto.iso" });
+    const grub_build_path = try fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "iso", "boot" });
+    const iso_dir_path = try fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "iso" });
 
     const mkdir_cmd = b.addSystemCommand([_][]const u8{ "mkdir", "-p", fs.path.dirname(grub_build_path).? });
 
@@ -59,7 +61,10 @@ pub fn build(b: *Builder) !void {
     b.default_step.dependOn(&iso_cmd.step);
 
     const run_step = b.step("run", "Run with qemu");
-    const qemu_bin = if (target.getArch() == builtin.Arch.i386) "qemu-system-i386" else unreachable;
+    const qemu_bin = switch (target.getArch()) {
+        .i386 => "qemu-system-i386",
+        else => unreachable,
+    };
     const qemu_cmd = b.addSystemCommand([_][]const u8{
         qemu_bin,
         "-cdrom",
@@ -69,10 +74,15 @@ pub fn build(b: *Builder) !void {
         "-serial",
         "stdio",
     });
-    if (debug)
+
+    if (debug) {
         qemu_cmd.addArgs([_][]const u8{ "-s", "-S" });
-    if (rt_test)
+    }
+
+    if (rt_test) {
         qemu_cmd.addArgs([_][]const u8{ "-display", "none" });
+    }
+
     run_step.dependOn(&qemu_cmd.step);
     qemu_cmd.step.dependOn(&iso_cmd.step);
 
@@ -81,15 +91,24 @@ pub fn build(b: *Builder) !void {
         const script = b.addSystemCommand([_][]const u8{ "python3", "test/rt-test.py", "x86", b.zig_exe });
         test_step.dependOn(&script.step);
     } else {
-        inline for ([_]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall }) |test_mode| {
-            const mode_str = comptime modeToString(test_mode);
-            const unit_tests = b.addTest("test/unittests/test_all.zig");
+        const mock_path = "\"" ++ "../../test/mock/kernel/" ++ "\"";
+        const arch_mock_path = "\"" ++ "../../../../test/mock/kernel/" ++ "\"";
+        const modes = [_]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall };
+        inline for (modes) |test_mode| {
+            const mode_str = switch (test_mode) {
+                Mode.Debug => "debug",
+                Mode.ReleaseFast => "release-fast",
+                Mode.ReleaseSafe => "release-safe",
+                Mode.ReleaseSmall => "release-small",
+            };
+            const unit_tests = b.addTest(main_src);
             unit_tests.setBuildMode(test_mode);
             unit_tests.setMainPkgPath(".");
             unit_tests.setNamePrefix(mode_str ++ " - ");
-            unit_tests.addPackagePath("mocking", "test/mock/kernel/mocking.zig");
-            unit_tests.addPackagePath("constants", const_path);
+            unit_tests.addPackagePath("constants", constants_path);
             unit_tests.addBuildOption(bool, "rt_test", rt_test);
+            unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
+            unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
             test_step.dependOn(&unit_tests.step);
         }
     }
@@ -106,13 +125,4 @@ pub fn build(b: *Builder) !void {
         "target remote localhost:1234",
     });
     debug_step.dependOn(&debug_cmd.step);
-}
-
-fn modeToString(comptime mode: Mode) []const u8 {
-    return switch (mode) {
-        Mode.Debug => "debug",
-        Mode.ReleaseFast => "release-fast",
-        Mode.ReleaseSafe => "release-safe",
-        Mode.ReleaseSmall => "release-small",
-    };
 }

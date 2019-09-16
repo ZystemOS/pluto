@@ -1,4 +1,5 @@
-const is_test = @import("builtin").is_test;
+const builtin = @import("builtin");
+const is_test = builtin.is_test;
 
 const std = @import("std");
 const fmt = std.fmt;
@@ -6,8 +7,9 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 
-const vga = if (is_test) @import("mocking").vga else @import("vga.zig");
-const log = if (is_test) @import("mocking").log else @import("log.zig");
+const build_options = @import("build_options");
+const vga = if (is_test) @import(build_options.mock_path ++ "vga_mock.zig") else @import("vga.zig");
+const log = if (is_test) @import(build_options.mock_path ++ "log_mock.zig") else @import("log.zig");
 
 /// The number of rows down from the top (row 0) where the displayable region starts. Above is
 /// where the logo and time is printed
