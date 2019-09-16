@@ -1,80 +1,82 @@
+const std = @import("std");
+const expectEqual = std.testing.expectEqual;
 const arch = @import("arch.zig").internals;
 
 /// The port address for the VGA register selection.
-pub const PORT_ADDRESS: u16 = 0x03D4;
+const PORT_ADDRESS: u16 = 0x03D4;
 
 /// The port address for the VGA data.
-pub const PORT_DATA: u16    = 0x03D5;
+const PORT_DATA: u16 = 0x03D5;
 
 /// The indexes that is passed to the address port to select the register for the data to be
 /// read or written to.
-pub const REG_HORIZONTAL_TOTAL: u8                = 0x00;
-pub const REG_HORIZONTAL_DISPLAY_ENABLE_END: u8   = 0x01;
-pub const REG_START_HORIZONTAL_BLINKING: u8       = 0x02;
-pub const REG_END_HORIZONTAL_BLINKING: u8         = 0x03;
-pub const REG_START_HORIZONTAL_RETRACE_PULSE: u8  = 0x04;
-pub const REG_END_HORIZONTAL_RETRACE_PULSE: u8    = 0x05;
-pub const REG_VERTICAL_TOTAL: u8                  = 0x06;
-pub const REG_OVERFLOW: u8                        = 0x07;
-pub const REG_PRESET_ROW_SCAN: u8                 = 0x08;
-pub const REG_MAXIMUM_SCAN_LINE: u8               = 0x09;
+const REG_HORIZONTAL_TOTAL: u8 = 0x00;
+const REG_HORIZONTAL_DISPLAY_ENABLE_END: u8 = 0x01;
+const REG_START_HORIZONTAL_BLINKING: u8 = 0x02;
+const REG_END_HORIZONTAL_BLINKING: u8 = 0x03;
+const REG_START_HORIZONTAL_RETRACE_PULSE: u8 = 0x04;
+const REG_END_HORIZONTAL_RETRACE_PULSE: u8 = 0x05;
+const REG_VERTICAL_TOTAL: u8 = 0x06;
+const REG_OVERFLOW: u8 = 0x07;
+const REG_PRESET_ROW_SCAN: u8 = 0x08;
+const REG_MAXIMUM_SCAN_LINE: u8 = 0x09;
 
 /// The register select for setting the cursor scan lines.
-pub const REG_CURSOR_START: u8                    = 0x0A;
-pub const REG_CURSOR_END: u8                      = 0x0B;
-pub const REG_START_ADDRESS_HIGH: u8              = 0x0C;
-pub const REG_START_ADDRESS_LOW: u8               = 0x0D;
+const REG_CURSOR_START: u8 = 0x0A;
+const REG_CURSOR_END: u8 = 0x0B;
+const REG_START_ADDRESS_HIGH: u8 = 0x0C;
+const REG_START_ADDRESS_LOW: u8 = 0x0D;
 
 /// The command for setting the cursor's linear location.
-pub const REG_CURSOR_LOCATION_HIGH: u8            = 0x0E;
-pub const REG_CURSOR_LOCATION_LOW: u8             = 0x0F;
+const REG_CURSOR_LOCATION_HIGH: u8 = 0x0E;
+const REG_CURSOR_LOCATION_LOW: u8 = 0x0F;
 
 /// Other VGA registers.
-pub const REG_VERTICAL_RETRACE_START: u8          = 0x10;
-pub const REG_VERTICAL_RETRACE_END: u8            = 0x11;
-pub const REG_VERTICAL_DISPLAY_ENABLE_END: u8     = 0x12;
-pub const REG_OFFSET: u8                          = 0x13;
-pub const REG_UNDERLINE_LOCATION: u8              = 0x14;
-pub const REG_START_VERTICAL_BLINKING: u8         = 0x15;
-pub const REG_END_VERTICAL_BLINKING: u8           = 0x16;
-pub const REG_CRT_MODE_CONTROL: u8                = 0x17;
-pub const REG_LINE_COMPARE: u8                    = 0x18;
+const REG_VERTICAL_RETRACE_START: u8 = 0x10;
+const REG_VERTICAL_RETRACE_END: u8 = 0x11;
+const REG_VERTICAL_DISPLAY_ENABLE_END: u8 = 0x12;
+const REG_OFFSET: u8 = 0x13;
+const REG_UNDERLINE_LOCATION: u8 = 0x14;
+const REG_START_VERTICAL_BLINKING: u8 = 0x15;
+const REG_END_VERTICAL_BLINKING: u8 = 0x16;
+const REG_CRT_MODE_CONTROL: u8 = 0x17;
+const REG_LINE_COMPARE: u8 = 0x18;
 
 /// The start of the cursor scan line, the very beginning.
-pub const CURSOR_SCANLINE_START: u8   = 0x0;
+const CURSOR_SCANLINE_START: u8 = 0x0;
 
 /// The scan line for use in the underline cursor shape.
-pub const CURSOR_SCANLINE_MIDDLE: u8  = 0xE;
+const CURSOR_SCANLINE_MIDDLE: u8 = 0xE;
 
 /// The end of the cursor scan line, the very end.
-pub const CURSOR_SCANLINE_END: u8     = 0xF;
+const CURSOR_SCANLINE_END: u8 = 0xF;
 
 /// If set, disables the cursor.
-pub const CURSOR_DISABLE: u8    = 0x20;
+const CURSOR_DISABLE: u8 = 0x20;
 
 /// The number of characters wide the screen is.
-pub const WIDTH: u16        = 80;
+pub const WIDTH: u16 = 80;
 
 /// The number of characters heigh the screen is.
-pub const HEIGHT: u16       = 25;
+pub const HEIGHT: u16 = 25;
 
 /// The set of colours that VGA supports and can display for the foreground and background.
-pub const COLOUR_BLACK: u4            = 0x00;
-pub const COLOUR_BLUE: u4             = 0x01;
-pub const COLOUR_GREEN: u4            = 0x02;
-pub const COLOUR_CYAN: u4             = 0x03;
-pub const COLOUR_RED: u4              = 0x04;
-pub const COLOUR_MAGENTA: u4          = 0x05;
-pub const COLOUR_BROWN: u4            = 0x06;
-pub const COLOUR_LIGHT_GREY: u4       = 0x07;
-pub const COLOUR_DARK_GREY: u4        = 0x08;
-pub const COLOUR_LIGHT_BLUE: u4       = 0x09;
-pub const COLOUR_LIGHT_GREEN: u4      = 0x0A;
-pub const COLOUR_LIGHT_CYAN: u4       = 0x0B;
-pub const COLOUR_LIGHT_RED: u4        = 0x0C;
-pub const COLOUR_LIGHT_MAGENTA: u4    = 0x0D;
-pub const COLOUR_LIGHT_BROWN: u4      = 0x0E;
-pub const COLOUR_WHITE: u4            = 0x0F;
+pub const COLOUR_BLACK: u4 = 0x00;
+pub const COLOUR_BLUE: u4 = 0x01;
+pub const COLOUR_GREEN: u4 = 0x02;
+pub const COLOUR_CYAN: u4 = 0x03;
+pub const COLOUR_RED: u4 = 0x04;
+pub const COLOUR_MAGENTA: u4 = 0x05;
+pub const COLOUR_BROWN: u4 = 0x06;
+pub const COLOUR_LIGHT_GREY: u4 = 0x07;
+pub const COLOUR_DARK_GREY: u4 = 0x08;
+pub const COLOUR_LIGHT_BLUE: u4 = 0x09;
+pub const COLOUR_LIGHT_GREEN: u4 = 0x0A;
+pub const COLOUR_LIGHT_CYAN: u4 = 0x0B;
+pub const COLOUR_LIGHT_RED: u4 = 0x0C;
+pub const COLOUR_LIGHT_MAGENTA: u4 = 0x0D;
+pub const COLOUR_LIGHT_BROWN: u4 = 0x0E;
+pub const COLOUR_WHITE: u4 = 0x0F;
 
 /// The set of shapes that can be displayed.
 pub const CursorShape = enum {
@@ -233,4 +235,236 @@ pub fn init() void {
 
     // Set by default the underline cursor
     setCursorShape(CursorShape.UNDERLINE);
+}
+
+test "entryColour" {
+    var fg: u4 = COLOUR_BLACK;
+    var bg: u4 = COLOUR_BLACK;
+    var res: u8 = entryColour(fg, bg);
+    expectEqual(u8(0x00), res);
+
+    fg = COLOUR_LIGHT_GREEN;
+    bg = COLOUR_BLACK;
+    res = entryColour(fg, bg);
+    expectEqual(u8(0x0A), res);
+
+    fg = COLOUR_BLACK;
+    bg = COLOUR_LIGHT_GREEN;
+    res = entryColour(fg, bg);
+    expectEqual(u8(0xA0), res);
+
+    fg = COLOUR_BROWN;
+    bg = COLOUR_LIGHT_GREEN;
+    res = entryColour(fg, bg);
+    expectEqual(u8(0xA6), res);
+}
+
+test "entry" {
+    var colour: u8 = entryColour(COLOUR_BROWN, COLOUR_LIGHT_GREEN);
+    expectEqual(u8(0xA6), colour);
+
+    // Character '0' is 0x30
+    var video_entry: u16 = entry('0', colour);
+    expectEqual(u16(0xA630), video_entry);
+
+    video_entry = entry(0x55, colour);
+    expectEqual(u16(0xA655), video_entry);
+}
+
+test "updateCursor width out of bounds" {
+    const x: u16 = WIDTH;
+    const y: u16 = 0;
+
+    const max_cursor: u16 = (HEIGHT - 1) * WIDTH + (WIDTH - 1);
+    const expected_upper: u8 = @truncate(u8, (max_cursor >> 8) & 0x00FF);
+    const expected_lower: u8 = @truncate(u8, max_cursor & 0x00FF);
+
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for changing the hardware cursor:
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+
+    updateCursor(x, y);
+}
+
+test "updateCursor height out of bounds" {
+    const x: u16 = 0;
+    const y: u16 = HEIGHT;
+
+    const max_cursor: u16 = (HEIGHT - 1) * WIDTH + (WIDTH - 1);
+    const expected_upper: u8 = @truncate(u8, (max_cursor >> 8) & 0x00FF);
+    const expected_lower: u8 = @truncate(u8, max_cursor & 0x00FF);
+
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for changing the hardware cursor:
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+
+    updateCursor(x, y);
+}
+
+test "updateCursor width and height out of bounds" {
+    const x: u16 = WIDTH;
+    const y: u16 = HEIGHT;
+
+    const max_cursor: u16 = (HEIGHT - 1) * WIDTH + (WIDTH - 1);
+    const expected_upper: u8 = @truncate(u8, (max_cursor >> 8) & 0x00FF);
+    const expected_lower: u8 = @truncate(u8, max_cursor & 0x00FF);
+
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for changing the hardware cursor:
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+
+    updateCursor(x, y);
+}
+
+test "updateCursor width-1 and height out of bounds" {
+    const x: u16 = WIDTH - 1;
+    const y: u16 = HEIGHT;
+
+    const max_cursor: u16 = (HEIGHT - 1) * WIDTH + (WIDTH - 1);
+    const expected_upper: u8 = @truncate(u8, (max_cursor >> 8) & 0x00FF);
+    const expected_lower: u8 = @truncate(u8, max_cursor & 0x00FF);
+
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for changing the hardware cursor:
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+
+    updateCursor(x, y);
+}
+
+test "updateCursor width and height-1 out of bounds" {
+    const x: u16 = WIDTH;
+    const y: u16 = HEIGHT - 1;
+
+    const max_cursor: u16 = (HEIGHT - 1) * WIDTH + (WIDTH - 1);
+    const expected_upper: u8 = @truncate(u8, (max_cursor >> 8) & 0x00FF);
+    const expected_lower: u8 = @truncate(u8, max_cursor & 0x00FF);
+
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for changing the hardware cursor:
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+
+    updateCursor(x, y);
+}
+
+test "updateCursor in bounds" {
+    var x: u16 = 0x000A;
+    var y: u16 = 0x000A;
+    const expected: u16 = y * WIDTH + x;
+
+    var expected_upper: u8 = @truncate(u8, (expected >> 8) & 0x00FF);
+    var expected_lower: u8 = @truncate(u8, expected & 0x00FF);
+
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for changing the hardware cursor:
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+    updateCursor(x, y);
+}
+
+test "getCursor 1: 10" {
+    const expect: u16 = u16(10);
+
+    // Mocking out the arch.outb and arch.inb calls for getting the hardware cursor:
+    arch.initTest();
+    defer arch.freeTest();
+
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW);
+
+    arch.addTestParams("inb", PORT_DATA, u8(10));
+
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH);
+
+    arch.addTestParams("inb", PORT_DATA, u8(0));
+
+    const actual: u16 = getCursor();
+    expectEqual(expect, actual);
+}
+
+test "getCursor 2: 0xBEEF" {
+    const expect: u16 = u16(0xBEEF);
+
+    // Mocking out the arch.outb and arch.inb calls for getting the hardware cursor:
+    arch.initTest();
+    defer arch.freeTest();
+
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW);
+
+    arch.addTestParams("inb", PORT_DATA, u8(0xEF));
+
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH);
+
+    arch.addTestParams("inb", PORT_DATA, u8(0xBE));
+
+    const actual: u16 = getCursor();
+    expectEqual(expect, actual);
+}
+
+test "enableCursor all" {
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Need to init the cursor start and end positions, so call the init() to set this up
+    arch.addTestParams("outb", PORT_ADDRESS, REG_MAXIMUM_SCAN_LINE, PORT_DATA, CURSOR_SCANLINE_END, PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END,
+    // Mocking out the arch.outb calls for enabling the cursor:
+    // These are the default cursor positions from init()
+    PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END);
+
+    init();
+    enableCursor();
+}
+
+test "disableCursor all" {
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for disabling the cursor:
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_DISABLE);
+    disableCursor();
+}
+
+test "setCursorShape UNDERLINE" {
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for setting the cursor shape to underline:
+    // This will also check that the scan line variables were set properly as these are using in
+    // the arch.outb call
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END);
+
+    setCursorShape(CursorShape.UNDERLINE);
+}
+
+test "setCursorShape BLOCK" {
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for setting the cursor shape to block:
+    // This will also check that the scan line variables were set properly as these are using in
+    // the arch.outb call
+    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_START, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END);
+
+    setCursorShape(CursorShape.BLOCK);
+}
+
+test "init all" {
+    arch.initTest();
+    defer arch.freeTest();
+
+    // Mocking out the arch.outb calls for setting the cursor max scan line and the shape to block:
+    // This will also check that the scan line variables were set properly as these are using in
+    // the arch.outb call for setting the cursor shape.
+    arch.addTestParams("outb", PORT_ADDRESS, REG_MAXIMUM_SCAN_LINE, PORT_DATA, CURSOR_SCANLINE_END, PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END);
+
+    init();
 }
