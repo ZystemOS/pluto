@@ -91,8 +91,8 @@ pub fn build(b: *Builder) !void {
         const script = b.addSystemCommand([_][]const u8{ "python3", "test/rt-test.py", "x86", b.zig_exe });
         test_step.dependOn(&script.step);
     } else {
-        const mock_path = "\"" ++ "../../test/mock/kernel/" ++ "\"";
-        const arch_mock_path = "\"" ++ "../../../../test/mock/kernel/" ++ "\"";
+        const mock_path = "\"../../test/mock/kernel/\"";
+        const arch_mock_path = "\"../../../../test/mock/kernel/\"";
         const modes = [_]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall };
         inline for (modes) |test_mode| {
             const mode_str = switch (test_mode) {

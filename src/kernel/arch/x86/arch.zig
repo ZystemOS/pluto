@@ -125,7 +125,7 @@ pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
 ///     The previously loaded GDT from the CPU.
 ///
 pub fn sgdt() gdt.GdtPtr {
-    var gdt_ptr: gdt.GdtPtr = gdt.GdtPtr{ .limit = 0, .base = 0 };
+    var gdt_ptr = gdt.GdtPtr{ .limit = 0, .base = 0 };
     asm volatile ("sgdt %[tab]"
         : [tab] "=m" (gdt_ptr)
     );
@@ -156,6 +156,20 @@ pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
         :
         : [idt_ptr] "{eax}" (idt_ptr)
     );
+}
+
+///
+/// Get the previously loaded IDT from the CPU.
+///
+/// Return: idt.IdtPtr
+///     The previously loaded IDT from the CPU.
+///
+pub fn sidt() idt.IdtPtr {
+    var idt_ptr = idt.IdtPtr{ .limit = 0, .base = 0 };
+    asm volatile ("sidt %[tab]"
+        : [tab] "=m" (idt_ptr)
+    );
+    return idt_ptr;
 }
 
 ///
@@ -226,4 +240,9 @@ pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime opti
     syscalls.init(options);
 
     enableInterrupts();
+}
+
+test "" {
+    _ = @import("gdt.zig");
+    _ = @import("idt.zig");
 }

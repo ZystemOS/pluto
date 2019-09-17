@@ -60,6 +60,21 @@ export fn irqHandler(context: *arch.InterruptContext) void {
 }
 
 ///
+/// Open an IDT entry with index and handler. This will also handle the errors.
+///
+/// Arguments:
+///     IN index: u8                     - The IDT interrupt number.
+///     IN handler: idt.InterruptHandler - The IDT handler.
+///
+fn openIrq(index: u8, handler: idt.InterruptHandler) void {
+    idt.openInterruptGate(index, handler) catch |err| switch (err) {
+        error.IdtEntryExists => {
+            panic.panicFmt(@errorReturnTrace(), "Error opening IRQ number: {} exists", index);
+        },
+    };
+}
+
+///
 /// Register a IRQ by setting its interrupt handler to the given function. This will also clear the
 /// mask bit in the PIC so interrupts can happen.
 ///
@@ -92,20 +107,20 @@ pub fn init() void {
     pic.remapIrq();
 
     // Open all the IRQ's
-    idt.openInterruptGate(32, irq0);
-    idt.openInterruptGate(33, irq1);
-    idt.openInterruptGate(34, irq2);
-    idt.openInterruptGate(35, irq3);
-    idt.openInterruptGate(36, irq4);
-    idt.openInterruptGate(37, irq5);
-    idt.openInterruptGate(38, irq6);
-    idt.openInterruptGate(39, irq7);
-    idt.openInterruptGate(40, irq8);
-    idt.openInterruptGate(41, irq9);
-    idt.openInterruptGate(42, irq10);
-    idt.openInterruptGate(43, irq11);
-    idt.openInterruptGate(44, irq12);
-    idt.openInterruptGate(45, irq13);
-    idt.openInterruptGate(46, irq14);
-    idt.openInterruptGate(47, irq15);
+    openIrq(32, irq0);
+    openIrq(33, irq1);
+    openIrq(34, irq2);
+    openIrq(35, irq3);
+    openIrq(36, irq4);
+    openIrq(37, irq5);
+    openIrq(38, irq6);
+    openIrq(39, irq7);
+    openIrq(40, irq8);
+    openIrq(41, irq9);
+    openIrq(42, irq10);
+    openIrq(43, irq11);
+    openIrq(44, irq12);
+    openIrq(45, irq13);
+    openIrq(46, irq14);
+    openIrq(47, irq15);
 }
