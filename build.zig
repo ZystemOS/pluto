@@ -21,6 +21,7 @@ pub fn build(b: *Builder) !void {
         else => unreachable,
     };
 
+    const build_mode = b.standardReleaseOptions();
     const debug = b.option(bool, "debug", "build with debug symbols / make qemu wait for a debug connection") orelse false;
     const rt_test = b.option(bool, "rt-test", "enable/disable runtime testing") orelse false;
 
@@ -29,6 +30,7 @@ pub fn build(b: *Builder) !void {
     const exec = b.addExecutable("pluto", main_src);
     const constants_path = try fs.path.join(b.allocator, [_][]const u8{ "src/kernel/arch", target_str, "constants.zig" });
     exec.addPackagePath("constants", constants_path);
+    exec.setBuildMode(build_mode);
     exec.addBuildOption(bool, "rt_test", rt_test);
     exec.setLinkerScriptPath("link.ld");
     exec.setTheTarget(target);
@@ -93,24 +95,14 @@ pub fn build(b: *Builder) !void {
     } else {
         const mock_path = "\"../../test/mock/kernel/\"";
         const arch_mock_path = "\"../../../../test/mock/kernel/\"";
-        const modes = [_]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall };
-        inline for (modes) |test_mode| {
-            const mode_str = switch (test_mode) {
-                Mode.Debug => "debug",
-                Mode.ReleaseFast => "release-fast",
-                Mode.ReleaseSafe => "release-safe",
-                Mode.ReleaseSmall => "release-small",
-            };
-            const unit_tests = b.addTest(main_src);
-            unit_tests.setBuildMode(test_mode);
-            unit_tests.setMainPkgPath(".");
-            unit_tests.setNamePrefix(mode_str ++ " - ");
-            unit_tests.addPackagePath("constants", constants_path);
-            unit_tests.addBuildOption(bool, "rt_test", rt_test);
-            unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
-            unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
-            test_step.dependOn(&unit_tests.step);
-        }
+        const unit_tests = b.addTest(main_src);
+        unit_tests.setBuildMode(build_mode);
+        unit_tests.setMainPkgPath(".");
+        unit_tests.addPackagePath("constants", constants_path);
+        unit_tests.addBuildOption(bool, "rt_test", rt_test);
+        unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
+        unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
+        test_step.dependOn(&unit_tests.step);
     }
 
     const debug_step = b.step("debug", "Debug with gdb");
