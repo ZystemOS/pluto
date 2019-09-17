@@ -1,0 +1,31 @@
+name: CI
+
+on: [push]
+
+jobs:
+  test:
+    name: Build mode ${{ matrix.build_mode }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_mode: ["", -Drelease-fast=true, -Drelease-safe=true, -Drelease-small=true]
+
+    steps:
+    - uses: actions/checkout@v1
+    
+    - name: Download zig
+      run: |
+        export PYTHONIOENCODING=utf8
+        wget $(curl -s 'https://ziglang.org/download/index.json' | python3 -c "import sys, json; print(json.load(sys.stdin)['master']['x86_64-linux']['tarball'])")
+        sudo apt-get install mtools
+        tar -xvf zig*
+    - name: Build kernel
+      run: zig*/zig build ${{ matrix.build_mode }}
+    - name: Run unit tests
+      run: zig*/zig build test ${{ matrix.build_mode }}
+    - name: Install qemu
+      run: |
+        sudo apt-get update
+        sudo apt-get install qemu qemu-system --fix-missing
+    - name: Run runtime tests
+      run: zig*/zig build test -Drt-test=true ${{ matrix.build_mode }}
