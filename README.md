@@ -1,6 +1,6 @@
 # Pluto
 
-[![Build Status](https://dev.azure.com/samueltebbs/pluto/_apis/build/status/SamTebbs33.pluto?branchName=develop)](https://dev.azure.com/samueltebbs/samueltebbs/_build/latest?definitionId=1&branchName=develop)
+[![Build Status](https://github.com/SamTebbs33/pluto/workflows/CI/badge.svg)](https://github.com/SamTebbs33/pluto/actions)
 
 Pluto is a kernel written almost entirely in [Zig](https://github.com/ziglang/zig) and supports x86, with aarch64 and x64 backends being planned.
 
