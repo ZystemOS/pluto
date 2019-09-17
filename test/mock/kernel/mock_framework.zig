@@ -6,6 +6,7 @@ const GlobalAllocator = std.debug.global_allocator;
 const TailQueue = std.TailQueue;
 const warn = std.debug.warn;
 const gdt = @import("gdt_mock.zig");
+const idt = @import("idt_mock.zig");
 
 ///
 /// The enumeration of types that the mocking framework supports. These include basic types like u8
@@ -17,6 +18,7 @@ const DataElementType = enum {
     U16,
     U32,
     PTR_CONST_GdtPtr,
+    PTR_CONST_IdtPtr,
     FN_OVOID,
     FN_OUSIZE,
     FN_OU16,
@@ -27,6 +29,7 @@ const DataElementType = enum {
     FN_IU16_IU8_OVOID,
     FN_IU16_IU16_OVOID,
     FN_IPTRCONSTGDTPTR_OVOID,
+    FN_IPTRCONSTIDTPTR_OVOID,
 };
 
 ///
@@ -40,6 +43,7 @@ const DataElement = union(DataElementType) {
     U16: u16,
     U32: u32,
     PTR_CONST_GdtPtr: *const gdt.GdtPtr,
+    PTR_CONST_IdtPtr: *const idt.IdtPtr,
     FN_OVOID: fn () void,
     FN_OUSIZE: fn () usize,
     FN_OU16: fn () u16,
@@ -50,6 +54,7 @@ const DataElement = union(DataElementType) {
     FN_IU16_IU8_OVOID: fn (u16, u8) void,
     FN_IU16_IU16_OVOID: fn (u16, u16) void,
     FN_IPTRCONSTGDTPTR_OVOID: fn (*const gdt.GdtPtr) void,
+    FN_IPTRCONSTIDTPTR_OVOID: fn (*const idt.IdtPtr) void,
 };
 
 ///
@@ -130,6 +135,7 @@ fn Mock() type {
                 u16 => DataElement{ .U16 = arg },
                 u32 => DataElement{ .U32 = arg },
                 *const gdt.GdtPtr => DataElement{ .PTR_CONST_GdtPtr = arg },
+                *const idt.IdtPtr => DataElement{ .PTR_CONST_IdtPtr = arg },
                 fn () void => DataElement{ .FN_OVOID = arg },
                 fn () usize => DataElement{ .FN_OUSIZE = arg },
                 fn () u16 => DataElement{ .FN_OU16 = arg },
@@ -140,6 +146,7 @@ fn Mock() type {
                 fn (u16, u8) void => DataElement{ .FN_IU16_IU8_OVOID = arg },
                 fn (u16, u16) void => DataElement{ .FN_IU16_IU16_OVOID = arg },
                 fn (*const gdt.GdtPtr) void => DataElement{ .FN_IPTRCONSTGDTPTR_OVOID = arg },
+                fn (*const idt.IdtPtr) void => DataElement{ .FN_IPTRCONSTIDTPTR_OVOID = arg },
                 else => @compileError("Type not supported: " ++ @typeName(@typeOf(arg))),
             };
         }
@@ -160,6 +167,7 @@ fn Mock() type {
                 u16 => DataElementType.U16,
                 u32 => DataElementType.U32,
                 *const gdt.GdtPtr => DataElement.PTR_CONST_GdtPtr,
+                *const idt.IdtPtr => DataElement.PTR_CONST_IdtPtr,
                 fn () void => DataElementType.FN_OVOID,
                 fn () u16 => DataElementType.FN_OU16,
                 fn (u16) void => DataElementType.FN_IU16_OVOID,
@@ -169,6 +177,7 @@ fn Mock() type {
                 fn (u16, u8) void => DataElementType.FN_IU16_IU8_OVOID,
                 fn (u16, u16) void => DataElementType.FN_IU16_IU16_OVOID,
                 fn (*const gdt.GdtPtr) void => DataElementType.FN_IPTRCONSTGDTPTR_OVOID,
+                fn (*const idt.IdtPtr) void => DataElementType.FN_IPTRCONSTIDTPTR_OVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
@@ -191,6 +200,7 @@ fn Mock() type {
                 u16 => element.U16,
                 u32 => element.U32,
                 *const gdt.GdtPtr => element.PTR_CONST_GdtPtr,
+                *const idt.IdtPtr => element.PTR_CONST_IdtPtr,
                 fn () void => element.FN_OVOID,
                 fn () u16 => element.FN_OU16,
                 fn (u16) void => element.FN_IU16_OVOID,
@@ -200,6 +210,7 @@ fn Mock() type {
                 fn (u16, u8) void => element.FN_IU16_IU8_OVOID,
                 fn (u16, u16) void => element.FN_IU16_IU16_OVOID,
                 fn (*const gdt.GdtPtr) void => element.FN_IPTRCONSTGDTPTR_OVOID,
+                fn (*const idt.IdtPtr) void => element.FN_IPTRCONSTIDTPTR_OVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
