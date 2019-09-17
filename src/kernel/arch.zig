@@ -6,3 +6,7 @@ pub const internals = if (is_test) @import(build_options.mock_path ++ "arch_mock
     .i386 => @import("arch/x86/arch.zig"),
     else => unreachable,
 };
+
+test "" {
+    _ = @import("arch/x86/arch.zig");
+}

@@ -131,6 +131,21 @@ export fn isrHandler(context: *arch.InterruptContext) void {
 }
 
 ///
+/// Open an IDT entry with index and handler. This will also handle the errors.
+///
+/// Arguments:
+///     IN index: u8                     - The IDT interrupt number.
+///     IN handler: idt.InterruptHandler - The IDT handler.
+///
+fn openIsr(index: u8, handler: idt.InterruptHandler) void {
+    idt.openInterruptGate(index, handler) catch |err| switch (err) {
+        error.IdtEntryExists => {
+            panic.panicFmt(@errorReturnTrace(), "Error opening ISR number: {} exists", index);
+        },
+    };
+}
+
+///
 /// Register an exception by setting its exception handler to the given function.
 ///
 /// Arguments:
@@ -164,37 +179,37 @@ pub fn unregisterIsr(isr_num: u16) void {
 /// Initialise the exception and opening up all the IDT interrupt gates for each exception.
 ///
 pub fn init() void {
-    idt.openInterruptGate(0, isr0);
-    idt.openInterruptGate(1, isr1);
-    idt.openInterruptGate(2, isr2);
-    idt.openInterruptGate(3, isr3);
-    idt.openInterruptGate(4, isr4);
-    idt.openInterruptGate(5, isr5);
-    idt.openInterruptGate(6, isr6);
-    idt.openInterruptGate(7, isr7);
-    idt.openInterruptGate(8, isr8);
-    idt.openInterruptGate(9, isr9);
-    idt.openInterruptGate(10, isr10);
-    idt.openInterruptGate(11, isr11);
-    idt.openInterruptGate(12, isr12);
-    idt.openInterruptGate(13, isr13);
-    idt.openInterruptGate(14, isr14);
-    idt.openInterruptGate(15, isr15);
-    idt.openInterruptGate(16, isr16);
-    idt.openInterruptGate(17, isr17);
-    idt.openInterruptGate(18, isr18);
-    idt.openInterruptGate(19, isr19);
-    idt.openInterruptGate(20, isr20);
-    idt.openInterruptGate(21, isr21);
-    idt.openInterruptGate(22, isr22);
-    idt.openInterruptGate(23, isr23);
-    idt.openInterruptGate(24, isr24);
-    idt.openInterruptGate(25, isr25);
-    idt.openInterruptGate(26, isr26);
-    idt.openInterruptGate(27, isr27);
-    idt.openInterruptGate(28, isr28);
-    idt.openInterruptGate(29, isr29);
-    idt.openInterruptGate(30, isr30);
-    idt.openInterruptGate(31, isr31);
-    idt.openInterruptGate(syscalls.INTERRUPT, isr128);
+    openIsr(0, isr0);
+    openIsr(1, isr1);
+    openIsr(2, isr2);
+    openIsr(3, isr3);
+    openIsr(4, isr4);
+    openIsr(5, isr5);
+    openIsr(6, isr6);
+    openIsr(7, isr7);
+    openIsr(8, isr8);
+    openIsr(9, isr9);
+    openIsr(10, isr10);
+    openIsr(11, isr11);
+    openIsr(12, isr12);
+    openIsr(13, isr13);
+    openIsr(14, isr14);
+    openIsr(15, isr15);
+    openIsr(16, isr16);
+    openIsr(17, isr17);
+    openIsr(18, isr18);
+    openIsr(19, isr19);
+    openIsr(20, isr20);
+    openIsr(21, isr21);
+    openIsr(22, isr22);
+    openIsr(23, isr23);
+    openIsr(24, isr24);
+    openIsr(25, isr25);
+    openIsr(26, isr26);
+    openIsr(27, isr27);
+    openIsr(28, isr28);
+    openIsr(29, isr29);
+    openIsr(30, isr30);
+    openIsr(31, isr31);
+    openIsr(syscalls.INTERRUPT, isr128);
 }

@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const mem = @import("mem_mock.zig");
 const MemProfile = mem.MemProfile;
 const gdt = @import("gdt_mock.zig");
+const idt = @import("idt_mock.zig");
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
@@ -59,6 +60,10 @@ pub fn ltr(offset: u16) void {
 
 pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
     return mock_framework.performAction("lidt", void, idt_ptr);
+}
+
+pub fn sidt() idt.IdtPtr {
+    return mock_framework.performAction("sidt", idt.IdtPtr);
 }
 
 pub fn enableInterrupts() void {
