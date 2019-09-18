@@ -72,16 +72,28 @@ const DirectoryEntry = u32;
 /// Bits 12-31: The 4KB aligned physical address mapped to this page.
 const TableEntry = u32;
 
+/// Each directory has 1024 entries
 const ENTRIES_PER_DIRECTORY: u32 = 1024;
+
+/// Each table has 1024 entries
 const ENTRIES_PER_TABLE: u32 = 1024;
 
+/// The number of bytes in 4MB
 const PAGE_SIZE_4MB: u32 = 0x400000;
-const PAGE_SIZE_4KB: u29 = PAGE_SIZE_4MB / 1024;
-const PAGE_SIZE: u32 = PAGE_SIZE_4KB;
-const PAGES_PER_DIR_ENTRY: u32 = PAGE_SIZE_4MB / PAGE_SIZE;
-const PAGES_PER_DIR: u32 = ENTRIES_PER_DIRECTORY * PAGES_PER_DIR_ENTRY;
-const PHYS_ADDR_OFFSET: u32 = 22;
 
+/// The number of bytes in 4KB
+const PAGE_SIZE_4KB: u29 = PAGE_SIZE_4MB / 1024;
+
+/// The size of each page is 4KB
+const PAGE_SIZE: u32 = PAGE_SIZE_4KB;
+
+/// There are 1024 entries per directory with each one covering 4MB
+const PAGES_PER_DIR_ENTRY: u32 = PAGE_SIZE_4MB / PAGE_SIZE;
+
+/// There are 1 million pages per directory
+const PAGES_PER_DIR: u32 = ENTRIES_PER_DIRECTORY * PAGES_PER_DIR_ENTRY;
+
+/// The bitmasks for the bits in a DirectoryEntry
 const DENTRY_PRESENT: u32 = 0x1;
 const DENTRY_WRITABLE: u32 = 0x2;
 const DENTRY_USER: u32 = 0x4;
@@ -94,6 +106,7 @@ const DENTRY_IGNORED: u32 = 0x100;
 const DENTRY_AVAILABLE: u32 = 0xE00;
 const DENTRY_PAGE_ADDR: u32 = 0xFFFFF000;
 
+/// The bitmasks for the bits in a TableEntry
 const TENTRY_PRESENT: u32 = 0x1;
 const TENTRY_WRITABLE: u32 = 0x2;
 const TENTRY_USER: u32 = 0x4;
@@ -304,7 +317,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
     const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), PAGE_SIZE);
     const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE);
 
-    var tmp = allocator.alignedAlloc(Directory, PAGE_SIZE_4KB, 1) catch @panic("Failed to allocate page directory");
+    var tmp = allocator.alignedAlloc(Directory, PAGE_SIZE_4KB, 1) catch panic.panicFmt(@errorReturnTrace(), "Failed to allocate page directory");
     var kernel_directory = @ptrCast(*Directory, tmp.ptr);
     @memset(@ptrCast([*]u8, kernel_directory), 0, @sizeOf(Directory));
 
@@ -323,7 +336,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
         :
         : [addr] "{eax}" (dir_physaddr)
     );
-    isr.registerIsr(14, pageFault) catch @panic("Failed to register page fault ISR");
+    isr.registerIsr(14, pageFault) catch panic.panicFmt(@errorReturnTrace(), "Failed to register page fault ISR");
 }
 
 fn checkDirEntry(entry: DirectoryEntry, virt_start: usize, virt_end: usize, phys_start: usize, table: *Table) void {
