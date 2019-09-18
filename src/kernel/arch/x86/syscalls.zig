@@ -250,8 +250,8 @@ fn testHandler5(ctx: *arch.InterruptContext) u32 {
 }
 
 test "registerSyscall returns SyscallExists" {
-    registerSyscall(123, testHandler) catch unreachable;
-    registerSyscall(123, testHandler) catch |err| {
+    registerSyscall(123, testHandler0) catch unreachable;
+    registerSyscall(123, testHandler0) catch |err| {
         return;
     };
     assert(false);
