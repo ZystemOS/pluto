@@ -245,4 +245,5 @@ pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime opti
 test "" {
     _ = @import("gdt.zig");
     _ = @import("idt.zig");
+    _ = @import("syscalls.zig");
 }
