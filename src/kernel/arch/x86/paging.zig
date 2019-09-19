@@ -82,13 +82,10 @@ const ENTRIES_PER_TABLE: u32 = 1024;
 const PAGE_SIZE_4MB: u32 = 0x400000;
 
 /// The number of bytes in 4KB
-const PAGE_SIZE_4KB: u29 = PAGE_SIZE_4MB / 1024;
+const PAGE_SIZE_4KB: u32 = PAGE_SIZE_4MB / 1024;
 
-/// The size of each page is 4KB
-const PAGE_SIZE: u32 = PAGE_SIZE_4KB;
-
-/// There are 1024 entries per directory with each one covering 4MB
-const PAGES_PER_DIR_ENTRY: u32 = PAGE_SIZE_4MB / PAGE_SIZE;
+/// There are 1024 entries per directory with each one covering 4KB
+const PAGES_PER_DIR_ENTRY: u32 = 1024;
 
 /// There are 1 million pages per directory
 const PAGES_PER_DIR: u32 = ENTRIES_PER_DIRECTORY * PAGES_PER_DIR_ENTRY;
@@ -196,10 +193,10 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
     if (phys_end - phys_start != virt_end - virt_start) {
         return PagingError.PhysicalVirtualMismatch;
     }
-    if (!std.mem.isAligned(phys_start, PAGE_SIZE) or !std.mem.isAligned(phys_end, PAGE_SIZE)) {
+    if (!std.mem.isAligned(phys_start, PAGE_SIZE_4KB) or !std.mem.isAligned(phys_end, PAGE_SIZE_4KB)) {
         return PagingError.UnalignedPhysAddresses;
     }
-    if (!std.mem.isAligned(virt_start, PAGE_SIZE) or !std.mem.isAligned(virt_end, PAGE_SIZE)) {
+    if (!std.mem.isAligned(virt_start, PAGE_SIZE_4KB) or !std.mem.isAligned(virt_end, PAGE_SIZE_4KB)) {
         return PagingError.UnalignedVirtAddresses;
     }
 
@@ -221,7 +218,7 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
         table = tbl;
     } else {
         // Create a table and put the physical address in the dir entry
-        table = &(try allocator.alignedAlloc(Table, PAGE_SIZE_4KB, 1))[0];
+        table = &(try allocator.alignedAlloc(Table, @truncate(u29, PAGE_SIZE_4KB), 1))[0];
         @memset(@ptrCast([*]u8, table), 0, @sizeOf(Table));
         const table_phys_addr = @ptrToInt(virtToPhys(table));
         dir_entry.* |= @intCast(u32, DENTRY_PAGE_ADDR & table_phys_addr);
@@ -231,7 +228,7 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
     // Map the table entries within the requested space
     var virt = virt_start;
     var phys = phys_start;
-    var tentry = (virt / PAGE_SIZE_4KB) % ENTRIES_PER_TABLE;
+    var tentry = virtToTableEntryIdx(virt);
     while (virt < virt_end) : ({
         virt += PAGE_SIZE_4KB;
         phys += PAGE_SIZE_4KB;
@@ -253,7 +250,7 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
 ///     PagingError.UnalignedPhysAddresses - If the physical address isn't page size aligned.
 ///
 fn mapTableEntry(entry: *align(1) TableEntry, phys_addr: usize) PagingError!void {
-    if (!std.mem.isAligned(phys_addr, PAGE_SIZE)) {
+    if (!std.mem.isAligned(phys_addr, PAGE_SIZE_4KB)) {
         return PagingError.UnalignedPhysAddresses;
     }
     entry.* |= TENTRY_PRESENT;
@@ -312,12 +309,12 @@ fn pageFault(state: *arch.InterruptContext) void {
 ///
 pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
     // Calculate start and end of mapping
-    const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE);
-    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE);
-    const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), PAGE_SIZE);
-    const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE);
+    const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE_4KB);
+    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
+    const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), PAGE_SIZE_4KB);
+    const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
 
-    var tmp = allocator.alignedAlloc(Directory, PAGE_SIZE_4KB, 1) catch panic.panicFmt(@errorReturnTrace(), "Failed to allocate page directory");
+    var tmp = allocator.alignedAlloc(Directory, @truncate(u29, PAGE_SIZE_4KB), 1) catch panic.panicFmt(@errorReturnTrace(), "Failed to allocate page directory");
     var kernel_directory = @ptrCast(*Directory, tmp.ptr);
     @memset(@ptrCast([*]u8, kernel_directory), 0, @sizeOf(Directory));
 
