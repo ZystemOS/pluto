@@ -11,7 +11,7 @@ pub const INTERRUPT: u16 = 0x80;
 pub const NUM_HANDLERS: u16 = 256;
 
 /// A syscall handler
-pub const SyscallHandler = fn (ctx: *arch.InterruptContext) u32;
+pub const SyscallHandler = fn (ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32;
 
 /// Errors that syscall utility functions can throw
 pub const SyscallError = error{
@@ -46,7 +46,7 @@ fn handle(ctx: *arch.InterruptContext) void {
     const syscall = ctx.eax;
     if (isValidSyscall(syscall)) {
         if (handlers[syscall]) |handler| {
-            ctx.eax = handler(ctx);
+            ctx.eax = handler(ctx, syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
         } else {
             log.logWarning("Syscall {} triggered but not registered\n", syscall);
         }
@@ -219,34 +219,34 @@ pub fn init(comptime options: type) void {
 /// Tests
 var testInt: u32 = 0;
 
-fn testHandler0(ctx: *arch.InterruptContext) u32 {
+fn testHandler0(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
     testInt += 1;
     return 0;
 }
 
-fn testHandler1(ctx: *arch.InterruptContext) u32 {
-    testInt += syscallArg(ctx, 0);
+fn testHandler1(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+    testInt += arg1;
     return 1;
 }
 
-fn testHandler2(ctx: *arch.InterruptContext) u32 {
-    testInt += syscallArg(ctx, 1);
-    return testHandler1(ctx) + 1;
+fn testHandler2(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+    testInt += arg1 + arg2;
+    return 2;
 }
 
-fn testHandler3(ctx: *arch.InterruptContext) u32 {
-    testInt += syscallArg(ctx, 2);
-    return testHandler2(ctx) + 1;
+fn testHandler3(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+    testInt += arg1 + arg2 + arg3;
+    return 3;
 }
 
-fn testHandler4(ctx: *arch.InterruptContext) u32 {
-    testInt += syscallArg(ctx, 3);
-    return testHandler3(ctx) + 1;
+fn testHandler4(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+    testInt += arg1 + arg2 + arg3 + arg4;
+    return 4;
 }
 
-fn testHandler5(ctx: *arch.InterruptContext) u32 {
-    testInt += syscallArg(ctx, 4);
-    return testHandler4(ctx) + 1;
+fn testHandler5(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+    testInt += arg1 + arg2 + arg3 + arg4 + arg5;
+    return 5;
 }
 
 test "registerSyscall returns SyscallExists" {
