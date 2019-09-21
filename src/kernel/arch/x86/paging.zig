@@ -372,7 +372,8 @@ test "virtToPhys" {
     const offset: usize = @ptrToInt(&KERNEL_ADDR_OFFSET);
     expectEqual(virtToPhys(offset + 0), 0);
     expectEqual(virtToPhys(offset + 123), 123);
-    expectEqual(@ptrToInt(virtToPhys(@intToPtr(*usize, offset + 123))), 123);
+    if (builtin.mode != builtin.Mode.ReleaseSafe)
+        expectEqual(@ptrToInt(virtToPhys(@intToPtr(*usize, offset + 123))), 123);
 }
 
 test "virtToDirEntryIdx" {
