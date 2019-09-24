@@ -506,7 +506,12 @@ pub fn setColour(new_colour: u8) void {
     blank = vga.entry(0, colour);
 }
 
-fn getVideoBufferAddress() usize {
+///
+/// Gets the video buffer's virtual address.
+///
+/// Return: usize
+///     The virtual address of the video buffer
+pub fn getVideoBufferAddress() usize {
     return @ptrToInt(&KERNEL_ADDR_OFFSET) + 0xB8000;
 }
 
