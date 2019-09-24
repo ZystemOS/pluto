@@ -116,6 +116,10 @@ const TENTRY_GLOBAL: u32 = 0x100;
 const TENTRY_AVAILABLE: u32 = 0xE00;
 const TENTRY_PAGE_ADDR: u32 = 0xFFFFF000;
 
+/// The kernel's virtual address offset. It's assigned in the init function and the virtToPhys test.
+/// We can't just use KERNEL_ADDR_OFFSET since using externs in the virtToPhys test is broken in
+/// release-safe. This is a workaround until that is fixed.
+var ADDR_OFFSET: usize = undefined;
 extern var KERNEL_ADDR_OFFSET: *u32;
 
 ///
@@ -128,7 +132,7 @@ extern var KERNEL_ADDR_OFFSET: *u32;
 ///     The physical address.
 ///
 inline fn virtToPhys(virt: var) @typeOf(virt) {
-    const offset = @ptrToInt(&KERNEL_ADDR_OFFSET);
+    const offset = ADDR_OFFSET;
     const T = @typeOf(virt);
     return switch (@typeId(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(virt) - offset),
@@ -308,6 +312,7 @@ fn pageFault(state: *arch.InterruptContext) void {
 ///     IN allocator: *std.mem.Allocator - The allocator to use
 ///
 pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
+    ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
     // Calculate start and end of mapping
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE_4KB);
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
@@ -369,11 +374,11 @@ fn checkTableEntry(entry: TableEntry, page_phys: usize) void {
 }
 
 test "virtToPhys" {
-    const offset: usize = @ptrToInt(&KERNEL_ADDR_OFFSET);
+    ADDR_OFFSET = 0xC0000000;
+    const offset: usize = ADDR_OFFSET;
     expectEqual(virtToPhys(offset + 0), 0);
     expectEqual(virtToPhys(offset + 123), 123);
-    if (builtin.mode != builtin.Mode.ReleaseSafe)
-        expectEqual(@ptrToInt(virtToPhys(@intToPtr(*usize, offset + 123))), 123);
+    expectEqual(virtToPhys(@intToPtr(*usize, offset + 123)), @intToPtr(*usize, 123));
 }
 
 test "virtToDirEntryIdx" {
