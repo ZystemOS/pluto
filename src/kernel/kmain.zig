@@ -22,13 +22,13 @@ export var KERNEL_ADDR_OFFSET: u32 = if (builtin.is_test) 0xC0000000 else undefi
 
 // Need to import this as we need the panic to be in the root source file, or zig will just use the
 // builtin panic and just loop, which is what we don't want
-const panic_root = if (builtin.is_test) @import(build_options.mock_path ++ "panic_mock.zig") else @import("panic.zig");
+const panic_root = @import("panic.zig").panic;
 
 // Just call the panic function, as this need to be in the root source file
 pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {
     @setCold(true);
     arch.disableInterrupts();
-    panic_root.panicFmt(error_return_trace, "{}", msg);
+    panic_root(error_return_trace, "{}", msg);
 }
 
 export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {

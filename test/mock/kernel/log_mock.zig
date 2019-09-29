@@ -1,13 +1,16 @@
 const mock_framework = @import("mock_framework.zig");
+pub const initTest = mock_framework.initTest;
+pub const freeTest = mock_framework.freeTest;
+pub const addTestParams = mock_framework.addTestParams;
+pub const addConsumeFunction = mock_framework.addConsumeFunction;
+pub const addRepeatFunction = mock_framework.addRepeatFunction;
 
 pub const Level = enum {
     INFO,
     DEBUG,
     WARNING,
-    ERROR
+    ERROR,
 };
-
-fn logCallback(context: void, str: []const u8) anyerror!void {}
 
 pub fn log(comptime level: Level, comptime format: []const u8, args: ...) void {
     //return mock_framework.performAction("log", void, level, format, args);
@@ -27,24 +30,4 @@ pub fn logWarning(comptime format: []const u8, args: ...) void {
 
 pub fn logError(comptime format: []const u8, args: ...) void {
     //return mock_framework.performAction("logError", void, format, args);
-}
-
-pub fn addRepeatFunction(comptime fun_name: []const u8, function: var) void {
-    mock_framework.addRepeatFunction(fun_name, function);
-}
-
-pub fn addTestFunction(comptime fun_name: []const u8, function: var) void {
-    mock_framework.addRepeatFunction(fun_name, function);
-}
-
-pub fn addTestParams(comptime fun_name: []const u8, params: ...) void {
-    mock_framework.addTestParams(fun_name, params);
-}
-
-pub fn initTest() void {
-    mock_framework.initTest();
-}
-
-pub fn freeTest() void {
-    mock_framework.freeTest();
 }
