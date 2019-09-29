@@ -1,6 +1,6 @@
 // Zig version: 0.4.0
 
-const panic = @import("../../panic.zig");
+const panic = @import("../../panic.zig").panic;
 const idt = @import("idt.zig");
 const arch = @import("arch.zig");
 const pic = @import("pic.zig");
@@ -39,7 +39,7 @@ var irq_handlers: [NUMBER_OF_ENTRIES]fn (*arch.InterruptContext) void = [_]fn (*
 ///
 fn unhandled(context: *arch.InterruptContext) void {
     const interrupt_num: u8 = @truncate(u8, context.int_num - IRQ_OFFSET);
-    panic.panicFmt(null, "Unhandled IRQ number {}", interrupt_num);
+    panic(null, "Unhandled IRQ number {}", interrupt_num);
 }
 
 ///
@@ -69,7 +69,7 @@ export fn irqHandler(context: *arch.InterruptContext) void {
 fn openIrq(index: u8, handler: idt.InterruptHandler) void {
     idt.openInterruptGate(index, handler) catch |err| switch (err) {
         error.IdtEntryExists => {
-            panic.panicFmt(@errorReturnTrace(), "Error opening IRQ number: {} exists", index);
+            panic(@errorReturnTrace(), "Error opening IRQ number: {} exists", index);
         },
     };
 }

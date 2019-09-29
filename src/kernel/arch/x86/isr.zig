@@ -1,6 +1,6 @@
 // Zig version: 0.4.0
 
-const panic = @import("../../panic.zig");
+const panic = @import("../../panic.zig").panic;
 const idt = @import("idt.zig");
 const arch = @import("arch.zig");
 const syscalls = @import("syscalls.zig");
@@ -98,7 +98,7 @@ var syscall_handler: IsrHandler = unhandled;
 ///
 fn unhandled(context: *arch.InterruptContext) void {
     const interrupt_num = context.int_num;
-    panic.panicFmt(null, "Unhandled exception: {}, number {}", exception_msg[interrupt_num], interrupt_num);
+    panic(null, "Unhandled exception: {}, number {}", exception_msg[interrupt_num], interrupt_num);
 }
 
 ///
@@ -126,7 +126,7 @@ export fn isrHandler(context: *arch.InterruptContext) void {
     } else if (isValidIsr(isr_num)) {
         isr_handlers[isr_num](context);
     } else {
-        panic.panicFmt(null, "Unrecognised isr: {}\n", isr_num);
+        panic(null, "Unrecognised isr: {}\n", isr_num);
     }
 }
 
@@ -140,7 +140,7 @@ export fn isrHandler(context: *arch.InterruptContext) void {
 fn openIsr(index: u8, handler: idt.InterruptHandler) void {
     idt.openInterruptGate(index, handler) catch |err| switch (err) {
         error.IdtEntryExists => {
-            panic.panicFmt(@errorReturnTrace(), "Error opening ISR number: {} exists", index);
+            panic(@errorReturnTrace(), "Error opening ISR number: {} exists", index);
         },
     };
 }
