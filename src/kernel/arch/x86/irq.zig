@@ -79,9 +79,9 @@ fn openIrq(index: u8, handler: idt.InterruptHandler) void {
 /// mask bit in the PIC so interrupts can happen.
 ///
 /// Arguments:
-///     IN irq_num: u16 - The IRQ number to register.
+///     IN irq_num: u8 - The IRQ number to register.
 ///
-pub fn registerIrq(irq_num: u16, handler: fn (*arch.InterruptContext) void) void {
+pub fn registerIrq(irq_num: u8, handler: fn (*arch.InterruptContext) void) void {
     irq_handlers[irq_num] = handler;
     pic.clearMask(irq_num);
 }
@@ -103,9 +103,6 @@ pub fn unregisterIrq(irq_num: u16) void {
 /// the IDT interrupt gates for each IRQ.
 ///
 pub fn init() void {
-    // Remap the PIC IRQ so not to overlap with other exceptions
-    pic.remapIrq();
-
     // Open all the IRQ's
     openIrq(32, irq0);
     openIrq(33, irq1);
