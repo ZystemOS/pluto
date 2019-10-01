@@ -29,6 +29,7 @@ def get_post_archinit_cases():
             TestCase("VGA init", [r"Init vga", r"Done"]),
             TestCase("VGA tests", [r"VGA: Tested max scan line", r"VGA: Tested cursor shape", r"VGA: Tested updating cursor"]),
             TestCase("TTY init", [r"Init tty", r"Done"]),
+            TestCase("TTY tests", [r"TTY: Tested globals", r"TTY: Tested printing"]),
             TestCase("Init finishes", [r"Init done"])
         ]
 
