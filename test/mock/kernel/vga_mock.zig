@@ -69,11 +69,11 @@ pub fn init() void {
 
 // User defined mocked functions
 
-pub fn mock_entryColour(fg: u4, bg: u4) u8 {
+pub fn orig_entryColour(fg: u4, bg: u4) u8 {
     return u8(fg) | u8(bg) << 4;
 }
 
-pub fn mock_entry(uc: u8, c: u8) u16 {
+pub fn orig_entry(uc: u8, c: u8) u16 {
     return u16(uc) | u16(c) << 8;
 }
 
