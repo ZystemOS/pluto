@@ -7,6 +7,9 @@ const arch = @import("arch.zig");
 const isr = @import("isr.zig");
 const MemProfile = @import("../../mem.zig").MemProfile;
 const tty = @import("../../tty.zig");
+const log = @import("../../log.zig");
+const options = @import("build_options");
+const testing = std.testing;
 
 /// An array of directory entries and page tables. Forms the first level of paging and covers the entire 4GB memory space.
 const Directory = packed struct {
@@ -271,16 +274,16 @@ fn mapTableEntry(entry: *align(1) TableEntry, phys_addr: usize) PagingError!void
 ///
 /// Arguments:
 ///     OUT entry: *Directory - The directory to map
-///     IN phys_start: usize - The physical address at which to start mapping
-///     IN phys_end: usize - The physical address at which to stop mapping
 ///     IN virt_start: usize - The virtual address at which to start mapping
 ///     IN virt_end: usize - The virtual address at which to stop mapping
+///     IN phys_start: usize - The physical address at which to start mapping
+///     IN phys_end: usize - The physical address at which to stop mapping
 ///     IN allocator: *Allocator - The allocator to use to map any tables needed
 ///
 /// Error: std.mem.allocator.Error || PagingError
 ///     * - See mapDirEntry.
 ///
-fn mapDir(dir: *Directory, phys_start: usize, phys_end: usize, virt_start: usize, virt_end: usize, allocator: *std.mem.Allocator) (std.mem.Allocator.Error || PagingError)!void {
+fn mapDir(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usize, allocator: *std.mem.Allocator) (std.mem.Allocator.Error || PagingError)!void {
     var virt_addr = virt_start;
     var phys_addr = phys_start;
     var page = virt_addr / PAGE_SIZE_4KB;
@@ -312,6 +315,7 @@ fn pageFault(state: *arch.InterruptContext) void {
 ///     IN allocator: *std.mem.Allocator - The allocator to use
 ///
 pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
+    log.logInfo("Init paging\n");
     ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
     // Calculate start and end of mapping
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE_4KB);
@@ -319,18 +323,24 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
     const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), PAGE_SIZE_4KB);
     const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
 
-    var tmp = allocator.alignedAlloc(Directory, @truncate(u29, PAGE_SIZE_4KB), 1) catch panic(@errorReturnTrace(), "Failed to allocate page directory");
+    var tmp = allocator.alignedAlloc(Directory, @truncate(u29, PAGE_SIZE_4KB), 1) catch |e| {
+        panic(@errorReturnTrace(), "Failed to allocate page directory: {}\n", e);
+    };
     var kernel_directory = @ptrCast(*Directory, tmp.ptr);
     @memset(@ptrCast([*]u8, kernel_directory), 0, @sizeOf(Directory));
 
     // Map in kernel
-    mapDir(kernel_directory, p_start, p_end, v_start, v_end, allocator) catch panic(@errorReturnTrace(), "Failed to map kernel directory");
+    mapDir(kernel_directory, v_start, v_end, p_start, p_end, allocator) catch |e| {
+        panic(@errorReturnTrace(), "Failed to map kernel directory: {}\n", e);
+    };
     const tty_addr = tty.getVideoBufferAddress();
     // If the previous mappping space didn't cover the tty buffer, do so now
     if (v_start > tty_addr or v_end <= tty_addr) {
         const tty_phys = virtToPhys(tty_addr);
         const tty_buff_size = 32 * 1024;
-        mapDir(kernel_directory, tty_phys, tty_phys + tty_buff_size, tty_addr, tty_addr + tty_buff_size, allocator) catch panic(@errorReturnTrace(), "Failed to map vga buffer in kernel directory");
+        mapDir(kernel_directory, tty_addr, tty_addr + tty_buff_size, tty_phys, tty_phys + tty_buff_size, allocator) catch |e| {
+            panic(@errorReturnTrace(), "Failed to map vga buffer in kernel directory: {}\n", e);
+        };
     }
 
     const dir_physaddr = @ptrToInt(virtToPhys(kernel_directory));
@@ -338,7 +348,12 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
         :
         : [addr] "{eax}" (dir_physaddr)
     );
-    isr.registerIsr(14, pageFault) catch panic(@errorReturnTrace(), "Failed to register page fault ISR");
+    isr.registerIsr(14, if (options.rt_test) rt_pageFault else pageFault) catch |e| {
+        panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", e);
+    };
+    log.logInfo("Done\n");
+
+    if (options.rt_test) runtimeTests(v_end);
 }
 
 fn checkDirEntry(entry: DirectoryEntry, virt_start: usize, virt_end: usize, phys_start: usize, table: *Table) void {
@@ -417,6 +432,16 @@ test "mapDirEntry" {
     checkDirEntry(entry, virt, virt_end, phys, table);
 }
 
+test "mapDirEntry returns errors correctly" {
+    var allocator = std.heap.direct_allocator;
+    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = undefined };
+    testing.expectError(PagingError.UnalignedVirtAddresses, mapDirEntry(&dir, 1, PAGE_SIZE_4KB + 1, 0, PAGE_SIZE_4KB, allocator));
+    testing.expectError(PagingError.UnalignedPhysAddresses, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB + 1, allocator));
+    testing.expectError(PagingError.PhysicalVirtualMismatch, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB, allocator));
+    testing.expectError(PagingError.InvalidVirtAddresses, mapDirEntry(&dir, 1, 0, 0, PAGE_SIZE_4KB, allocator));
+    testing.expectError(PagingError.InvalidPhysAddresses, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, 0, allocator));
+}
+
 test "mapDir" {
     var allocator = std.heap.direct_allocator;
     var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
@@ -424,7 +449,7 @@ test "mapDir" {
     const virt_start: usize = PAGE_SIZE_4MB * 4;
     const phys_end: usize = PAGE_SIZE_4MB * 4;
     const virt_end: usize = PAGE_SIZE_4MB * 6;
-    mapDir(&dir, phys_start, phys_end, virt_start, virt_end, allocator) catch unreachable;
+    mapDir(&dir, virt_start, virt_end, phys_start, phys_end, allocator) catch unreachable;
 
     var virt = virt_start;
     var phys = phys_start;
@@ -437,4 +462,52 @@ test "mapDir" {
         const table = dir.tables[entry_idx] orelse unreachable;
         checkDirEntry(entry, virt, virt + PAGE_SIZE_4MB, phys, table);
     }
+}
+
+// The labels to jump to after attempting to cause a page fault. This is needed as we don't want to cause an
+// infinite loop by jummping to the same instruction that caused the fault.
+extern var rt_fault_callback: *u32;
+extern var rt_fault_callback2: *u32;
+
+var faulted = false;
+var use_callback2 = false;
+
+fn rt_pageFault(ctx: *arch.InterruptContext) void {
+    faulted = true;
+    // Return to the fault callback
+    ctx.eip = @ptrToInt(&if (use_callback2) rt_fault_callback2 else rt_fault_callback);
+}
+
+fn rt_accessUnmappedMem(v_end: u32) void {
+    use_callback2 = false;
+    faulted = false;
+    // Accessing unmapped mem causes a page fault
+    var ptr = @intToPtr(*u8, v_end);
+    var value = ptr.*;
+    // This is the label that we return to after processing the page fault
+    asm volatile (
+        \\.global rt_fault_callback
+        \\rt_fault_callback:
+    );
+    testing.expect(faulted);
+    log.logInfo("Paging: Tested accessing unmapped memory\n");
+}
+
+fn rt_accessMappedMem(v_end: u32) void {
+    use_callback2 = true;
+    faulted = false;
+    // Accessing mapped memory does't cause a page fault
+    var ptr = @intToPtr(*u8, v_end - PAGE_SIZE_4KB);
+    var value = ptr.*;
+    asm volatile (
+        \\.global rt_fault_callback2
+        \\rt_fault_callback2:
+    );
+    testing.expect(!faulted);
+    log.logInfo("Paging: Tested accessing mapped memory\n");
+}
+
+fn runtimeTests(v_end: u32) void {
+    rt_accessUnmappedMem(v_end);
+    rt_accessMappedMem(v_end);
 }

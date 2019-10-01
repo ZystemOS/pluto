@@ -7,6 +7,8 @@ def get_test_cases(TestCase):
             TestCase("PIC init", [r"Init pic", r"Done"]),
             TestCase("PIC tests", [r"PIC: Tested masking"]),
             TestCase("PIT init", [r"Init pit", r".+", r"Done"]),
+            TestCase("Paging init", [r"Init paging", r"Done"]),
+            TestCase("Paging tests", [r"Paging: Tested accessing unmapped memory", r"Paging: Tested accessing mapped memory"]),
             TestCase("Syscalls init", [r"Init syscalls", r"Done"]),
             TestCase("Syscall tests", [r"Syscalls: Tested no args", r"Syscalls: Tested 1 arg", r"Syscalls: Tested 2 args", r"Syscalls: Tested 3 args", r"Syscalls: Tested 4 args", r"Syscalls: Tested 5 args"])
         ]
