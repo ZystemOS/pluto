@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
-const panic = @import("std").debug.panic;
+const std = @import("std");
 
-pub fn panicFmt(trace: ?*builtin.StackTrace, comptime format: []const u8, args: ...) noreturn {
+pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: ...) noreturn {
     @setCold(true);
-    panic(format, args);
+    std.debug.panic(format, args);
 }

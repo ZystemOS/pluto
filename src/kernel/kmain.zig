@@ -27,7 +27,6 @@ const panic_root = @import("panic.zig").panic;
 // Just call the panic function, as this need to be in the root source file
 pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {
     @setCold(true);
-    arch.disableInterrupts();
     panic_root(error_return_trace, "{}", msg);
 }
 
