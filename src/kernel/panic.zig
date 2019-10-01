@@ -5,6 +5,7 @@ const log = @import("log.zig");
 
 pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: ...) noreturn {
     @setCold(true);
+    arch.disableInterrupts();
     log.logInfo("KERNEL PANIC\n");
     log.logInfo(format, args);
     log.logInfo("HALTING\n");
