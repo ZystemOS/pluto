@@ -633,100 +633,6 @@ pub fn init() void {
     if (build_options.rt_test) runtimeTests();
 }
 
-///
-/// Test the init function set up everything properly.
-///
-fn rt_initialisedGlobals() void {
-    if (@ptrToInt(video_buffer.ptr) != @ptrToInt(&KERNEL_ADDR_OFFSET) + 0xB8000) {
-        panic(@errorReturnTrace(), "Video buffer not at correct virtual address, found: {}\n", @ptrToInt(video_buffer.ptr));
-    }
-
-    if (page_index != 0) {
-        panic(@errorReturnTrace(), "Page index not at zero, found: {}\n", page_index);
-    }
-
-    if (colour != vga.entryColour(vga.COLOUR_LIGHT_GREY, vga.COLOUR_BLACK)) {
-        panic(@errorReturnTrace(), "Colour not set up properly, found: {}\n", colour);
-    }
-
-    if (blank != vga.entry(0, colour)) {
-        panic(@errorReturnTrace(), "Blank not set up properly, found: {}\n", blank);
-    }
-
-    // Make sure the screen isn't all blank
-    var all_blank = true;
-    for (video_buffer) |buf| {
-        if (buf != blank and buf != 0) {
-            all_blank = false;
-            break;
-        }
-    }
-
-    if (all_blank) {
-        panic(@errorReturnTrace(), "Screen all blank, should have logo and page number\n");
-    }
-
-    log.logInfo("TTY: Tested globals\n");
-}
-
-///
-/// Test printing a string will output to the screen. This will check both the video memory and
-/// the pages.
-///
-fn rt_printString() void {
-    const text = "abcdefg";
-    const clear_text = "\x08" ** text.len;
-
-    print(text);
-
-    // Check the video memory
-    var counter = u32(0);
-    for (video_buffer) |buf| {
-        if (counter < text.len and buf == vga.entry(text[counter], colour)) {
-            counter += 1;
-        } else if (counter == text.len) {
-            // Found all the text
-            break;
-        } else {
-            counter = 0;
-        }
-    }
-
-    if (counter != text.len) {
-        panic(@errorReturnTrace(), "Didn't find the printed text in video memory\n");
-    }
-
-    // Check the pages
-    counter = 0;
-    for (pages[0]) |c| {
-        if (counter < text.len and c == vga.entry(text[counter], colour)) {
-            counter += 1;
-        } else if (counter == text.len) {
-            // Found all the text
-            break;
-        } else {
-            counter = 0;
-        }
-    }
-
-    if (counter != text.len) {
-        panic(@errorReturnTrace(), "Didn't find the printed text in pages\n");
-    }
-
-    // Clear the text
-    print(clear_text);
-
-    log.logInfo("TTY: Tested printing\n");
-}
-
-///
-/// Run all the runtime tests.
-///
-fn runtimeTests() void {
-    rt_initialisedGlobals();
-    rt_printString();
-}
-
 const test_colour: u8 = vga.orig_entryColour(vga.COLOUR_LIGHT_GREY, vga.COLOUR_BLACK);
 var test_video_buffer: [VIDEO_BUFFER_SIZE]u16 = [_]u16{0} ** VIDEO_BUFFER_SIZE;
 
@@ -2195,4 +2101,98 @@ test "init not 0,0" {
 
     // Tear down
     resetGlobals();
+}
+
+///
+/// Test the init function set up everything properly.
+///
+fn rt_initialisedGlobals() void {
+    if (@ptrToInt(video_buffer.ptr) != @ptrToInt(&KERNEL_ADDR_OFFSET) + 0xB8000) {
+        panic(@errorReturnTrace(), "Video buffer not at correct virtual address, found: {}\n", @ptrToInt(video_buffer.ptr));
+    }
+
+    if (page_index != 0) {
+        panic(@errorReturnTrace(), "Page index not at zero, found: {}\n", page_index);
+    }
+
+    if (colour != vga.entryColour(vga.COLOUR_LIGHT_GREY, vga.COLOUR_BLACK)) {
+        panic(@errorReturnTrace(), "Colour not set up properly, found: {}\n", colour);
+    }
+
+    if (blank != vga.entry(0, colour)) {
+        panic(@errorReturnTrace(), "Blank not set up properly, found: {}\n", blank);
+    }
+
+    // Make sure the screen isn't all blank
+    var all_blank = true;
+    for (video_buffer) |buf| {
+        if (buf != blank and buf != 0) {
+            all_blank = false;
+            break;
+        }
+    }
+
+    if (all_blank) {
+        panic(@errorReturnTrace(), "Screen all blank, should have logo and page number\n");
+    }
+
+    log.logInfo("TTY: Tested globals\n");
+}
+
+///
+/// Test printing a string will output to the screen. This will check both the video memory and
+/// the pages.
+///
+fn rt_printString() void {
+    const text = "abcdefg";
+    const clear_text = "\x08" ** text.len;
+
+    print(text);
+
+    // Check the video memory
+    var counter = u32(0);
+    for (video_buffer) |buf| {
+        if (counter < text.len and buf == vga.entry(text[counter], colour)) {
+            counter += 1;
+        } else if (counter == text.len) {
+            // Found all the text
+            break;
+        } else {
+            counter = 0;
+        }
+    }
+
+    if (counter != text.len) {
+        panic(@errorReturnTrace(), "Didn't find the printed text in video memory\n");
+    }
+
+    // Check the pages
+    counter = 0;
+    for (pages[0]) |c| {
+        if (counter < text.len and c == vga.entry(text[counter], colour)) {
+            counter += 1;
+        } else if (counter == text.len) {
+            // Found all the text
+            break;
+        } else {
+            counter = 0;
+        }
+    }
+
+    if (counter != text.len) {
+        panic(@errorReturnTrace(), "Didn't find the printed text in pages\n");
+    }
+
+    // Clear the text
+    print(clear_text);
+
+    log.logInfo("TTY: Tested printing\n");
+}
+
+///
+/// Run all the runtime tests.
+///
+fn runtimeTests() void {
+    rt_initialisedGlobals();
+    rt_printString();
 }

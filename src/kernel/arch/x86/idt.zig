@@ -6,9 +6,10 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 
 const build_options = @import("build_options");
-const gdt = if (is_test) @import(build_options.arch_mock_path ++ "gdt_mock.zig") else @import("gdt.zig");
-const arch = if (is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const log = if (is_test) @import(build_options.arch_mock_path ++ "log_mock.zig") else @import("../../log.zig");
+const mock_path = build_options.arch_mock_path;
+const gdt = if (is_test) @import(mock_path ++ "gdt_mock.zig") else @import("gdt.zig");
+const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
 
 /// The structure that contains all the information that each IDT entry needs.
 const IdtEntry = packed struct {
@@ -326,6 +327,7 @@ fn rt_loadedIDTSuccess() void {
     const loaded_idt = arch.sidt();
     expect(idt_ptr.limit == loaded_idt.limit);
     expect(idt_ptr.base == loaded_idt.base);
+    log.logInfo("IDT: Tested loading IDT\n");
 }
 
 ///
@@ -333,5 +335,4 @@ fn rt_loadedIDTSuccess() void {
 ///
 fn runtimeTests() void {
     rt_loadedIDTSuccess();
-    log.logInfo("IDT: Tested loading IDT\n");
 }

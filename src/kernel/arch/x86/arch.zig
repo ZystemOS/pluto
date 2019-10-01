@@ -3,13 +3,13 @@ const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 const gdt = @import("gdt.zig");
 const idt = @import("idt.zig");
+const pic = @import("pic.zig");
 const irq = @import("irq.zig");
 const isr = @import("isr.zig");
 const pit = @import("pit.zig");
 const paging = @import("paging.zig");
 const syscalls = @import("syscalls.zig");
 const mem = @import("../../mem.zig");
-const log = @import("../../log.zig");
 const MemProfile = mem.MemProfile;
 
 /// The interrupt context that is given to a interrupt handler. It contains most of the registers
@@ -74,15 +74,6 @@ pub fn inb(port: u16) u8 {
         : [result] "={al}" (-> u8)
         : [port] "N{dx}" (port)
     );
-}
-
-///
-/// A simple way of waiting for I/O event to happen by doing an I/O event to flush the I/O
-/// event being waited.
-///
-pub fn ioWait() void {
-    // Port 0x80 is free to use
-    outb(0x80, 0);
 }
 
 ///
@@ -230,6 +221,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime opti
     gdt.init();
     idt.init();
 
+    pic.init();
     isr.init();
     irq.init();
 
@@ -245,6 +237,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime opti
 test "" {
     _ = @import("gdt.zig");
     _ = @import("idt.zig");
+    _ = @import("pic.zig");
     _ = @import("syscalls.zig");
     _ = @import("paging.zig");
 }
