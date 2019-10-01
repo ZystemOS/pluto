@@ -1,4 +1,4 @@
-def getTestCases(TestCase):
+def get_test_cases(TestCase):
     return [
             TestCase("GDT init", [r"Init gdt", r"Done"]),
             TestCase("GDT tests", [r"GDT: Tested loading GDT"]),

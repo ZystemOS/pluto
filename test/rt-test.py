@@ -18,6 +18,20 @@ def test_failure(case, exp, expected_idx, found):
 def test_pass(case, exp, expected_idx, found):
     print("PASS: %s #%d, expected '%s', found '%s'" %(case.name, expected_idx + 1, exp, found))
 
+def get_pre_archinit_cases():
+    return [
+            TestCase("Arch init starts", [r"Init arch \w+"])
+        ]
+
+def get_post_archinit_cases():
+    return [
+            TestCase("Arch init finishes", [r"Arch init done"]),
+            TestCase("VGA init", [r"Init vga", r"Done"]),
+            TestCase("VGA tests", [r"VGA: Tested max scan line", r"VGA: Tested cursor shape", r"VGA: Tested updating cursor"]),
+            TestCase("TTY init", [r"Init tty", r"Done"]),
+            TestCase("Init finishes", [r"Init done"])
+        ]
+
 if __name__ == "__main__":
     arch = sys.argv[1]
     zig_path = sys.argv[2]
@@ -25,18 +39,10 @@ if __name__ == "__main__":
     arch_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(arch_module)
 
-    # The list of log statements to look for before arch init is called
-    pre_archinit_cases = [
-            TestCase("Arch init starts", [r"Init arch \w+"])
-        ]
+    # The list of log statements to look for before arch init is called +
+    # All log statements to look for, including the arch-specific ones +
     # The list of log statements to look for after arch init is called
-    post_archinit_cases = [
-            TestCase("Arch init finishes", [r"Arch init done"]),
-            TestCase("TTY init", [r"Init tty", r"Done"]),
-            TestCase("Init finishes", [r"Init done"])
-        ]
-    # All log statements to look for, including the arch-specific ones
-    cases = pre_archinit_cases + arch_module.getTestCases(TestCase) + post_archinit_cases
+    cases = get_pre_archinit_cases() + arch_module.get_test_cases(TestCase) + get_post_archinit_cases()
 
     if len(cases) > 0:
         proc = subprocess.Popen(zig_path + " build run -Drt-test=true", stdout=subprocess.PIPE, shell=True)
@@ -47,7 +53,7 @@ if __name__ == "__main__":
             expected_idx = 0
             # Go through the expected log messages
             while expected_idx < len(case.expected):
-                e = "\[INFO\] " + case.expected[expected_idx]
+                e = r"\[INFO\] " + case.expected[expected_idx]
                 line = proc.stdout.readline().decode("utf-8")
                 if not line:
                     break
