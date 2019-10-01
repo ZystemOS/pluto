@@ -2,7 +2,7 @@ const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 const expect = std.testing.expect;
 const builtin = @import("builtin");
-const panic = @import("../../panic.zig");
+const panic = @import("../../panic.zig").panic;
 const arch = @import("arch.zig");
 const isr = @import("isr.zig");
 const MemProfile = @import("../../mem.zig").MemProfile;
@@ -319,18 +319,18 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
     const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), PAGE_SIZE_4KB);
     const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
 
-    var tmp = allocator.alignedAlloc(Directory, @truncate(u29, PAGE_SIZE_4KB), 1) catch panic.panicFmt(@errorReturnTrace(), "Failed to allocate page directory");
+    var tmp = allocator.alignedAlloc(Directory, @truncate(u29, PAGE_SIZE_4KB), 1) catch panic(@errorReturnTrace(), "Failed to allocate page directory");
     var kernel_directory = @ptrCast(*Directory, tmp.ptr);
     @memset(@ptrCast([*]u8, kernel_directory), 0, @sizeOf(Directory));
 
     // Map in kernel
-    mapDir(kernel_directory, p_start, p_end, v_start, v_end, allocator) catch panic.panicFmt(@errorReturnTrace(), "Failed to map kernel directory");
+    mapDir(kernel_directory, p_start, p_end, v_start, v_end, allocator) catch panic(@errorReturnTrace(), "Failed to map kernel directory");
     const tty_addr = tty.getVideoBufferAddress();
     // If the previous mappping space didn't cover the tty buffer, do so now
     if (v_start > tty_addr or v_end <= tty_addr) {
         const tty_phys = virtToPhys(tty_addr);
         const tty_buff_size = 32 * 1024;
-        mapDir(kernel_directory, tty_phys, tty_phys + tty_buff_size, tty_addr, tty_addr + tty_buff_size, allocator) catch panic.panicFmt(@errorReturnTrace(), "Failed to map vga buffer in kernel directory");
+        mapDir(kernel_directory, tty_phys, tty_phys + tty_buff_size, tty_addr, tty_addr + tty_buff_size, allocator) catch panic(@errorReturnTrace(), "Failed to map vga buffer in kernel directory");
     }
 
     const dir_physaddr = @ptrToInt(virtToPhys(kernel_directory));
@@ -338,7 +338,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
         :
         : [addr] "{eax}" (dir_physaddr)
     );
-    isr.registerIsr(14, pageFault) catch panic.panicFmt(@errorReturnTrace(), "Failed to register page fault ISR");
+    isr.registerIsr(14, pageFault) catch panic(@errorReturnTrace(), "Failed to register page fault ISR");
 }
 
 fn checkDirEntry(entry: DirectoryEntry, virt_start: usize, virt_end: usize, phys_start: usize, table: *Table) void {
