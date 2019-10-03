@@ -22,7 +22,6 @@ pub fn build(b: *Builder) !void {
     };
 
     const build_mode = b.standardReleaseOptions();
-    const debug = b.option(bool, "debug", "build with debug symbols / make qemu wait for a debug connection") orelse false;
     const rt_test = b.option(bool, "rt-test", "enable/disable runtime testing") orelse false;
 
     const main_src = "src/kernel/kmain.zig";
@@ -63,11 +62,13 @@ pub fn build(b: *Builder) !void {
     b.default_step.dependOn(&iso_cmd.step);
 
     const run_step = b.step("run", "Run with qemu");
+    const run_debug_step = b.step("debug-run", "Run with qemu and wait for a gdb connection");
+
     const qemu_bin = switch (target.getArch()) {
         .i386 => "qemu-system-i386",
         else => unreachable,
     };
-    const qemu_cmd = b.addSystemCommand([_][]const u8{
+    const qemu_args = [_][]const u8{
         qemu_bin,
         "-cdrom",
         iso_path,
@@ -75,18 +76,22 @@ pub fn build(b: *Builder) !void {
         "d",
         "-serial",
         "stdio",
-    });
-
-    if (debug) {
-        qemu_cmd.addArgs([_][]const u8{ "-s", "-S" });
-    }
+    };
+    const qemu_cmd = b.addSystemCommand(qemu_args);
+    const qemu_debug_cmd = b.addSystemCommand(qemu_args);
+    qemu_debug_cmd.addArgs([_][]const u8{ "-s", "-S" });
 
     if (rt_test) {
-        qemu_cmd.addArgs([_][]const u8{ "-display", "none" });
+        const qemu_rt_test_args = [_][]const u8{ "-display", "none" };
+        qemu_cmd.addArgs(qemu_rt_test_args);
+        qemu_debug_cmd.addArgs(qemu_rt_test_args);
     }
 
-    run_step.dependOn(&qemu_cmd.step);
     qemu_cmd.step.dependOn(&iso_cmd.step);
+    qemu_debug_cmd.step.dependOn(&iso_cmd.step);
+
+    run_step.dependOn(&qemu_cmd.step);
+    run_debug_step.dependOn(&qemu_debug_cmd.step);
 
     const test_step = b.step("test", "Run tests");
     if (rt_test) {
@@ -105,7 +110,7 @@ pub fn build(b: *Builder) !void {
         test_step.dependOn(&unit_tests.step);
     }
 
-    const debug_step = b.step("debug", "Debug with gdb");
+    const debug_step = b.step("debug", "Debug with gdb and connect to a running qemu instance");
     const symbol_file_arg = try std.mem.join(b.allocator, " ", [_][]const u8{ "symbol-file", elf_path });
     const debug_cmd = b.addSystemCommand([_][]const u8{
         "gdb",
