@@ -1,27 +1,27 @@
-// Zig version: 0.4.0
-
 const arch = @import("arch.zig");
 const assert = @import("std").debug.assert;
 const irq = @import("irq.zig");
 const pic = @import("pic.zig");
 const log = @import("../../log.zig");
+const panic = @import("../../panic.zig").panic;
 
 // The port addresses of the PIT registers
+
 /// The port address for the PIT data register for counter 0. This is going to be used as the
 /// system clock.
-const COUNTER_0_REGISTER: u16   = 0x40;
+const COUNTER_0_REGISTER: u16 = 0x40;
 
 /// The port address for the PIT data register for counter 1. This was used for refreshing the DRAM
 /// chips. But now is unused and unknown use, so won't use.
-const COUNTER_1_REGISTER: u16   = 0x41;
+const COUNTER_1_REGISTER: u16 = 0x41;
 
 /// The port address for the PIT data register for counter 2. Connected to the PC speakers, we'll
 /// use this for the speakers.
-const COUNTER_2_REGISTER: u16   = 0x42;
+const COUNTER_2_REGISTER: u16 = 0x42;
 
 /// The port address for the PIT control word register. Used to tell the PIT controller what is
 /// about to happen. Tell what data is going where, lower or upper part of it's registers.
-const COMMAND_REGISTER: u16     = 0x43;
+const COMMAND_REGISTER: u16 = 0x43;
 
 // The operational command word marks for the different modes.
 //
@@ -49,62 +49,62 @@ const COMMAND_REGISTER: u16     = 0x43;
 //     11: Illegal value.
 
 /// Have the counter count in binary (internally?).
-const OCW_BINARY_COUNT_BINARY: u8           = 0x00; // xxxxxxx0
+const OCW_BINARY_COUNT_BINARY: u8 = 0x00; // xxxxxxx0
 
 /// Have the counter count in BCD (internally?).
-const OCW_BINARY_COUNT_BCD: u8              = 0x01; // xxxxxxx1
+const OCW_BINARY_COUNT_BCD: u8 = 0x01; // xxxxxxx1
 
 /// The PIT counter will be programmed with an initial COUNT value that counts down at a rate of
 /// the input clock frequency. When the COUNT reaches 0, and after the control word is written,
 /// then its OUT pit is set high (1). Count down starts then the COUNT is set. The OUT pin remains
 /// high until the counter is reloaded with a new COUNT value or a new control work is written.
-const OCW_MODE_TERMINAL_COUNT: u8           = 0x00; // xxxx000x
+const OCW_MODE_TERMINAL_COUNT: u8 = 0x00; // xxxx000x
 
 /// The counter is programmed to output a pulse every curtain number of clock pulses. The OUT pin
 /// remains high as soon as a control word is written. When COUNT is written, the counter waits
 /// until the rising edge of the GATE pin to start.  One clock pulse after the GATE pin, the OUT
 /// pin will remain low until COUNT reaches 0.
-const OCW_MODE_ONE_SHOT: u8                 = 0x02; // xxxx001x
+const OCW_MODE_ONE_SHOT: u8 = 0x02; // xxxx001x
 
 /// The counter is initiated with a COUNT value. Counting starts next clock pulse. OUT pin remains
 /// high until COUNT reaches 1, then is set low for one clock pulse. Then COUNT is reset back to
 /// initial value and OUT pin is set high again.
-const OCW_MODE_RATE_GENERATOR: u8           = 0x04; // xxxx010x
+const OCW_MODE_RATE_GENERATOR: u8 = 0x04; // xxxx010x
 
 /// Similar to PIT_OCW_MODE_RATE_GENERATOR, but OUT pin will be high for half the time and low for
 /// half the time. Good for the speaker when setting a tone.
-const OCW_MODE_SQUARE_WAVE_GENERATOR: u8    = 0x06; // xxxx011x
+const OCW_MODE_SQUARE_WAVE_GENERATOR: u8 = 0x06; // xxxx011x
 
 /// The counter is initiated with a COUNT value. Counting starts on next clock pulse. OUT pin remains
 /// high until count is 0. Then OUT pin is low for one clock pulse. Then resets to high again.
-const OCW_MODE_SOFTWARE_TRIGGER: u8         = 0x08; // xxxx100x
+const OCW_MODE_SOFTWARE_TRIGGER: u8 = 0x08; // xxxx100x
 
 /// The counter is initiated with a COUNT value. OUT pin remains high until the rising edge of the
 /// GATE pin. Then the counting begins. When COUNT reaches 0, OUT pin goes low for one clock pulse.
 /// Then COUNT is reset and OUT pin goes high. This cycles for each rising edge of the GATE pin.
-const OCW_MODE_HARDWARE_TRIGGER: u8         = 0x0A; // xxxx101x
+const OCW_MODE_HARDWARE_TRIGGER: u8 = 0x0A; // xxxx101x
 
 /// The counter value is latched into an internal control register at the time of the I/O write
 /// operations.
-const OCW_READ_LOAD_LATCH: u8               = 0x00; // xx00xxxx
+const OCW_READ_LOAD_LATCH: u8 = 0x00; // xx00xxxx
 
 /// Read or load the most significant bit only.
-const OCW_READ_LOAD_LSB_ONLY: u8            = 0x10; // xx01xxxx
+const OCW_READ_LOAD_LSB_ONLY: u8 = 0x10; // xx01xxxx
 
 /// Read or load the least significant bit only.
-const OCW_READ_LOAD_MSB_ONLY: u8            = 0x20; // xx10xxxx
+const OCW_READ_LOAD_MSB_ONLY: u8 = 0x20; // xx10xxxx
 
 /// Read or load the least significant bit first then the most significant bit.
-const OCW_READ_LOAD_DATA: u8                = 0x30; // xx11xxxx
+const OCW_READ_LOAD_DATA: u8 = 0x30; // xx11xxxx
 
 /// The OCW bits for selecting counter 0. Used for the system clock.
-const OCW_SELECT_COUNTER_0: u8              = 0x00; // 00xxxxxx
+const OCW_SELECT_COUNTER_0: u8 = 0x00; // 00xxxxxx
 
 /// The OCW bits for selecting counter 1. Was for the memory refreshing.
-const OCW_SELECT_COUNTER_1: u8              = 0x40; // 01xxxxxx
+const OCW_SELECT_COUNTER_1: u8 = 0x40; // 01xxxxxx
 
 /// The OCW bits for selecting counter 2. Channel for the speaker.
-const OCW_SELECT_COUNTER_2: u8              = 0x80; // 10xxxxxx
+const OCW_SELECT_COUNTER_2: u8 = 0x80; // 10xxxxxx
 
 // The divisor constant
 const MAX_FREQUENCY: u32 = 1193180;

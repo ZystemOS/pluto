@@ -6,6 +6,8 @@ def get_test_cases(TestCase):
             TestCase("IDT tests", [r"IDT: Tested loading IDT"]),
             TestCase("PIC init", [r"Init pic", r"Done"]),
             TestCase("PIC tests", [r"PIC: Tested masking"]),
+            TestCase("ISR init", [r"Init isr", r"Done"]),
+            TestCase("ISR tests", [r"ISR: Tested registered handlers", r"ISR: Tested opened IDT entries"]),
             TestCase("PIT init", [r"Init pit", r".+", r"Done"]),
             TestCase("Paging init", [r"Init paging", r"Done"]),
             TestCase("Paging tests", [r"Paging: Tested accessing unmapped memory", r"Paging: Tested accessing mapped memory"]),

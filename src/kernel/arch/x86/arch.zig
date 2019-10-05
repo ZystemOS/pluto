@@ -238,6 +238,7 @@ test "" {
     _ = @import("gdt.zig");
     _ = @import("idt.zig");
     _ = @import("pic.zig");
+    _ = @import("isr.zig");
     _ = @import("syscalls.zig");
     _ = @import("paging.zig");
 }
