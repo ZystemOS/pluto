@@ -12,7 +12,7 @@ const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("ar
 const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
 
 /// The structure that contains all the information that each IDT entry needs.
-const IdtEntry = packed struct {
+pub const IdtEntry = packed struct {
     /// The lower 16 bits of the base address of the interrupt handler offset.
     base_low: u16,
 
@@ -88,11 +88,11 @@ const PRIVILEGE_RING_2: u2 = 0x2;
 /// Privilege level 3. User land. The privilege level the calling descriptor minimum will have.
 const PRIVILEGE_RING_3: u2 = 0x3;
 
-/// The total number of entries the IDT can have (2^8).
-const NUMBER_OF_ENTRIES: u16 = 256;
-
 /// The total size of all the IDT entries (minus 1).
 const TABLE_SIZE: u16 = @sizeOf(IdtEntry) * NUMBER_OF_ENTRIES - 1;
+
+/// The total number of entries the IDT can have (2^8).
+pub const NUMBER_OF_ENTRIES: u16 = 256;
 
 /// The IDT pointer that the CPU is loaded with that contains the base address of the IDT and the
 /// size.
@@ -150,7 +150,7 @@ fn makeEntry(base: u32, selector: u16, gate_type: u4, privilege: u2) IdtEntry {
 /// Return: bool
 ///     Whether the provided IDT entry is open or not.
 ///
-fn isIdtOpen(entry: IdtEntry) bool {
+pub fn isIdtOpen(entry: IdtEntry) bool {
     return entry.present == 1;
 }
 

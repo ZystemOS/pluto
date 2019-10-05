@@ -37,10 +37,10 @@ const PagingError = error{
     /// Physical and virtual addresses don't cover spaces of the same size.
     PhysicalVirtualMismatch,
 
-    /// Physical addressses aren't aligned by page size.
+    /// Physical addresses aren't aligned by page size.
     UnalignedPhysAddresses,
 
-    /// Virtual addressses aren't aligned by page size.
+    /// Virtual addresses aren't aligned by page size.
     UnalignedVirtAddresses,
 };
 
@@ -301,7 +301,7 @@ fn mapDir(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: usize
 /// Called when a page fault occurs.
 ///
 /// Arguments:
-///     IN state: *arch.InterruptContext - The CPU's state when the fault occured.
+///     IN state: *arch.InterruptContext - The CPU's state when the fault occurred.
 ///
 fn pageFault(state: *arch.InterruptContext) void {
     @panic("Page fault");
@@ -334,7 +334,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
         panic(@errorReturnTrace(), "Failed to map kernel directory: {}\n", e);
     };
     const tty_addr = tty.getVideoBufferAddress();
-    // If the previous mappping space didn't cover the tty buffer, do so now
+    // If the previous mapping space didn't cover the tty buffer, do so now
     if (v_start > tty_addr or v_end <= tty_addr) {
         const tty_phys = virtToPhys(tty_addr);
         const tty_buff_size = 32 * 1024;
@@ -348,7 +348,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
         :
         : [addr] "{eax}" (dir_physaddr)
     );
-    isr.registerIsr(14, if (options.rt_test) rt_pageFault else pageFault) catch |e| {
+    isr.registerIsr(isr.PAGE_FAULT, if (options.rt_test) rt_pageFault else pageFault) catch |e| {
         panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", e);
     };
     log.logInfo("Done\n");
