@@ -29,17 +29,21 @@ var handlers: [NUM_HANDLERS]?SyscallHandler = [_]?SyscallHandler{null} ** NUM_HA
 /// Arguments:
 ///     IN syscall: u32 - The syscall to check
 ///
+/// Return: bool
+///     Whether the syscall number is valid.
+///
 pub fn isValidSyscall(syscall: u32) bool {
     return syscall < NUM_HANDLERS;
 }
 
 ///
-/// Handle a syscall. Gets the syscall number from eax within the context and calls the registered handler.
-/// If there isn't a registered handler or the syscall is invalid (>= NUM_HANDLERS) then a warning is logged.
+/// Handle a syscall. Gets the syscall number from eax within the context and calls the registered
+/// handler. If there isn't a registered handler or the syscall is invalid (>= NUM_HANDLERS) then a
+/// warning is logged.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - The cpu context when the syscall was triggered. The syscall number is
-///                                      stored in eax.
+///     IN ctx: *arch.InterruptContext - The cpu context when the syscall was triggered. The
+///                                      syscall number is stored in eax.
 ///
 fn handle(ctx: *arch.InterruptContext) void {
     // The syscall number is put in eax
@@ -80,6 +84,9 @@ pub fn registerSyscall(syscall: u8, handler: SyscallHandler) SyscallError!void {
 /// Arguments:
 ///     IN syscall: u32 - The syscall to trigger, put in eax.
 ///
+/// Return: u32
+///     The return value from the syscall.
+///
 inline fn syscall0(syscall: u32) u32 {
     return asm volatile (
         \\int $0x80
@@ -94,6 +101,9 @@ inline fn syscall0(syscall: u32) u32 {
 /// Arguments:
 ///     IN syscall: u32 - The syscall to trigger, put in eax.
 ///     IN arg: u32 - The argument to pass. Put in ebx.
+///
+/// Return: u32
+///     The return value from the syscall.
 ///
 inline fn syscall1(syscall: u32, arg: u32) u32 {
     return asm volatile (
@@ -111,6 +121,9 @@ inline fn syscall1(syscall: u32, arg: u32) u32 {
 ///     IN syscall: u32 - The syscall to trigger, put in eax.
 ///     IN arg1: u32 - The first argument to pass. Put in ebx.
 ///     IN arg2: u32 - The second argument to pass. Put in ecx.
+///
+/// Return: u32
+///     The return value from the syscall.
 ///
 inline fn syscall2(syscall: u32, arg1: u32, arg2: u32) u32 {
     return asm volatile (
@@ -130,6 +143,9 @@ inline fn syscall2(syscall: u32, arg1: u32, arg2: u32) u32 {
 ///     IN arg1: u32 - The first argument to pass. Put in ebx.
 ///     IN arg2: u32 - The second argument to pass. Put in ecx.
 ///     IN arg3: u32 - The third argument to pass. Put in edx.
+///
+/// Return: u32
+///     The return value from the syscall.
 ///
 inline fn syscall3(syscall: u32, arg1: u32, arg2: u32, arg3: u32) u32 {
     return asm volatile (
@@ -151,6 +167,9 @@ inline fn syscall3(syscall: u32, arg1: u32, arg2: u32, arg3: u32) u32 {
 ///     IN arg2: u32 - The second argument to pass. Put in ecx.
 ///     IN arg3: u32 - The third argument to pass. Put in edx.
 ///     IN arg4: u32 - The fourth argument to pass. Put in esi.
+///
+/// Return: u32
+///     The return value from the syscall.
 ///
 inline fn syscall4(syscall: u32, arg1: u32, arg2: u32, arg3: u32, arg4: u32) u32 {
     return asm volatile (
@@ -175,6 +194,9 @@ inline fn syscall4(syscall: u32, arg1: u32, arg2: u32, arg3: u32, arg4: u32) u32
 ///     IN arg4: u32 - The fourth argument to pass. Put in esi.
 ///     IN arg5: u32 - The fifth argument to pass. Put in edi.
 ///
+/// Return: u32
+///     The return value from the syscall.
+///
 inline fn syscall5(syscall: u32, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
     return asm volatile (
         \\int $0x80
@@ -189,11 +211,15 @@ inline fn syscall5(syscall: u32, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg
 }
 
 ///
-/// Gets the syscall argument according to the given index. 0 => ebx, 1 => ecx, 2 => edx, 3 => esi and 4 => edi.
+/// Gets the syscall argument according to the given index. 0 => ebx, 1 => ecx, 2 => edx,
+/// 3 => esi and 4 => edi.
 ///
 /// Arguments:
 ///     IN ctx: *arch.InterruptContext - The interrupt context from which to get the argument
 ///     IN arg_idx: comptime u32 - The argument index to get. Between 0 and 4.
+///
+/// Return: u32
+///     The syscall argument from the given index.
 ///
 inline fn syscallArg(ctx: *arch.InterruptContext, comptime arg_idx: u32) u32 {
     return switch (arg_idx) {

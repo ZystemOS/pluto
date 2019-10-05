@@ -21,9 +21,9 @@ const IdtEntry = packed struct {
 // Need to use the type from the source file so that types match
 pub const IdtPtr = src_idt.IdtPtr;
 
-pub const InterruptHandler = extern fn () void;
+pub const InterruptHandler = src_idt.InterruptHandler;
 
-pub const IdtError = error{IdtEntryExists};
+pub const IdtError = src_idt.IdtError;
 
 const TASK_GATE: u4 = 0x5;
 const INTERRUPT_GATE: u4 = 0xE;
@@ -39,7 +39,7 @@ const NUMBER_OF_ENTRIES: u16 = 256;
 const TABLE_SIZE: u16 = @sizeOf(IdtEntry) * NUMBER_OF_ENTRIES - 1;
 
 pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
-    return mock_framework.performAction("openInterruptGate", IdtError!void, port);
+    return mock_framework.performAction("openInterruptGate", IdtError!void, index, handler);
 }
 
 pub fn init() void {
