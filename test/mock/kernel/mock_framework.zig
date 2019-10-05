@@ -19,6 +19,8 @@ const DataElementType = enum {
     U32,
     PTR_CONST_GdtPtr,
     PTR_CONST_IdtPtr,
+    ERROR_IDTERROR_VOID,
+    EFN_OVOID,
     FN_OVOID,
     FN_OUSIZE,
     FN_OU16,
@@ -28,6 +30,7 @@ const DataElementType = enum {
     FN_IU8_IU8_OU16,
     FN_IU16_IU8_OVOID,
     FN_IU16_IU16_OVOID,
+    FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
     FN_IPTRCONSTGDTPTR_OVOID,
     FN_IPTRCONSTIDTPTR_OVOID,
 };
@@ -44,6 +47,8 @@ const DataElement = union(DataElementType) {
     U32: u32,
     PTR_CONST_GdtPtr: *const gdt.GdtPtr,
     PTR_CONST_IdtPtr: *const idt.IdtPtr,
+    ERROR_IDTERROR_VOID: idt.IdtError!void,
+    EFN_OVOID: extern fn () void,
     FN_OVOID: fn () void,
     FN_OUSIZE: fn () usize,
     FN_OU16: fn () u16,
@@ -53,6 +58,7 @@ const DataElement = union(DataElementType) {
     FN_IU8_IU8_OU16: fn (u8, u8) u16,
     FN_IU16_IU8_OVOID: fn (u16, u8) void,
     FN_IU16_IU16_OVOID: fn (u16, u16) void,
+    FN_IU8_IEFNOVOID_OERRORIDTERRORVOID: fn (u8, extern fn () void) idt.IdtError!void,
     FN_IPTRCONSTGDTPTR_OVOID: fn (*const gdt.GdtPtr) void,
     FN_IPTRCONSTIDTPTR_OVOID: fn (*const idt.IdtPtr) void,
 };
@@ -136,6 +142,8 @@ fn Mock() type {
                 u32 => DataElement{ .U32 = arg },
                 *const gdt.GdtPtr => DataElement{ .PTR_CONST_GdtPtr = arg },
                 *const idt.IdtPtr => DataElement{ .PTR_CONST_IdtPtr = arg },
+                idt.IdtError!void => DataElement{ .ERROR_IDTERROR_VOID = arg },
+                extern fn () void => DataElement{ .EFN_OVOID = arg },
                 fn () void => DataElement{ .FN_OVOID = arg },
                 fn () usize => DataElement{ .FN_OUSIZE = arg },
                 fn () u16 => DataElement{ .FN_OU16 = arg },
@@ -147,6 +155,7 @@ fn Mock() type {
                 fn (u16, u16) void => DataElement{ .FN_IU16_IU16_OVOID = arg },
                 fn (*const gdt.GdtPtr) void => DataElement{ .FN_IPTRCONSTGDTPTR_OVOID = arg },
                 fn (*const idt.IdtPtr) void => DataElement{ .FN_IPTRCONSTIDTPTR_OVOID = arg },
+                fn (u8, extern fn () void) idt.IdtError!void => DataElement{ .FN_IU8_IEFNOVOID_OERRORIDTERRORVOID = arg },
                 else => @compileError("Type not supported: " ++ @typeName(@typeOf(arg))),
             };
         }
@@ -168,6 +177,8 @@ fn Mock() type {
                 u32 => DataElementType.U32,
                 *const gdt.GdtPtr => DataElement.PTR_CONST_GdtPtr,
                 *const idt.IdtPtr => DataElement.PTR_CONST_IdtPtr,
+                idt.IdtError!void => DataElement.ERROR_IDTERROR_VOID,
+                extern fn () void => DataElementType.EFN_OVOID,
                 fn () void => DataElementType.FN_OVOID,
                 fn () u16 => DataElementType.FN_OU16,
                 fn (u16) void => DataElementType.FN_IU16_OVOID,
@@ -178,6 +189,7 @@ fn Mock() type {
                 fn (u16, u16) void => DataElementType.FN_IU16_IU16_OVOID,
                 fn (*const gdt.GdtPtr) void => DataElementType.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => DataElementType.FN_IPTRCONSTIDTPTR_OVOID,
+                fn (u8, extern fn () void) idt.IdtError!void => DataElementType.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
@@ -201,6 +213,8 @@ fn Mock() type {
                 u32 => element.U32,
                 *const gdt.GdtPtr => element.PTR_CONST_GdtPtr,
                 *const idt.IdtPtr => element.PTR_CONST_IdtPtr,
+                idt.IdtError!void => element.ERROR_IDTERROR_VOID,
+                extern fn () void => element.EFN_OVOID,
                 fn () void => element.FN_OVOID,
                 fn () u16 => element.FN_OU16,
                 fn (u16) void => element.FN_IU16_OVOID,
@@ -211,6 +225,7 @@ fn Mock() type {
                 fn (u16, u16) void => element.FN_IU16_IU16_OVOID,
                 fn (*const gdt.GdtPtr) void => element.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => element.FN_IPTRCONSTIDTPTR_OVOID,
+                fn (u8, extern fn () void) idt.IdtError!void => element.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
@@ -248,8 +263,7 @@ fn Mock() type {
         fn expectTest(comptime ExpectedType: type, expected_value: ExpectedType, elem: DataElement) void {
             if (ExpectedType == void) {
                 // Can't test void as it has no value
-                warn("Can not test a value for void\n");
-                expect(false);
+                std.debug.panic("Can not test a value for void\n");
             }
 
             // Test that the types match
@@ -291,9 +305,7 @@ fn Mock() type {
 
                 return ret;
             } else {
-                warn("No more test values for the return of function: " ++ fun_name ++ "\n");
-                expect(false);
-                unreachable;
+                std.debug.panic("No more test values for the return of function: " ++ fun_name ++ "\n");
             }
         }
 
@@ -328,9 +340,7 @@ fn Mock() type {
             } else {
                 // Shouldn't get here as we would have just added a new mapping
                 // But just in case ;)
-                warn("No function name: " ++ fun_name ++ "\n");
-                expect(false);
-                unreachable;
+                std.debug.panic("No function name: " ++ fun_name ++ "\n");
             }
         }
 
@@ -448,14 +458,10 @@ fn Mock() type {
                     kv_actions_list.value = action_list;
                     return ret;
                 } else {
-                    warn("No action list elements for function: " ++ fun_name ++ "\n");
-                    expect(false);
-                    unreachable;
+                    std.debug.panic("No action list elements for function: " ++ fun_name ++ "\n");
                 }
             } else {
-                warn("No function name: " ++ fun_name ++ "\n");
-                expect(false);
-                unreachable;
+                std.debug.panic("No function name: " ++ fun_name ++ "\n");
             }
         }
 
@@ -489,9 +495,7 @@ fn Mock() type {
                     switch (action.action) {
                         ActionType.TestValue, ActionType.ConsumeFunctionCall => {
                             // These need to be all consumed
-                            warn("Unused testing value: Type: {}, value: {} for function '{}'\n", action.action, DataElementType(action.data), next.key);
-                            expect(false);
-                            unreachable;
+                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{}'\n", action.action, DataElementType(action.data), next.key);
                         },
                         ActionType.RepeatFunctionCall => {
                             // As this is a repeat action, the function will still be here
