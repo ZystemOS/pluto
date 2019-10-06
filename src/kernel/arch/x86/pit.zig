@@ -275,12 +275,21 @@ pub fn getFrequency() u32 {
 pub fn init() void {
     log.logInfo("Init pit\n");
     // Set up counter 0 at 1000hz in a square wave mode counting in binary
-    const f: u32 = 10000;
-    setupCounter(OCW_SELECT_COUNTER_0, f, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY);
+    // TODO: https://github.com/ziglang/zig/issues/557, Need type defined
+    const freq: u32 = 10000;
+    setupCounter(OCW_SELECT_COUNTER_0, freq, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY);
 
-    log.logInfo("Set frequency at: {}Hz, real frequency: {}Hz\n", f, getFrequency());
+    log.logInfo("Set frequency at: {}Hz, real frequency: {}Hz\n", freq, getFrequency());
 
     // Installs 'pitHandler' to IRQ0 (pic.IRQ_PIT)
-    irq.registerIrq(pic.IRQ_PIT, pitHandler);
+    irq.registerIrq(pic.IRQ_PIT, pitHandler) catch |err| switch (err) {
+        error.IrqExists => {
+            panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} exists", pic.IRQ_PIT);
+        },
+        error.InvalidIrq => {
+            panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} is invalid", pic.IRQ_PIT);
+        },
+    };
+
     log.logInfo("Done\n");
 }
