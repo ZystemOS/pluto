@@ -334,9 +334,9 @@ test "isValidIsr" {
         expectEqual(true, isValidIsr(i));
     }
 
-    expectEqual(true, isValidIsr(syscalls.INTERRUPT));
+    expect(isValidIsr(syscalls.INTERRUPT));
 
-    expectEqual(false, isValidIsr(200));
+    expect(!isValidIsr(200));
 }
 
 test "registerIsr re-register syscall handler" {

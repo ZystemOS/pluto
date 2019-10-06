@@ -13,6 +13,7 @@ const idt = @import("idt_mock.zig");
 /// and function types like fn () void
 ///
 const DataElementType = enum {
+    BOOL,
     U4,
     U8,
     U16,
@@ -24,6 +25,8 @@ const DataElementType = enum {
     FN_OVOID,
     FN_OUSIZE,
     FN_OU16,
+    FN_IU8_OBOOL,
+    FN_IU8_OVOID,
     FN_IU16_OVOID,
     FN_IU16_OU8,
     FN_IU4_IU4_OU8,
@@ -41,6 +44,7 @@ const DataElementType = enum {
 /// so this wraps the data into a union, (which is of one type) so can have a list of them.
 ///
 const DataElement = union(DataElementType) {
+    BOOL: bool,
     U4: u4,
     U8: u8,
     U16: u16,
@@ -52,6 +56,8 @@ const DataElement = union(DataElementType) {
     FN_OVOID: fn () void,
     FN_OUSIZE: fn () usize,
     FN_OU16: fn () u16,
+    FN_IU8_OBOOL: fn (u8) bool,
+    FN_IU8_OVOID: fn (u8) void,
     FN_IU16_OVOID: fn (u16) void,
     FN_IU16_OU8: fn (u16) u8,
     FN_IU4_IU4_OU8: fn (u4, u4) u8,
@@ -136,6 +142,7 @@ fn Mock() type {
         ///
         fn createDataElement(arg: var) DataElement {
             return switch (@typeOf(arg)) {
+                bool => DataElement{ .BOOL = arg },
                 u4 => DataElement{ .U4 = arg },
                 u8 => DataElement{ .U8 = arg },
                 u16 => DataElement{ .U16 = arg },
@@ -147,6 +154,8 @@ fn Mock() type {
                 fn () void => DataElement{ .FN_OVOID = arg },
                 fn () usize => DataElement{ .FN_OUSIZE = arg },
                 fn () u16 => DataElement{ .FN_OU16 = arg },
+                fn (u8) bool => DataElement{ .FN_IU8_OBOOL = arg },
+                fn (u8) void => DataElement{ .FN_IU8_OVOID = arg },
                 fn (u16) void => DataElement{ .FN_IU16_OVOID = arg },
                 fn (u16) u8 => DataElement{ .FN_IU16_OU8 = arg },
                 fn (u4, u4) u8 => DataElement{ .FN_IU4_IU4_OU8 = arg },
@@ -171,6 +180,7 @@ fn Mock() type {
         ///
         fn getDataElementType(comptime T: type) DataElementType {
             return switch (T) {
+                bool => DataElementType.BOOL,
                 u4 => DataElementType.U4,
                 u8 => DataElementType.U8,
                 u16 => DataElementType.U16,
@@ -181,6 +191,8 @@ fn Mock() type {
                 extern fn () void => DataElementType.EFN_OVOID,
                 fn () void => DataElementType.FN_OVOID,
                 fn () u16 => DataElementType.FN_OU16,
+                fn (u8) bool => DataElementType.FN_IU8_OBOOL,
+                fn (u8) void => DataElementType.FN_IU8_OVOID,
                 fn (u16) void => DataElementType.FN_IU16_OVOID,
                 fn (u16) u8 => DataElementType.FN_IU16_OU8,
                 fn (u4, u4) u8 => DataElementType.FN_IU4_IU4_OU8,
@@ -207,6 +219,7 @@ fn Mock() type {
         ///
         fn getDataValue(comptime T: type, element: DataElement) T {
             return switch (T) {
+                bool => element.BOOL,
                 u4 => element.U4,
                 u8 => element.U8,
                 u16 => element.U16,
@@ -217,6 +230,8 @@ fn Mock() type {
                 extern fn () void => element.EFN_OVOID,
                 fn () void => element.FN_OVOID,
                 fn () u16 => element.FN_OU16,
+                fn (u8) bool => element.FN_IU8_OBOOL,
+                fn (u8) void => element.FN_IU8_OVOID,
                 fn (u16) void => element.FN_IU16_OVOID,
                 fn (u16) u8 => element.FN_IU16_OU8,
                 fn (u4, u4) u8 => element.FN_IU4_IU4_OU8,
