@@ -1,13 +1,37 @@
-// Zig version: 0.4.0
-
+const std = @import("std");
+const builtin = @import("builtin");
+const is_test = builtin.is_test;
+const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
+const expectError = std.testing.expectError;
+const build_options = @import("build_options");
 const panic = @import("../../panic.zig").panic;
-const idt = @import("idt.zig");
-const arch = @import("arch.zig");
-const pic = @import("pic.zig");
+const mock_path = build_options.arch_mock_path;
+const idt = if (is_test) @import(mock_path ++ "idt_mock.zig") else @import("idt.zig");
+const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
+const pic = if (is_test) @import(mock_path ++ "pic_mock.zig") else @import("pic.zig");
 
+/// The error set for the IRQ. This will be from installing a IRQ handler.
+pub const IrqError = error{
+    /// The IRQ index is invalid.
+    InvalidIrq,
+
+    /// A IRQ handler already exists.
+    IrqExists,
+};
+
+/// The total number of IRQ.
 const NUMBER_OF_ENTRIES: u16 = 16;
 
+// The offset from the interrupt number where the IRQs are.
 const IRQ_OFFSET: u16 = 32;
+
+/// The type of a IRQ handler. A function that takes a interrupt context and returns void.
+const IrqHandler = fn (*arch.InterruptContext) void;
+
+/// The list of IRQ handlers initialised to unhandled.
+var irq_handlers: [NUMBER_OF_ENTRIES]?IrqHandler = [_]?IrqHandler{null} ** NUMBER_OF_ENTRIES;
 
 // The external assembly that is fist called to set up the interrupt handler.
 extern fn irq0() void;
@@ -27,35 +51,31 @@ extern fn irq13() void;
 extern fn irq14() void;
 extern fn irq15() void;
 
-/// The list of IRQ handlers initialised to unhandled.
-var irq_handlers: [NUMBER_OF_ENTRIES]fn (*arch.InterruptContext) void = [_]fn (*arch.InterruptContext) void{unhandled} ** NUMBER_OF_ENTRIES;
-
 ///
-/// A dummy handler that will make a call to panic as it is a unhandled interrupt.
+/// The IRQ handler that each of the IRQs will call when a interrupt happens.
 ///
 /// Arguments:
-///     IN context: *arch.InterruptContext - Pointer to the interrupt context containing the
-///                                          contents of the register at the time of the interrupt.
+///     IN ctx: *arch.InterruptContext - Pointer to the interrupt context containing the contents
+///                                      of the register at the time of the interrupt.
 ///
-fn unhandled(context: *arch.InterruptContext) void {
-    const interrupt_num: u8 = @truncate(u8, context.int_num - IRQ_OFFSET);
-    panic(null, "Unhandled IRQ number {}", interrupt_num);
-}
-
-///
-/// The IRQ handler that each of the IRQ's will call when a interrupt happens.
-///
-/// Arguments:
-///     IN context: *arch.InterruptContext - Pointer to the interrupt context containing the
-///                                          contents of the register at the time of the interrupt.
-///
-export fn irqHandler(context: *arch.InterruptContext) void {
-    const irq_num: u8 = @truncate(u8, context.int_num - IRQ_OFFSET);
-    // Make sure it isn't a spurious irq
-    if (!pic.spuriousIrq(irq_num)) {
-        irq_handlers[irq_num](context);
-        // Send the end of interrupt command
-        pic.sendEndOfInterrupt(irq_num);
+export fn irqHandler(ctx: *arch.InterruptContext) void {
+    // Get the IRQ index, by getting the interrupt number and subtracting the offset.
+    const irq_offset = ctx.int_num - IRQ_OFFSET;
+    if (isValidIrq(irq_offset)) {
+        // IRQ index is valid so can truncate
+        const irq_num = @truncate(u8, irq_offset);
+        if (irq_handlers[irq_num]) |handler| {
+            // Make sure it isn't a spurious irq
+            if (!pic.spuriousIrq(irq_num)) {
+                handler(ctx);
+                // Send the end of interrupt command
+                pic.sendEndOfInterrupt(irq_num);
+            }
+        } else {
+            panic(@errorReturnTrace(), "IRQ not registered: {}", irq_num);
+        }
+    } else {
+        panic(@errorReturnTrace(), "Invalid IRQ index: {}", irq_offset);
     }
 }
 
@@ -75,27 +95,45 @@ fn openIrq(index: u8, handler: idt.InterruptHandler) void {
 }
 
 ///
-/// Register a IRQ by setting its interrupt handler to the given function. This will also clear the
-/// mask bit in the PIC so interrupts can happen.
+/// Check whether the IRQ index is valid. This will have to be less than NUMBER_OF_ENTRIES.
 ///
 /// Arguments:
-///     IN irq_num: u8 - The IRQ number to register.
+///     IN irq_num: u8 - The IRQ index to test.
 ///
-pub fn registerIrq(irq_num: u8, handler: fn (*arch.InterruptContext) void) void {
-    irq_handlers[irq_num] = handler;
-    pic.clearMask(irq_num);
+/// Return: bool
+///     Whether the IRQ index if valid.
+///
+pub fn isValidIrq(irq_num: u32) bool {
+    return irq_num < NUMBER_OF_ENTRIES;
 }
 
 ///
-/// Unregister a IRQ by setting its interrupt handler to the unhandled function call to panic. This
-/// will also set the mask bit in the PIC so no interrupts can happen anyway.
+/// Register a IRQ by setting its interrupt handler to the given function. This will also clear the
+/// mask bit in the PIC so interrupts can happen for this IRQ.
 ///
 /// Arguments:
-///     IN irq_num: u16 - The IRQ number to unregister.
+///     IN irq_num: u8         - The IRQ number to register.
+///     IN handler: IrqHandler - The IRQ handler to register. This is what will be called when this
+///                              interrupt happens.
 ///
-pub fn unregisterIrq(irq_num: u16) void {
-    irq_handlers[irq_num] = unhandled;
-    pic.setMask(irq_num);
+/// Errors: IrqError
+///     IrqError.InvalidIrq - If the IRQ index is invalid (see isValidIrq).
+///     IrqError.IrqExists  - If the IRQ handler has already been registered.
+///
+pub fn registerIrq(irq_num: u8, handler: IrqHandler) IrqError!void {
+    // Check whether the IRQ index is valid.
+    if (isValidIrq(irq_num)) {
+        // Check if a handler has already been registered.
+        if (irq_handlers[irq_num]) |_| {
+            return IrqError.IrqExists;
+        } else {
+            // Register the handler and clear the PIC mask so interrupts can happen.
+            irq_handlers[irq_num] = handler;
+            pic.clearMask(irq_num);
+        }
+    } else {
+        return IrqError.InvalidIrq;
+    }
 }
 
 ///
@@ -103,7 +141,9 @@ pub fn unregisterIrq(irq_num: u16) void {
 /// the IDT interrupt gates for each IRQ.
 ///
 pub fn init() void {
-    // Open all the IRQ's
+    log.logInfo("Init irq\n");
+
+    // Open all the IRQs
     openIrq(32, irq0);
     openIrq(33, irq1);
     openIrq(34, irq2);
@@ -120,4 +160,135 @@ pub fn init() void {
     openIrq(45, irq13);
     openIrq(46, irq14);
     openIrq(47, irq15);
+
+    log.logInfo("Done\n");
+
+    if (build_options.rt_test) runtimeTests();
+}
+
+extern fn testFunction0() void {}
+fn testFunction1(ctx: *arch.InterruptContext) void {}
+fn testFunction2(ctx: *arch.InterruptContext) void {}
+
+test "openIrq" {
+    idt.initTest();
+    defer idt.freeTest();
+
+    const index = u8(0);
+    const handler = testFunction0;
+    const ret: idt.IdtError!void = {};
+
+    idt.addTestParams("openInterruptGate", index, handler, ret);
+
+    openIrq(index, handler);
+}
+
+test "isValidIrq" {
+    comptime var i = 0;
+    inline while (i < NUMBER_OF_ENTRIES) : (i += 1) {
+        expect(isValidIrq(i));
+    }
+
+    expect(!isValidIrq(200));
+}
+
+test "registerIrq re-register irq handler" {
+    // Set up
+    pic.initTest();
+    defer pic.freeTest();
+
+    pic.addTestParams("clearMask", u16(0));
+
+    // Pre testing
+    for (irq_handlers) |h| {
+        expect(null == h);
+    }
+
+    // Call function
+    try registerIrq(0, testFunction1);
+    expectError(IrqError.IrqExists, registerIrq(0, testFunction2));
+
+    // Post testing
+    for (irq_handlers) |h, i| {
+        if (i != 0) {
+            expect(null == h);
+        } else {
+            expectEqual(testFunction1, h.?);
+        }
+    }
+
+    // Clean up
+    irq_handlers[0] = null;
+}
+
+test "registerIrq register irq handler" {
+    // Set up
+    pic.initTest();
+    defer pic.freeTest();
+
+    pic.addTestParams("clearMask", u16(0));
+
+    // Pre testing
+    for (irq_handlers) |h| {
+        expect(null == h);
+    }
+
+    // Call function
+    try registerIrq(0, testFunction1);
+
+    // Post testing
+    for (irq_handlers) |h, i| {
+        if (i != 0) {
+            expect(null == h);
+        } else {
+            expectEqual(testFunction1, h.?);
+        }
+    }
+
+    // Clean up
+    irq_handlers[0] = null;
+}
+
+test "registerIrq invalid irq index" {
+    expectError(IrqError.InvalidIrq, registerIrq(200, testFunction1));
+}
+
+///
+/// Test that all handers are null at initialisation.
+///
+fn rt_unregisteredHandlers() void {
+    // Ensure all ISR are not registered yet
+    for (irq_handlers) |h, i| {
+        if (h) |_| {
+            panic(@errorReturnTrace(), "Handler found for IRQ: {}-{}\n", i, h);
+        }
+    }
+
+    log.logInfo("IRQ: Tested registered handlers\n");
+}
+
+///
+/// Test that all IDT entries for the IRQs are open.
+///
+fn rt_openedIdtEntries() void {
+    const loaded_idt = arch.sidt();
+    const idt_entries = @intToPtr([*]idt.IdtEntry, loaded_idt.base)[0..idt.NUMBER_OF_ENTRIES];
+
+    for (idt_entries) |entry, i| {
+        if (i >= IRQ_OFFSET and isValidIrq(i - IRQ_OFFSET)) {
+            if (!idt.isIdtOpen(entry)) {
+                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", i);
+            }
+        }
+    }
+
+    log.logInfo("IRQ: Tested opened IDT entries\n");
+}
+
+///
+/// Run all the runtime tests.
+///
+fn runtimeTests() void {
+    rt_unregisteredHandlers();
+    rt_openedIdtEntries();
 }
