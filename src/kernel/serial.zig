@@ -13,15 +13,13 @@ const PARITY_BIT = false;
 
 pub const DEFAULT_BAUDRATE = 38400;
 
-const SerialError = error {
-    InvalidBaud
-};
+const SerialError = error{InvalidBaud};
 
 pub const Port = enum(u16) {
     COM1 = 0x3F8,
     COM2 = 0x2F8,
     COM3 = 0x3E8,
-    COM4 = 0x2E8
+    COM4 = 0x2E8,
 };
 
 // Compute a value that encodes the serial properties
@@ -69,7 +67,9 @@ pub fn init(baud: u32, port: Port) SerialError!void {
 }
 
 pub fn write(char: u8, port: Port) void {
-    while (!transmitIsEmpty(port)) { arch.halt();  }
+    while (!transmitIsEmpty(port)) {
+        arch.halt();
+    }
     arch.outb(@enumToInt(port), char);
 }
 

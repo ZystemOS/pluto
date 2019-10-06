@@ -29,3 +29,5 @@ jobs:
         sudo apt-get install qemu qemu-system --fix-missing
     - name: Run runtime tests
       run: zig*/zig build test -Drt-test=true ${{ matrix.build_mode }}
+    - name: Check formatting
+      run: zig*/zig fmt --check src
