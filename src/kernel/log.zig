@@ -9,7 +9,7 @@ pub const Level = enum {
 };
 
 fn logCallback(context: void, str: []const u8) anyerror!void {
-    serial.writeString(str, serial.Port.COM1);
+    serial.writeBytes(str, serial.Port.COM1);
 }
 
 pub fn log(comptime level: Level, comptime format: []const u8, args: ...) void {
