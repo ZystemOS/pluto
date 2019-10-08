@@ -36,7 +36,11 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
         var buffer = mem_profile.vaddr_end[0..mem_profile.fixed_alloc_size];
         var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer);
 
-        serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch unreachable;
+        serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
+            panic_root(@errorReturnTrace(), "Failed to initialise serial: {}", e);
+        };
+        if (build_options.rt_test)
+            log.runtimeTests();
 
         log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n");
         arch.init(&mem_profile, &fixed_allocator.allocator, build_options);
