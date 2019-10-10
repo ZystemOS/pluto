@@ -17,7 +17,7 @@ All of these goals will benefit from the features of Zig.
 
 ## Build
 
-Requires a master build of Zig ([downloaded](https://ziglang.org/download) or [built from source](https://github.com/ziglang/zig#building-from-source)) *xorriso* and the grub tools (such as *grub-mkrescue*). A gdb binary compatible with your chosen target is required to run the kernel (e.g. *qemu-system-i386*).
+Requires a master build of Zig ([downloaded](https://ziglang.org/download) or [built from source](https://github.com/ziglang/zig#building-from-source)) *xorriso* and the grub tools (such as *grub-mkrescue*). A *qemu-system* binary compatible with your chosen target is required to run the kernel (e.g. *qemu-system-i386*).
 
 ```Shell
 zig build
@@ -27,6 +27,10 @@ zig build
 
 ```Shell
 zig build run
+```
+or if you want to wait for a gdb connection:
+```Shell
+zig build debug-run
 ```
 
 ## Debug
@@ -47,12 +51,12 @@ zig build test
 
 ## Options
 
-* `-Ddebug=`: Boolean (default `false`).
-  * **build**: Build with debug info included or stripped (see #70 for planned changes).
-  * **run**: Wait for a gdb connection before executing.
 * `-Drt-test=`: Boolean (default `false`).
   * **build**: Build with runtime testing enabled. Makes the kernel bigger and slower but tests important functionality.
   * **test**: Run the runtime testing script instead of the unittests. Checks for the expected log statements and fails if any are missing.
+* `-D[build-mode]=`: Boolean (default `false`).
+  * **build**: Build a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
+  * **test**: Test a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
 
 ## Contribution
 
@@ -67,3 +71,5 @@ We also like to order a file's members (public after non-public):
 5. inline functions
 6. functions
 7. entry point/init function
+
+More styling information is available on the [wiki](https://github.com/SamTebbs33/pluto/wiki/Code-Styling-(Detailed))
