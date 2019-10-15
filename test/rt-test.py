@@ -13,9 +13,10 @@ msg_queue = queue.Queue(-1)
 proc = None
 
 class TestCase:
-    def __init__(self, name, expected):
+    def __init__(self, name, expected, prefix=r"\[INFO\] "):
         self.name = name
         self.expected = expected
+        self.prefix = prefix
 
 def failure(msg):
     print("FAILURE: %s" %(msg))
@@ -29,7 +30,8 @@ def test_pass(case, exp, expected_idx, found):
 
 def get_pre_archinit_cases():
     return [
-            TestCase("Arch init starts", [r"Init arch \w+"])
+            TestCase("Serial tests", [r"c", r"123"], ""),
+            TestCase("Arch init starts", [r"Init arch \w+"]),
         ]
 
 def get_post_archinit_cases():
@@ -76,7 +78,7 @@ if __name__ == "__main__":
             expected_idx = 0
             # Go through the expected log messages
             while expected_idx < len(case.expected):
-                e = r"\[INFO\] " + case.expected[expected_idx]
+                e = case.prefix + case.expected[expected_idx]
                 try:
                     line = msg_queue.get(block=True, timeout=5)
                 except queue.Empty:
