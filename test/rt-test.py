@@ -31,7 +31,11 @@ def test_pass(case, exp, expected_idx, found):
 def get_pre_archinit_cases():
     return [
             TestCase("Serial tests", [r"c", r"123"], ""),
-            TestCase("Arch init starts", [r"Init arch \w+"]),
+            TestCase("Log info tests", [r"Test INFO level", r"Test INFO level with args a, 1", r"Test INFO function", r"Test INFO function with args a, 1"], "\[INFO\] "),
+            TestCase("Log debug tests", [r"Test DEBUG level", r"Test DEBUG level with args a, 1", r"Test DEBUG function", r"Test DEBUG function with args a, 1"], "\[DEBUG\] "),
+            TestCase("Log warning tests", [r"Test WARNING level", r"Test WARNING level with args a, 1", r"Test WARNING function", r"Test WARNING function with args a, 1"], "\[WARNING\] "),
+            TestCase("Log error tests", [r"Test ERROR level", r"Test ERROR level with args a, 1", r"Test ERROR function", r"Test ERROR function with args a, 1"], "\[ERROR\] "),
+            TestCase("Arch init starts", [r"Init arch \w+"])
         ]
 
 def get_post_archinit_cases():
