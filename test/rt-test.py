@@ -42,11 +42,13 @@ def get_pre_archinit_cases():
 def get_post_archinit_cases():
     return [
             TestCase("Arch init finishes", [r"Arch init done"]),
+            TestCase("Panic init", [r"Init panic", r"Done"]),
             TestCase("VGA init", [r"Init vga", r"Done"]),
             TestCase("VGA tests", [r"VGA: Tested max scan line", r"VGA: Tested cursor shape", r"VGA: Tested updating cursor"]),
             TestCase("TTY init", [r"Init tty", r"Done"]),
             TestCase("TTY tests", [r"TTY: Tested globals", r"TTY: Tested printing"]),
-            TestCase("Init finishes", [r"Init done"])
+            TestCase("Init finishes", [r"Init done"]),
+            TestCase("Panic tests", [r"Kernel panic: integer overflow", r"c[a-z\d]+: panic", r"c[a-z\d]+: panic.runtimeTests", r"c[a-z\d]+: kmain", r"c[a-z\d]+: start_higher_half"], "\[ERROR\] ")
         ]
 
 def read_messages(proc):

@@ -99,7 +99,7 @@ export nakedcc fn start_higher_half() noreturn {
     asm volatile (
         \\.extern KERNEL_STACK_END
         \\mov $KERNEL_STACK_END, %%esp
-        \\mov %%esp, %%ebp
+        \\xor %%ebp, %%ebp
     );
 
     // Push the bootloader magic number and multiboot header address with virtual offset

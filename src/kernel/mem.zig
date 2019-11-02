@@ -29,7 +29,7 @@ extern var KERNEL_PHYSADDR_START: *u32;
 extern var KERNEL_ADDR_OFFSET: *u32;
 
 /// The size of the fixed allocator used before the heap is set up. Set to 1MiB.
-const FIXED_ALLOC_SIZE = 1024 * 1024;
+const FIXED_ALLOC_SIZE: usize = 1024 * 1024;
 
 /// The kernel's virtual address offset. It's assigned in the init function and this file's tests.
 /// We can't just use KERNEL_ADDR_OFFSET since using externs in the virtToPhys test is broken in
