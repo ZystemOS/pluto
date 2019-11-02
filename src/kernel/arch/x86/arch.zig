@@ -10,6 +10,7 @@ const pit = @import("pit.zig");
 const paging = @import("paging.zig");
 const syscalls = @import("syscalls.zig");
 const mem = @import("../../mem.zig");
+const multiboot = @import("../../multiboot.zig");
 const MemProfile = mem.MemProfile;
 
 /// The interrupt context that is given to a interrupt handler. It contains most of the registers
@@ -215,7 +216,7 @@ pub fn haltNoInterrupts() noreturn {
 ///     IN comptime options: type         - The build options that is passed to the kernel to be
 ///                                         used for run time testing.
 ///
-pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime options: type) void {
+pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *Allocator) void {
     disableInterrupts();
 
     gdt.init();
@@ -227,9 +228,9 @@ pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime opti
 
     pit.init();
 
-    paging.init(mem_profile, allocator);
+    paging.init(mb_info, mem_profile, allocator);
 
-    syscalls.init(options);
+    syscalls.init();
 
     enableInterrupts();
 }
