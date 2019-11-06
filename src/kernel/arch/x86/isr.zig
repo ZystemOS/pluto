@@ -11,6 +11,7 @@ const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @im
 const idt = if (is_test) @import(mock_path ++ "idt_mock.zig") else @import("idt.zig");
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
 const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
+const interrupts = @import("interrupts.zig");
 
 /// The error set for the ISR. This will be from installing a ISR handler.
 pub const IsrError = error{
@@ -132,41 +133,6 @@ var isr_handlers: [NUMBER_OF_ENTRIES]?IsrHandler = [_]?IsrHandler{null} ** NUMBE
 /// The syscall hander.
 var syscall_handler: ?IsrHandler = null;
 
-// The external assembly that is fist called to set up the exception handler.
-extern fn isr0() void;
-extern fn isr1() void;
-extern fn isr2() void;
-extern fn isr3() void;
-extern fn isr4() void;
-extern fn isr5() void;
-extern fn isr6() void;
-extern fn isr7() void;
-extern fn isr8() void;
-extern fn isr9() void;
-extern fn isr10() void;
-extern fn isr11() void;
-extern fn isr12() void;
-extern fn isr13() void;
-extern fn isr14() void;
-extern fn isr15() void;
-extern fn isr16() void;
-extern fn isr17() void;
-extern fn isr18() void;
-extern fn isr19() void;
-extern fn isr20() void;
-extern fn isr21() void;
-extern fn isr22() void;
-extern fn isr23() void;
-extern fn isr24() void;
-extern fn isr25() void;
-extern fn isr26() void;
-extern fn isr27() void;
-extern fn isr28() void;
-extern fn isr29() void;
-extern fn isr30() void;
-extern fn isr31() void;
-extern fn isr128() void;
-
 ///
 /// The exception handler that each of the exceptions will call when a exception happens.
 ///
@@ -270,46 +236,19 @@ pub fn registerIsr(isr_num: u16, handler: IsrHandler) IsrError!void {
 pub fn init() void {
     log.logInfo("Init isr\n");
 
-    openIsr(0, isr0);
-    openIsr(1, isr1);
-    openIsr(2, isr2);
-    openIsr(3, isr3);
-    openIsr(4, isr4);
-    openIsr(5, isr5);
-    openIsr(6, isr6);
-    openIsr(7, isr7);
-    openIsr(8, isr8);
-    openIsr(9, isr9);
-    openIsr(10, isr10);
-    openIsr(11, isr11);
-    openIsr(12, isr12);
-    openIsr(13, isr13);
-    openIsr(14, isr14);
-    openIsr(15, isr15);
-    openIsr(16, isr16);
-    openIsr(17, isr17);
-    openIsr(18, isr18);
-    openIsr(19, isr19);
-    openIsr(20, isr20);
-    openIsr(21, isr21);
-    openIsr(22, isr22);
-    openIsr(23, isr23);
-    openIsr(24, isr24);
-    openIsr(25, isr25);
-    openIsr(26, isr26);
-    openIsr(27, isr27);
-    openIsr(28, isr28);
-    openIsr(29, isr29);
-    openIsr(30, isr30);
-    openIsr(31, isr31);
-    openIsr(syscalls.INTERRUPT, isr128);
+    comptime var i = 0;
+    inline while (i < 32) : (i += 1) {
+        openIsr(i, interrupts.getInterruptStub(i));
+    }
+
+    openIsr(syscalls.INTERRUPT, interrupts.getInterruptStub(syscalls.INTERRUPT));
 
     log.logInfo("Done\n");
 
     if (build_options.rt_test) runtimeTests();
 }
 
-extern fn testFunction0() void {}
+nakedcc fn testFunction0() void {}
 fn testFunction1(ctx: *arch.InterruptContext) void {}
 fn testFunction2(ctx: *arch.InterruptContext) void {}
 fn testFunction3(ctx: *arch.InterruptContext) void {}

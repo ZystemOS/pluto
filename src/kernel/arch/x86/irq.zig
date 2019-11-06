@@ -11,6 +11,7 @@ const idt = if (is_test) @import(mock_path ++ "idt_mock.zig") else @import("idt.
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
 const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
 const pic = if (is_test) @import(mock_path ++ "pic_mock.zig") else @import("pic.zig");
+const interrupts = @import("interrupts.zig");
 
 /// The error set for the IRQ. This will be from installing a IRQ handler.
 pub const IrqError = error{
@@ -24,32 +25,14 @@ pub const IrqError = error{
 /// The total number of IRQ.
 const NUMBER_OF_ENTRIES: u16 = 16;
 
-// The offset from the interrupt number where the IRQs are.
-const IRQ_OFFSET: u16 = 32;
-
 /// The type of a IRQ handler. A function that takes a interrupt context and returns void.
 const IrqHandler = fn (*arch.InterruptContext) void;
 
+// The offset from the interrupt number where the IRQs are.
+pub const IRQ_OFFSET: u16 = 32;
+
 /// The list of IRQ handlers initialised to unhandled.
 var irq_handlers: [NUMBER_OF_ENTRIES]?IrqHandler = [_]?IrqHandler{null} ** NUMBER_OF_ENTRIES;
-
-// The external assembly that is fist called to set up the interrupt handler.
-extern fn irq0() void;
-extern fn irq1() void;
-extern fn irq2() void;
-extern fn irq3() void;
-extern fn irq4() void;
-extern fn irq5() void;
-extern fn irq6() void;
-extern fn irq7() void;
-extern fn irq8() void;
-extern fn irq9() void;
-extern fn irq10() void;
-extern fn irq11() void;
-extern fn irq12() void;
-extern fn irq13() void;
-extern fn irq14() void;
-extern fn irq15() void;
 
 ///
 /// The IRQ handler that each of the IRQs will call when a interrupt happens.
@@ -60,6 +43,10 @@ extern fn irq15() void;
 ///
 export fn irqHandler(ctx: *arch.InterruptContext) void {
     // Get the IRQ index, by getting the interrupt number and subtracting the offset.
+    if (ctx.int_num < IRQ_OFFSET) {
+        panic(@errorReturnTrace(), "Not an IRQ number: {}\n", ctx.int_num);
+    }
+
     const irq_offset = ctx.int_num - IRQ_OFFSET;
     if (isValidIrq(irq_offset)) {
         // IRQ index is valid so can truncate
@@ -143,30 +130,17 @@ pub fn registerIrq(irq_num: u8, handler: IrqHandler) IrqError!void {
 pub fn init() void {
     log.logInfo("Init irq\n");
 
-    // Open all the IRQs
-    openIrq(32, irq0);
-    openIrq(33, irq1);
-    openIrq(34, irq2);
-    openIrq(35, irq3);
-    openIrq(36, irq4);
-    openIrq(37, irq5);
-    openIrq(38, irq6);
-    openIrq(39, irq7);
-    openIrq(40, irq8);
-    openIrq(41, irq9);
-    openIrq(42, irq10);
-    openIrq(43, irq11);
-    openIrq(44, irq12);
-    openIrq(45, irq13);
-    openIrq(46, irq14);
-    openIrq(47, irq15);
+    comptime var i = IRQ_OFFSET;
+    inline while (i < IRQ_OFFSET + 16) : (i += 1) {
+        openIrq(i, interrupts.getInterruptStub(i));
+    }
 
     log.logInfo("Done\n");
 
     if (build_options.rt_test) runtimeTests();
 }
 
-extern fn testFunction0() void {}
+nakedcc fn testFunction0() void {}
 fn testFunction1(ctx: *arch.InterruptContext) void {}
 fn testFunction2(ctx: *arch.InterruptContext) void {}
 

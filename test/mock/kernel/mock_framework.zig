@@ -22,6 +22,7 @@ const DataElementType = enum {
     PTR_CONST_IdtPtr,
     ERROR_IDTERROR_VOID,
     EFN_OVOID,
+    NFN_OVOID,
     FN_OVOID,
     FN_OUSIZE,
     FN_OU16,
@@ -34,6 +35,7 @@ const DataElementType = enum {
     FN_IU16_IU8_OVOID,
     FN_IU16_IU16_OVOID,
     FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
+    FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
     FN_IPTRCONSTGDTPTR_OVOID,
     FN_IPTRCONSTIDTPTR_OVOID,
 };
@@ -53,6 +55,7 @@ const DataElement = union(DataElementType) {
     PTR_CONST_IdtPtr: *const idt.IdtPtr,
     ERROR_IDTERROR_VOID: idt.IdtError!void,
     EFN_OVOID: extern fn () void,
+    NFN_OVOID: nakedcc fn () void,
     FN_OVOID: fn () void,
     FN_OUSIZE: fn () usize,
     FN_OU16: fn () u16,
@@ -65,6 +68,7 @@ const DataElement = union(DataElementType) {
     FN_IU16_IU8_OVOID: fn (u16, u8) void,
     FN_IU16_IU16_OVOID: fn (u16, u16) void,
     FN_IU8_IEFNOVOID_OERRORIDTERRORVOID: fn (u8, extern fn () void) idt.IdtError!void,
+    FN_IU8_INFNOVOID_OERRORIDTERRORVOID: fn (u8, nakedcc fn () void) idt.IdtError!void,
     FN_IPTRCONSTGDTPTR_OVOID: fn (*const gdt.GdtPtr) void,
     FN_IPTRCONSTIDTPTR_OVOID: fn (*const idt.IdtPtr) void,
 };
@@ -151,6 +155,7 @@ fn Mock() type {
                 *const idt.IdtPtr => DataElement{ .PTR_CONST_IdtPtr = arg },
                 idt.IdtError!void => DataElement{ .ERROR_IDTERROR_VOID = arg },
                 extern fn () void => DataElement{ .EFN_OVOID = arg },
+                nakedcc fn () void => DataElement{ .NFN_OVOID = arg },
                 fn () void => DataElement{ .FN_OVOID = arg },
                 fn () usize => DataElement{ .FN_OUSIZE = arg },
                 fn () u16 => DataElement{ .FN_OU16 = arg },
@@ -165,6 +170,7 @@ fn Mock() type {
                 fn (*const gdt.GdtPtr) void => DataElement{ .FN_IPTRCONSTGDTPTR_OVOID = arg },
                 fn (*const idt.IdtPtr) void => DataElement{ .FN_IPTRCONSTIDTPTR_OVOID = arg },
                 fn (u8, extern fn () void) idt.IdtError!void => DataElement{ .FN_IU8_IEFNOVOID_OERRORIDTERRORVOID = arg },
+                fn (u8, nakedcc fn () void) idt.IdtError!void => DataElement{ .FN_IU8_INFNOVOID_OERRORIDTERRORVOID = arg },
                 else => @compileError("Type not supported: " ++ @typeName(@typeOf(arg))),
             };
         }
@@ -189,6 +195,7 @@ fn Mock() type {
                 *const idt.IdtPtr => DataElement.PTR_CONST_IdtPtr,
                 idt.IdtError!void => DataElement.ERROR_IDTERROR_VOID,
                 extern fn () void => DataElementType.EFN_OVOID,
+                nakedcc fn () void => DataElementType.NFN_OVOID,
                 fn () void => DataElementType.FN_OVOID,
                 fn () u16 => DataElementType.FN_OU16,
                 fn (u8) bool => DataElementType.FN_IU8_OBOOL,
@@ -202,6 +209,7 @@ fn Mock() type {
                 fn (*const gdt.GdtPtr) void => DataElementType.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => DataElementType.FN_IPTRCONSTIDTPTR_OVOID,
                 fn (u8, extern fn () void) idt.IdtError!void => DataElementType.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
+                fn (u8, nakedcc fn () void) idt.IdtError!void => DataElementType.FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
@@ -228,6 +236,7 @@ fn Mock() type {
                 *const idt.IdtPtr => element.PTR_CONST_IdtPtr,
                 idt.IdtError!void => element.ERROR_IDTERROR_VOID,
                 extern fn () void => element.EFN_OVOID,
+                nakedcc fn () void => element.NFN_OVOID,
                 fn () void => element.FN_OVOID,
                 fn () u16 => element.FN_OU16,
                 fn (u8) bool => element.FN_IU8_OBOOL,
@@ -241,6 +250,7 @@ fn Mock() type {
                 fn (*const gdt.GdtPtr) void => element.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => element.FN_IPTRCONSTIDTPTR_OVOID,
                 fn (u8, extern fn () void) idt.IdtError!void => element.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
+                fn (u8, nakedcc fn () void) idt.IdtError!void => element.FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
