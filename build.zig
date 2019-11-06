@@ -33,13 +33,6 @@ pub fn build(b: *Builder) !void {
     exec.addBuildOption(bool, "rt_test", rt_test);
     exec.setLinkerScriptPath("link.ld");
     exec.setTheTarget(target);
-    switch (target.getArch()) {
-        .i386 => {
-            exec.addAssemblyFile("src/kernel/arch/x86/irq_asm.s");
-            exec.addAssemblyFile("src/kernel/arch/x86/isr_asm.s");
-        },
-        else => unreachable,
-    }
 
     const iso_path = try fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "pluto.iso" });
     const grub_build_path = try fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "iso", "boot" });
