@@ -91,3 +91,9 @@ pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime opti
     // When I come on to the mem.zig testing, I'll fix :)
     //return mock_framework.performAction("init", void, mem_profile, allocator);
 }
+
+// User defined mocked functions
+
+pub fn mock_disableInterrupts() void {}
+
+pub fn mock_enableInterrupts() void {}
