@@ -250,7 +250,7 @@ fn putEntryAt(char: u8, x: u8, y: u8) TtyError!void {
 ///     TtyError.OutOfBounds - If trying to move up more rows on a page.
 ///
 fn pagesMoveRowsUp(rows: u16) TtyError!void {
-    // Out of bounds check, also no need to move 0 rows
+    // Out of bounds check
     if (rows > ROW_TOTAL) {
         return TtyError.OutOfBounds;
     }
@@ -284,13 +284,16 @@ fn pagesMoveRowsUp(rows: u16) TtyError!void {
 ///     TtyError.OutOfBounds - If trying to move up more rows on a page. This shouldn't happen
 ///                            as bounds checks have been done.
 ///
-fn scroll() TtyError!void {
+fn scroll() void {
     // Added the condition in the if from pagesMoveRowsUp as don't need to move all rows
     if (row >= vga.HEIGHT and (row - vga.HEIGHT + 1) <= ROW_TOTAL) {
         const rows_to_move = row - vga.HEIGHT + 1;
 
         // Move rows up pages by temp, will usually be one.
-        try pagesMoveRowsUp(rows_to_move);
+        // TODO: Maybe panic here as we have the check above, so if this fails, then is a big problem
+        pagesMoveRowsUp(rows_to_move) catch |e| {
+            panic(@errorReturnTrace(), "Can't move {} rows up. Must be less than {}\n", rows_to_move, ROW_TOTAL);
+        };
 
         // Move all rows up by rows_to_move
         var i = u32(0);
@@ -333,14 +336,14 @@ fn putChar(char: u8) TtyError!void {
         '\n' => {
             column = 0;
             row += 1;
-            try scroll();
+            scroll();
         },
         '\t' => {
             column += 4;
             if (column >= vga.WIDTH) {
                 column -= @truncate(u8, vga.WIDTH);
                 row += 1;
-                try scroll();
+                scroll();
             }
         },
         '\r' => {
@@ -363,7 +366,7 @@ fn putChar(char: u8) TtyError!void {
             if (column == vga.WIDTH) {
                 column = 0;
                 row += 1;
-                try scroll();
+                scroll();
             }
         },
     }
@@ -1203,7 +1206,7 @@ test "scroll row is less then max height" {
     incrementingPagesTesting();
 
     // Call function
-    try scroll();
+    scroll();
 
     // Post test
     defaultVariablesTesting(0, 0, 0);
@@ -1229,7 +1232,7 @@ test "scroll row is equal to height" {
 
     // Call function
     // Rows move up one
-    try scroll();
+    scroll();
 
     // Post test
     defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
@@ -1280,7 +1283,7 @@ test "scroll row is more than height" {
 
     // Call function
     // Rows move up 5
-    try scroll();
+    scroll();
 
     // Post test
     defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
