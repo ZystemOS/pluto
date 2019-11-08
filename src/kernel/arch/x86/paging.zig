@@ -8,6 +8,7 @@ const isr = @import("isr.zig");
 const MemProfile = @import("../../mem.zig").MemProfile;
 const tty = @import("../../tty.zig");
 const log = @import("../../log.zig");
+const mem = @import("../../mem.zig");
 const options = @import("build_options");
 const testing = std.testing;
 
@@ -119,31 +120,6 @@ const TENTRY_GLOBAL: u32 = 0x100;
 const TENTRY_AVAILABLE: u32 = 0xE00;
 const TENTRY_PAGE_ADDR: u32 = 0xFFFFF000;
 
-/// The kernel's virtual address offset. It's assigned in the init function and the virtToPhys test.
-/// We can't just use KERNEL_ADDR_OFFSET since using externs in the virtToPhys test is broken in
-/// release-safe. This is a workaround until that is fixed.
-var ADDR_OFFSET: usize = undefined;
-extern var KERNEL_ADDR_OFFSET: *u32;
-
-///
-/// Convert a virtual address to its physical counterpart by subtracting the kernel virtual offset from the virtual address.
-///
-/// Arguments:
-///     IN virt: var - The virtual address to covert. Either an integer or pointer.
-///
-/// Return: @typeOf(virt)
-///     The physical address.
-///
-inline fn virtToPhys(virt: var) @typeOf(virt) {
-    const offset = ADDR_OFFSET;
-    const T = @typeOf(virt);
-    return switch (@typeId(T)) {
-        .Pointer => @intToPtr(T, @ptrToInt(virt) - offset),
-        .Int => virt - offset,
-        else => @compileError("Only pointers and integers are supported"),
-    };
-}
-
 ///
 /// Convert a virtual address to an index within an array of directory entries.
 ///
@@ -227,7 +203,7 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
         // Create a table and put the physical address in the dir entry
         table = &(try allocator.alignedAlloc(Table, @truncate(u29, PAGE_SIZE_4KB), 1))[0];
         @memset(@ptrCast([*]u8, table), 0, @sizeOf(Table));
-        const table_phys_addr = @ptrToInt(virtToPhys(table));
+        const table_phys_addr = @ptrToInt(mem.virtToPhys(table));
         dir_entry.* |= @intCast(u32, DENTRY_PAGE_ADDR & table_phys_addr);
         dir.tables[entry] = table;
     }
@@ -316,7 +292,6 @@ fn pageFault(state: *arch.InterruptContext) void {
 ///
 pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
     log.logInfo("Init paging\n");
-    ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
     // Calculate start and end of mapping
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE_4KB);
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
@@ -336,14 +311,14 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
     const tty_addr = tty.getVideoBufferAddress();
     // If the previous mapping space didn't cover the tty buffer, do so now
     if (v_start > tty_addr or v_end <= tty_addr) {
-        const tty_phys = virtToPhys(tty_addr);
+        const tty_phys = mem.virtToPhys(tty_addr);
         const tty_buff_size = 32 * 1024;
         mapDir(kernel_directory, tty_addr, tty_addr + tty_buff_size, tty_phys, tty_phys + tty_buff_size, allocator) catch |e| {
             panic(@errorReturnTrace(), "Failed to map vga buffer in kernel directory: {}\n", e);
         };
     }
 
-    const dir_physaddr = @ptrToInt(virtToPhys(kernel_directory));
+    const dir_physaddr = @ptrToInt(mem.virtToPhys(kernel_directory));
     asm volatile ("mov %[addr], %%cr3"
         :
         : [addr] "{eax}" (dir_physaddr)
@@ -386,14 +361,6 @@ fn checkTableEntry(entry: TableEntry, page_phys: usize) void {
     expectEqual(entry & TENTRY_ZERO, 0);
     expectEqual(entry & TENTRY_GLOBAL, 0);
     expectEqual(entry & TENTRY_PAGE_ADDR, @intCast(u32, page_phys));
-}
-
-test "virtToPhys" {
-    ADDR_OFFSET = 0xC0000000;
-    const offset: usize = ADDR_OFFSET;
-    expectEqual(virtToPhys(offset + 0), 0);
-    expectEqual(virtToPhys(offset + 123), 123);
-    expectEqual(virtToPhys(@intToPtr(*usize, offset + 123)), @intToPtr(*usize, 123));
 }
 
 test "virtToDirEntryIdx" {
