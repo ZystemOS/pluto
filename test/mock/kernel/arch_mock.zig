@@ -4,6 +4,7 @@ const mem = @import("mem_mock.zig");
 const MemProfile = mem.MemProfile;
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
+const multiboot = @import("../../../src/kernel/multiboot.zig");
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
@@ -86,7 +87,7 @@ pub fn haltNoInterrupts() noreturn {
     while (true) {}
 }
 
-pub fn init(mem_profile: *const MemProfile, allocator: *Allocator, comptime options: type) void {
+pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *Allocator) void {
     // I'll get back to this as this doesn't effect the GDT testing.
     // When I come on to the mem.zig testing, I'll fix :)
     //return mock_framework.performAction("init", void, mem_profile, allocator);

@@ -1,6 +1,7 @@
 const multiboot = @import("multiboot.zig");
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
+const log = @import("log.zig");
 
 pub const MemProfile = struct {
     vaddr_end: [*]u8,
@@ -9,6 +10,7 @@ pub const MemProfile = struct {
     physaddr_start: [*]u8,
     mem_kb: u32,
     fixed_alloc_size: u32,
+    boot_modules: []multiboot.multiboot_module_t,
 };
 
 /// The virtual end of the kernel code
@@ -44,8 +46,10 @@ var ADDR_OFFSET: usize = undefined;
 ///     The memory profile constructed from the exported linker symbols and the relevant multiboot info.
 ///
 pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
+    log.logInfo("Init mem\n");
+    const mods_count = mb_info.mods_count;
     ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
-    return MemProfile{
+    const mem_profile = MemProfile{
         .vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END),
         .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
         .physaddr_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END),
@@ -53,7 +57,10 @@ pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
         // Total memory available including the initial 1MiB that grub doesn't include
         .mem_kb = mb_info.mem_upper + mb_info.mem_lower + 1024,
         .fixed_alloc_size = FIXED_ALLOC_SIZE,
+        .boot_modules = @intToPtr([*]multiboot.multiboot_mod_list, physToVirt(mb_info.mods_addr))[0..mods_count],
     };
+    log.logInfo("Done\n");
+    return mem_profile;
 }
 
 ///
@@ -65,7 +72,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
 /// Return: @typeOf(virt)
 ///     The physical address.
 ///
-pub fn virtToPhys(virt: var) @typeOf(virt) {
+pub inline fn virtToPhys(virt: var) @typeOf(virt) {
     const T = @typeOf(virt);
     return switch (@typeId(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(virt) - ADDR_OFFSET),
@@ -83,7 +90,7 @@ pub fn virtToPhys(virt: var) @typeOf(virt) {
 /// Return: @typeOf(virt)
 ///     The virtual address.
 ///
-pub fn physToVirt(phys: var) @typeOf(phys) {
+pub inline fn physToVirt(phys: var) @typeOf(phys) {
     const T = @typeOf(phys);
     return switch (@typeId(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(phys) + ADDR_OFFSET),

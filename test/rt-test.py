@@ -35,6 +35,7 @@ def get_pre_archinit_cases():
             TestCase("Log debug tests", [r"Test DEBUG level", r"Test DEBUG level with args a, 1", r"Test DEBUG function", r"Test DEBUG function with args a, 1"], "\[DEBUG\] "),
             TestCase("Log warning tests", [r"Test WARNING level", r"Test WARNING level with args a, 1", r"Test WARNING function", r"Test WARNING function with args a, 1"], "\[WARNING\] "),
             TestCase("Log error tests", [r"Test ERROR level", r"Test ERROR level with args a, 1", r"Test ERROR function", r"Test ERROR function with args a, 1"], "\[ERROR\] "),
+            TestCase("Mem init", [r"Init mem", r"Done"]),
             TestCase("Arch init starts", [r"Init arch \w+"])
         ]
 

@@ -32,18 +32,17 @@ pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn
 export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
     if (mb_magic == multiboot.MULTIBOOT_BOOTLOADER_MAGIC) {
         // Booted with compatible bootloader
-        const mem_profile = mem.init(mb_info);
-        var buffer = mem_profile.vaddr_end[0..mem_profile.fixed_alloc_size];
-        var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer);
-
         serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
             panic_root(@errorReturnTrace(), "Failed to initialise serial: {}", e);
         };
         if (build_options.rt_test)
             log.runtimeTests();
+        const mem_profile = mem.init(mb_info);
+        var buffer = mem_profile.vaddr_end[0..mem_profile.fixed_alloc_size];
+        var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer);
 
         log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n");
-        arch.init(&mem_profile, &fixed_allocator.allocator, build_options);
+        arch.init(mb_info, &mem_profile, &fixed_allocator.allocator);
         log.logInfo("Arch init done\n");
         vga.init();
         tty.init();

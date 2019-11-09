@@ -9,6 +9,7 @@ const MemProfile = @import("../../mem.zig").MemProfile;
 const tty = @import("../../tty.zig");
 const log = @import("../../log.zig");
 const mem = @import("../../mem.zig");
+const multiboot = @import("../../multiboot.zig");
 const options = @import("build_options");
 const testing = std.testing;
 
@@ -290,7 +291,7 @@ fn pageFault(state: *arch.InterruptContext) void {
 ///     IN mem_profile: *const MemProfile - The memory profile of the system and kernel
 ///     IN allocator: *std.mem.Allocator - The allocator to use
 ///
-pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
+pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
     log.logInfo("Init paging\n");
     // Calculate start and end of mapping
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE_4KB);
@@ -315,6 +316,30 @@ pub fn init(mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void 
         const tty_buff_size = 32 * 1024;
         mapDir(kernel_directory, tty_addr, tty_addr + tty_buff_size, tty_phys, tty_phys + tty_buff_size, allocator) catch |e| {
             panic(@errorReturnTrace(), "Failed to map vga buffer in kernel directory: {}\n", e);
+        };
+    }
+
+    // If the kernel mapping didn't cover the multiboot info, map it so it can be accessed by code later on
+    // There's no way to know the size, so an estimated size of 2MB is used. This will need increasing as the kernel gets bigger.
+    const mb_info_addr = std.mem.alignBackward(@ptrToInt(mb_info), PAGE_SIZE_4KB);
+    if (v_start > mb_info_addr) {
+        const mb_info_end = mb_info_addr + PAGE_SIZE_4MB / 2;
+        mapDir(kernel_directory, mb_info_addr, mb_info_end, mem.virtToPhys(mb_info_addr), mem.virtToPhys(mb_info_end), allocator) catch |e| {
+            panic(@errorReturnTrace(), "Failed to map mb_info in kernel directory: {}\n", e);
+        };
+    }
+
+    // Map in each boot module
+    for (mem_profile.boot_modules) |*module| {
+        const mod_p_struct_start = std.mem.alignBackward(@ptrToInt(module), PAGE_SIZE_4KB);
+        const mod_p_struct_end = std.mem.alignForward(mod_p_struct_start + @sizeOf(multiboot.multiboot_module_t), PAGE_SIZE_4KB);
+        mapDir(kernel_directory, mem.physToVirt(mod_p_struct_start), mem.physToVirt(mod_p_struct_end), mod_p_struct_start, mod_p_struct_end, allocator) catch |e| {
+            panic(@errorReturnTrace(), "Failed to map module struct: {}\n", e);
+        };
+        const mod_p_start = std.mem.alignBackward(module.mod_start, PAGE_SIZE_4KB);
+        const mod_p_end = std.mem.alignForward(module.mod_end, PAGE_SIZE_4KB);
+        mapDir(kernel_directory, mem.physToVirt(mod_p_start), mem.physToVirt(mod_p_end), mod_p_start, mod_p_end, allocator) catch |e| {
+            panic(@errorReturnTrace(), "Failed to map boot module in kernel directory: {}\n", e);
         };
     }
 
