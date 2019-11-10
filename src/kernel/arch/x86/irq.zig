@@ -148,7 +148,7 @@ test "openIrq" {
     idt.initTest();
     defer idt.freeTest();
 
-    const index = u8(0);
+    const index: u8 = 0;
     const handler = testFunction0;
     const ret: idt.IdtError!void = {};
 
@@ -171,7 +171,7 @@ test "registerIrq re-register irq handler" {
     pic.initTest();
     defer pic.freeTest();
 
-    pic.addTestParams("clearMask", u16(0));
+    pic.addTestParams("clearMask", @as(u16, 0));
 
     // Pre testing
     for (irq_handlers) |h| {
@@ -200,7 +200,7 @@ test "registerIrq register irq handler" {
     pic.initTest();
     defer pic.freeTest();
 
-    pic.addTestParams("clearMask", u16(0));
+    pic.addTestParams("clearMask", @as(u16, 0));
 
     // Pre testing
     for (irq_handlers) |h| {

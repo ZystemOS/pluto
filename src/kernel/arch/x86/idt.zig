@@ -198,16 +198,16 @@ fn mock_lidt(ptr: *const IdtPtr) void {
 }
 
 test "IDT entries" {
-    expectEqual(u32(8), @sizeOf(IdtEntry));
-    expectEqual(u32(6), @sizeOf(IdtPtr));
+    expectEqual(@as(u32, 8), @sizeOf(IdtEntry));
+    expectEqual(@as(u32, 6), @sizeOf(IdtPtr));
     expectEqual(TABLE_SIZE, idt_ptr.limit);
-    expectEqual(u32(0), idt_ptr.base);
+    expectEqual(@as(u32, 0), idt_ptr.base);
 }
 
 test "makeEntry alternating bit pattern" {
-    const actual = makeEntry(u32(0b01010101010101010101010101010101), u16(0b0101010101010101), u4(0b0101), u2(0b01));
+    const actual = makeEntry(0b01010101010101010101010101010101, 0b0101010101010101, 0b0101, 0b01);
 
-    const expected = u64(0b0101010101010101101001010000000001010101010101010101010101010101);
+    const expected: u64 = 0b0101010101010101101001010000000001010101010101010101010101010101;
 
     expectEqual(expected, @bitCast(u64, actual));
 }
@@ -240,7 +240,7 @@ test "isIdtOpen" {
 }
 
 test "openInterruptGate" {
-    const index = u8(100);
+    const index: u8 = 100;
     openInterruptGate(index, testHandler0) catch unreachable;
     expectError(IdtError.IdtEntryExists, openInterruptGate(index, testHandler0));
 

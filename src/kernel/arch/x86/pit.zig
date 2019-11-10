@@ -213,7 +213,7 @@ inline fn sendCommand(cmd: u8) void {
 ///
 inline fn readBackCommand(counter: CounterSelect) u8 {
     sendCommand(0xC2);
-    return u8(0x3F) & arch.inb(counter.getRegister());
+    return 0x3F & arch.inb(counter.getRegister());
 }
 
 ///
@@ -260,7 +260,7 @@ fn setupCounter(counter: CounterSelect, freq: u32, mode: u8) PitError!void {
     }
 
     // 65536, the slowest possible frequency. Roughly 19Hz
-    var reload_value = u32(0x10000);
+    var reload_value: u32 = 0x10000;
 
     // The lowest possible frequency is 18Hz.
     // MAX_FREQUENCY / 18 > u16 N
@@ -280,10 +280,10 @@ fn setupCounter(counter: CounterSelect, freq: u32, mode: u8) PitError!void {
     const frequency = (MAX_FREQUENCY + (reload_value / 2)) / reload_value;
 
     // Calculate the amount of nanoseconds between interrupts
-    time_ns = u32(1000000000) / frequency;
+    time_ns = 1000000000 / frequency;
 
     // Calculate the number of picoseconds, the left over from nanoseconds
-    time_under_1_ns = ((u32(1000000000) % frequency) * u32(1000) + (frequency / 2)) / frequency;
+    time_under_1_ns = ((1000000000 % frequency) * 1000 + (frequency / 2)) / frequency;
 
     // Set the frequency for the counter being set up
     switch (counter) {
@@ -316,11 +316,11 @@ fn setupCounter(counter: CounterSelect, freq: u32, mode: u8) PitError!void {
 ///     IN ticks_to_wait: u32 - The number of ticks to wait.
 ///
 pub fn waitTicks(ticks_to_wait: u32) void {
-    if (ticks > u32(maxInt(u32)) - ticks_to_wait) {
+    if (ticks > maxInt(u32) - ticks_to_wait) {
         // Integer overflow
 
         // Calculate the 2 conditions
-        const wait_ticks1 = u32(maxInt(u32)) - ticks;
+        const wait_ticks1 = maxInt(u32) - ticks;
         const wait_ticks2 = ticks_to_wait - wait_ticks1;
 
         while (ticks > wait_ticks1) {
@@ -372,7 +372,7 @@ pub fn getFrequency() u32 {
 pub fn init() void {
     log.logInfo("Init pit\n");
     // Set up counter 0 at 10000hz in a square wave mode counting in binary
-    const freq = u32(10000);
+    const freq: u32 = 10000;
     setupCounter(CounterSelect.Counter0, freq, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY) catch |e| {
         panic(@errorReturnTrace(), "Invalid frequency: {}\n", freq);
     };
@@ -398,7 +398,7 @@ test "sendCommand" {
     arch.initTest();
     defer arch.freeTest();
 
-    const cmd = u8(10);
+    const cmd: u8 = 10;
 
     arch.addTestParams("outb", COMMAND_REGISTER, cmd);
 
@@ -409,21 +409,21 @@ test "readBackCommand" {
     arch.initTest();
     defer arch.freeTest();
 
-    const cmd = u8(0xC2);
+    const cmd: u8 = 0xC2;
 
     arch.addTestParams("outb", COMMAND_REGISTER, cmd);
-    arch.addTestParams("inb", COUNTER_0_REGISTER, u8(0x20));
+    arch.addTestParams("inb", COUNTER_0_REGISTER, @as(u8, 0x20));
 
     const actual = readBackCommand(CounterSelect.Counter0);
 
-    expectEqual(u8(0x20), actual);
+    expectEqual(@as(u8, 0x20), actual);
 }
 
 test "sendDataToCounter" {
     arch.initTest();
     defer arch.freeTest();
 
-    const data = u8(10);
+    const data: u8 = 10;
 
     arch.addTestParams("outb", COUNTER_0_REGISTER, data);
 
@@ -437,13 +437,13 @@ test "setupCounter lowest frequency" {
     const counter = CounterSelect.Counter0;
     const port = counter.getRegister();
 
-    var freq = u32(0);
+    var freq: u32 = 0;
 
     // Reload value will be 0 (0x10000), the slowest speed for frequency less than 19
-    const expected_reload_value = u16(0);
+    const expected_reload_value: u16 = 0;
 
     // Slowest frequency the PIT can run at
-    const expected_freq = u32(19);
+    const expected_freq: u32 = 19;
 
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
     const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
@@ -514,7 +514,7 @@ test "setupCounter normal frequency" {
     // Set the frequency to a normal frequency
     const freq = 10000;
     const expected_reload_value = 119;
-    const expected_freq = u32(10027);
+    const expected_freq: u32 = 10027;
 
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
     const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
@@ -523,13 +523,13 @@ test "setupCounter normal frequency" {
 
     setupCounter(counter, freq, mode) catch unreachable;
 
-    expectEqual(u32(0), ticks);
+    expectEqual(@as(u32, 0), ticks);
     expectEqual(expected_freq, current_freq_0);
     expectEqual(expected_freq, getFrequency());
 
     // These are the hard coded expected values. Calculated externally to check the internal calculation
-    expectEqual(u32(99730), time_ns);
-    expectEqual(u32(727), time_under_1_ns);
+    expectEqual(@as(u32, 99730), time_ns);
+    expectEqual(@as(u32, 727), time_under_1_ns);
 
     // Reset globals
     time_ns = 0;
@@ -588,9 +588,9 @@ fn rt_waitTicks2() void {
 /// Check that when the PIT is initialised, counter 0 is set up properly.
 ///
 fn rt_initCounter_0() void {
-    const expected_ns = u32(99730);
-    const expected_ps = u32(727);
-    const expected_hz = u32(10027);
+    const expected_ns: u32 = 99730;
+    const expected_ps: u32 = 727;
+    const expected_hz: u32 = 10027;
 
     if (time_ns != expected_ns or time_under_1_ns != expected_ps or getFrequency() != expected_hz) {
         panic(
