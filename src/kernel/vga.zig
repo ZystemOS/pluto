@@ -186,7 +186,7 @@ inline fn getPortData(index: u8) u8 {
 ///     Both combined into 1 byte for the colour to be displayed.
 ///
 pub fn entryColour(fg: u4, bg: u4) u8 {
-    return u8(fg) | u8(bg) << 4;
+    return fg | @as(u8, bg) << 4;
 }
 
 ///
@@ -201,7 +201,7 @@ pub fn entryColour(fg: u4, bg: u4) u8 {
 ///     A VGA entry.
 ///
 pub fn entry(char: u8, colour: u8) u16 {
-    return u16(char) | u16(colour) << 8;
+    return char | @as(u16, colour) << 8;
 }
 
 ///
@@ -237,10 +237,10 @@ pub fn updateCursor(x: u16, y: u16) void {
 ///     The linear cursor position.
 ///
 pub fn getCursor() u16 {
-    var cursor = u16(0);
+    var cursor: u16 = 0;
 
-    cursor |= u16(getPortData(REG_CURSOR_LOCATION_LOW));
-    cursor |= u16(getPortData(REG_CURSOR_LOCATION_HIGH)) << 8;
+    cursor |= getPortData(REG_CURSOR_LOCATION_LOW);
+    cursor |= @as(u16, getPortData(REG_CURSOR_LOCATION_HIGH)) << 8;
 
     return cursor;
 }
@@ -303,34 +303,34 @@ test "entryColour" {
     var fg = COLOUR_BLACK;
     var bg = COLOUR_BLACK;
     var res = entryColour(fg, bg);
-    expectEqual(u8(0x00), res);
+    expectEqual(@as(u8, 0x00), res);
 
     fg = COLOUR_LIGHT_GREEN;
     bg = COLOUR_BLACK;
     res = entryColour(fg, bg);
-    expectEqual(u8(0x0A), res);
+    expectEqual(@as(u8, 0x0A), res);
 
     fg = COLOUR_BLACK;
     bg = COLOUR_LIGHT_GREEN;
     res = entryColour(fg, bg);
-    expectEqual(u8(0xA0), res);
+    expectEqual(@as(u8, 0xA0), res);
 
     fg = COLOUR_BROWN;
     bg = COLOUR_LIGHT_GREEN;
     res = entryColour(fg, bg);
-    expectEqual(u8(0xA6), res);
+    expectEqual(@as(u8, 0xA6), res);
 }
 
 test "entry" {
     const colour = entryColour(COLOUR_BROWN, COLOUR_LIGHT_GREEN);
-    expectEqual(u8(0xA6), colour);
+    expectEqual(@as(u8, 0xA6), colour);
 
     // Character '0' is 0x30
     var video_entry = entry('0', colour);
-    expectEqual(u16(0xA630), video_entry);
+    expectEqual(@as(u16, 0xA630), video_entry);
 
     video_entry = entry(0x55, colour);
-    expectEqual(u16(0xA655), video_entry);
+    expectEqual(@as(u16, 0xA655), video_entry);
 }
 
 test "updateCursor width out of bounds" {
@@ -419,8 +419,8 @@ test "updateCursor width and height-1 out of bounds" {
 }
 
 test "updateCursor in bounds" {
-    var x = u8(0x0A);
-    var y = u8(0x0A);
+    var x: u8 = 0x0A;
+    var y: u8 = 0x0A;
     const expected = y * WIDTH + x;
 
     var expected_upper = @truncate(u8, (expected >> 8) & 0x00FF);
@@ -435,32 +435,32 @@ test "updateCursor in bounds" {
 }
 
 test "getCursor 1: 10" {
-    const expect = u16(10);
+    const expect: u16 = 10;
 
     // Mocking out the arch.outb and arch.inb calls for getting the hardware cursor:
     arch.initTest();
     defer arch.freeTest();
 
     arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW);
-    arch.addTestParams("inb", PORT_DATA, u8(10));
+    arch.addTestParams("inb", PORT_DATA, @as(u8, 10));
     arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH);
-    arch.addTestParams("inb", PORT_DATA, u8(0));
+    arch.addTestParams("inb", PORT_DATA, @as(u8, 0));
 
     const actual = getCursor();
     expectEqual(expect, actual);
 }
 
 test "getCursor 2: 0xBEEF" {
-    const expect = u16(0xBEEF);
+    const expect: u16 = 0xBEEF;
 
     // Mocking out the arch.outb and arch.inb calls for getting the hardware cursor:
     arch.initTest();
     defer arch.freeTest();
 
     arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW);
-    arch.addTestParams("inb", PORT_DATA, u8(0xEF));
+    arch.addTestParams("inb", PORT_DATA, @as(u8, 0xEF));
     arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH);
-    arch.addTestParams("inb", PORT_DATA, u8(0xBE));
+    arch.addTestParams("inb", PORT_DATA, @as(u8, 0xBE));
 
     const actual = getCursor();
     expectEqual(expect, actual);
@@ -563,8 +563,8 @@ fn rt_correctCursorShape() void {
 ///
 fn rt_setCursorGetCursor() void {
     // The known locations
-    const x = u16(10);
-    const y = u16(20);
+    const x: u16 = 10;
+    const y: u16 = 20;
 
     // Save the previous location
     const prev_linear_loc = getCursor();

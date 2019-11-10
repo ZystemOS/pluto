@@ -293,7 +293,7 @@ fn Mock() type {
 
             // Test that the types match
             const expect_type = comptime getDataElementType(ExpectedType);
-            expectEqual(expect_type, DataElementType(elem));
+            expectEqual(expect_type, @as(DataElementType, elem));
 
             // Types match, so can use the expected type to get the actual data
             const actual_value = getDataValue(ExpectedType, elem);
@@ -323,7 +323,7 @@ fn Mock() type {
 
                 const ret = getDataValue(DataType, action.data);
 
-                expectEqual(DataElementType(action.data), expect_type);
+                expectEqual(@as(DataElementType, action.data), expect_type);
 
                 // Free the node
                 action_list.*.destroyNode(action_node, GlobalAllocator);
@@ -429,7 +429,7 @@ fn Mock() type {
                             const expect_type = comptime getDataElementType(expected_function);
 
                             // Test that the types match
-                            expectEqual(expect_type, DataElementType(test_element));
+                            expectEqual(expect_type, @as(DataElementType, test_element));
 
                             // Types match, so can use the expected type to get the actual data
                             const actual_function = getDataValue(expected_function, test_element);
@@ -462,7 +462,7 @@ fn Mock() type {
                             const expect_type = comptime getDataElementType(expected_function);
 
                             // Test that the types match
-                            expectEqual(expect_type, DataElementType(test_element));
+                            expectEqual(expect_type, @as(DataElementType, test_element));
 
                             // Types match, so can use the expected type to get the actual data
                             const actual_function = getDataValue(expected_function, test_element);
@@ -520,7 +520,7 @@ fn Mock() type {
                     switch (action.action) {
                         ActionType.TestValue, ActionType.ConsumeFunctionCall => {
                             // These need to be all consumed
-                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{}'\n", action.action, DataElementType(action.data), next.key);
+                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{}'\n", action.action, @as(DataElementType, action.data), next.key);
                         },
                         ActionType.RepeatFunctionCall => {
                             // As this is a repeat action, the function will still be here

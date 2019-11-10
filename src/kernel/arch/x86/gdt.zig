@@ -346,7 +346,7 @@ var gdt_ptr: GdtPtr = GdtPtr{
 var tss: TtsEntry = TtsEntry{
     .prev_tss = 0,
     .esp0 = 0,
-    .ss0 = u32(KERNEL_DATA_OFFSET),
+    .ss0 = KERNEL_DATA_OFFSET,
     .esp1 = 0,
     .ss1 = 0,
     .esp2 = 0,
@@ -370,7 +370,7 @@ var tss: TtsEntry = TtsEntry{
     .gs = 0,
     .ldtr = 0,
     .trap = 0,
-    .io_permissions_base_offset = u16(@sizeOf(TtsEntry)),
+    .io_permissions_base_offset = @sizeOf(TtsEntry),
 };
 
 ///
@@ -448,67 +448,67 @@ fn mock_lgdt(ptr: *const GdtPtr) void {
 }
 
 test "GDT entries" {
-    expectEqual(u32(1), @sizeOf(AccessBits));
-    expectEqual(u32(1), @sizeOf(FlagBits));
-    expectEqual(u32(8), @sizeOf(GdtEntry));
-    expectEqual(u32(104), @sizeOf(TtsEntry));
-    expectEqual(u32(6), @sizeOf(GdtPtr));
+    expectEqual(@as(u32, 1), @sizeOf(AccessBits));
+    expectEqual(@as(u32, 1), @sizeOf(FlagBits));
+    expectEqual(@as(u32, 8), @sizeOf(GdtEntry));
+    expectEqual(@as(u32, 104), @sizeOf(TtsEntry));
+    expectEqual(@as(u32, 6), @sizeOf(GdtPtr));
 
     const null_entry = gdt_entries[NULL_INDEX];
-    expectEqual(u64(0), @bitCast(u64, null_entry));
+    expectEqual(@as(u64, 0), @bitCast(u64, null_entry));
 
     const kernel_code_entry = gdt_entries[KERNEL_CODE_INDEX];
-    expectEqual(u64(0xCF9A000000FFFF), @bitCast(u64, kernel_code_entry));
+    expectEqual(@as(u64, 0xCF9A000000FFFF), @bitCast(u64, kernel_code_entry));
 
     const kernel_data_entry = gdt_entries[KERNEL_DATA_INDEX];
-    expectEqual(u64(0xCF92000000FFFF), @bitCast(u64, kernel_data_entry));
+    expectEqual(@as(u64, 0xCF92000000FFFF), @bitCast(u64, kernel_data_entry));
 
     const user_code_entry = gdt_entries[USER_CODE_INDEX];
-    expectEqual(u64(0xCFFA000000FFFF), @bitCast(u64, user_code_entry));
+    expectEqual(@as(u64, 0xCFFA000000FFFF), @bitCast(u64, user_code_entry));
 
     const user_data_entry = gdt_entries[USER_DATA_INDEX];
-    expectEqual(u64(0xCFF2000000FFFF), @bitCast(u64, user_data_entry));
+    expectEqual(@as(u64, 0xCFF2000000FFFF), @bitCast(u64, user_data_entry));
 
     const tss_entry = gdt_entries[TSS_INDEX];
-    expectEqual(u64(0), @bitCast(u64, tss_entry));
+    expectEqual(@as(u64, 0), @bitCast(u64, tss_entry));
 
     expectEqual(TABLE_SIZE, gdt_ptr.limit);
 
-    expectEqual(u32(0), tss.prev_tss);
-    expectEqual(u32(0), tss.esp0);
-    expectEqual(u32(KERNEL_DATA_OFFSET), tss.ss0);
-    expectEqual(u32(0), tss.esp1);
-    expectEqual(u32(0), tss.ss1);
-    expectEqual(u32(0), tss.esp2);
-    expectEqual(u32(0), tss.ss2);
-    expectEqual(u32(0), tss.cr3);
-    expectEqual(u32(0), tss.eip);
-    expectEqual(u32(0), tss.eflags);
-    expectEqual(u32(0), tss.eax);
-    expectEqual(u32(0), tss.ecx);
-    expectEqual(u32(0), tss.edx);
-    expectEqual(u32(0), tss.ebx);
-    expectEqual(u32(0), tss.esp);
-    expectEqual(u32(0), tss.ebp);
-    expectEqual(u32(0), tss.esi);
-    expectEqual(u32(0), tss.edi);
-    expectEqual(u32(0), tss.es);
-    expectEqual(u32(0), tss.cs);
-    expectEqual(u32(0), tss.ss);
-    expectEqual(u32(0), tss.ds);
-    expectEqual(u32(0), tss.fs);
-    expectEqual(u32(0), tss.gs);
-    expectEqual(u32(0), tss.ldtr);
-    expectEqual(u16(0), tss.trap);
+    expectEqual(@as(u32, 0), tss.prev_tss);
+    expectEqual(@as(u32, 0), tss.esp0);
+    expectEqual(@as(u32, KERNEL_DATA_OFFSET), tss.ss0);
+    expectEqual(@as(u32, 0), tss.esp1);
+    expectEqual(@as(u32, 0), tss.ss1);
+    expectEqual(@as(u32, 0), tss.esp2);
+    expectEqual(@as(u32, 0), tss.ss2);
+    expectEqual(@as(u32, 0), tss.cr3);
+    expectEqual(@as(u32, 0), tss.eip);
+    expectEqual(@as(u32, 0), tss.eflags);
+    expectEqual(@as(u32, 0), tss.eax);
+    expectEqual(@as(u32, 0), tss.ecx);
+    expectEqual(@as(u32, 0), tss.edx);
+    expectEqual(@as(u32, 0), tss.ebx);
+    expectEqual(@as(u32, 0), tss.esp);
+    expectEqual(@as(u32, 0), tss.ebp);
+    expectEqual(@as(u32, 0), tss.esi);
+    expectEqual(@as(u32, 0), tss.edi);
+    expectEqual(@as(u32, 0), tss.es);
+    expectEqual(@as(u32, 0), tss.cs);
+    expectEqual(@as(u32, 0), tss.ss);
+    expectEqual(@as(u32, 0), tss.ds);
+    expectEqual(@as(u32, 0), tss.fs);
+    expectEqual(@as(u32, 0), tss.gs);
+    expectEqual(@as(u32, 0), tss.ldtr);
+    expectEqual(@as(u16, 0), tss.trap);
 
     // Size of TtsEntry will fit in a u16 as 104 < 65535 (2^16)
-    expectEqual(u16(@sizeOf(TtsEntry)), tss.io_permissions_base_offset);
+    expectEqual(@as(u16, @sizeOf(TtsEntry)), tss.io_permissions_base_offset);
 }
 
 test "makeEntry NULL" {
-    const actual = makeEntry(u32(0), u32(0), NULL_SEGMENT, NULL_FLAGS);
+    const actual = makeEntry(0, 0, NULL_SEGMENT, NULL_FLAGS);
 
-    const expected = u64(0);
+    const expected: u64 = 0;
     expectEqual(expected, @bitCast(u64, actual));
 }
 
@@ -523,7 +523,7 @@ test "makeEntry alternating bit pattern" {
         .present = 0,
     };
 
-    expectEqual(u8(0b01010101), @bitCast(u8, alt_access));
+    expectEqual(@as(u8, 0b01010101), @bitCast(u8, alt_access));
 
     const alt_flag = FlagBits{
         .reserved_zero = 1,
@@ -532,106 +532,106 @@ test "makeEntry alternating bit pattern" {
         .granularity = 0,
     };
 
-    expectEqual(u4(0b0101), @bitCast(u4, alt_flag));
+    expectEqual(@as(u4, 0b0101), @bitCast(u4, alt_flag));
 
-    const actual = makeEntry(u32(0b01010101010101010101010101010101), u20(0b01010101010101010101), alt_access, alt_flag);
+    const actual = makeEntry(0b01010101010101010101010101010101, 0b01010101010101010101, alt_access, alt_flag);
 
-    const expected = u64(0b0101010101010101010101010101010101010101010101010101010101010101);
+    const expected: u64 = 0b0101010101010101010101010101010101010101010101010101010101010101;
     expectEqual(expected, @bitCast(u64, actual));
 }
 
 test "setTssStack" {
     // Pre-testing
-    expectEqual(u32(0), tss.prev_tss);
-    expectEqual(u32(0), tss.esp0);
-    expectEqual(u32(KERNEL_DATA_OFFSET), tss.ss0);
-    expectEqual(u32(0), tss.esp1);
-    expectEqual(u32(0), tss.ss1);
-    expectEqual(u32(0), tss.esp2);
-    expectEqual(u32(0), tss.ss2);
-    expectEqual(u32(0), tss.cr3);
-    expectEqual(u32(0), tss.eip);
-    expectEqual(u32(0), tss.eflags);
-    expectEqual(u32(0), tss.eax);
-    expectEqual(u32(0), tss.ecx);
-    expectEqual(u32(0), tss.edx);
-    expectEqual(u32(0), tss.ebx);
-    expectEqual(u32(0), tss.esp);
-    expectEqual(u32(0), tss.ebp);
-    expectEqual(u32(0), tss.esi);
-    expectEqual(u32(0), tss.edi);
-    expectEqual(u32(0), tss.es);
-    expectEqual(u32(0), tss.cs);
-    expectEqual(u32(0), tss.ss);
-    expectEqual(u32(0), tss.ds);
-    expectEqual(u32(0), tss.fs);
-    expectEqual(u32(0), tss.gs);
-    expectEqual(u32(0), tss.ldtr);
-    expectEqual(u16(0), tss.trap);
-    expectEqual(u16(@sizeOf(TtsEntry)), tss.io_permissions_base_offset);
+    expectEqual(@as(u32, 0), tss.prev_tss);
+    expectEqual(@as(u32, 0), tss.esp0);
+    expectEqual(@as(u32, KERNEL_DATA_OFFSET), tss.ss0);
+    expectEqual(@as(u32, 0), tss.esp1);
+    expectEqual(@as(u32, 0), tss.ss1);
+    expectEqual(@as(u32, 0), tss.esp2);
+    expectEqual(@as(u32, 0), tss.ss2);
+    expectEqual(@as(u32, 0), tss.cr3);
+    expectEqual(@as(u32, 0), tss.eip);
+    expectEqual(@as(u32, 0), tss.eflags);
+    expectEqual(@as(u32, 0), tss.eax);
+    expectEqual(@as(u32, 0), tss.ecx);
+    expectEqual(@as(u32, 0), tss.edx);
+    expectEqual(@as(u32, 0), tss.ebx);
+    expectEqual(@as(u32, 0), tss.esp);
+    expectEqual(@as(u32, 0), tss.ebp);
+    expectEqual(@as(u32, 0), tss.esi);
+    expectEqual(@as(u32, 0), tss.edi);
+    expectEqual(@as(u32, 0), tss.es);
+    expectEqual(@as(u32, 0), tss.cs);
+    expectEqual(@as(u32, 0), tss.ss);
+    expectEqual(@as(u32, 0), tss.ds);
+    expectEqual(@as(u32, 0), tss.fs);
+    expectEqual(@as(u32, 0), tss.gs);
+    expectEqual(@as(u32, 0), tss.ldtr);
+    expectEqual(@as(u16, 0), tss.trap);
+    expectEqual(@as(u16, @sizeOf(TtsEntry)), tss.io_permissions_base_offset);
 
     // Call function
-    setTssStack(u32(100));
+    setTssStack(100);
 
     // Post-testing
-    expectEqual(u32(0), tss.prev_tss);
-    expectEqual(u32(100), tss.esp0);
-    expectEqual(u32(KERNEL_DATA_OFFSET), tss.ss0);
-    expectEqual(u32(0), tss.esp1);
-    expectEqual(u32(0), tss.ss1);
-    expectEqual(u32(0), tss.esp2);
-    expectEqual(u32(0), tss.ss2);
-    expectEqual(u32(0), tss.cr3);
-    expectEqual(u32(0), tss.eip);
-    expectEqual(u32(0), tss.eflags);
-    expectEqual(u32(0), tss.eax);
-    expectEqual(u32(0), tss.ecx);
-    expectEqual(u32(0), tss.edx);
-    expectEqual(u32(0), tss.ebx);
-    expectEqual(u32(0), tss.esp);
-    expectEqual(u32(0), tss.ebp);
-    expectEqual(u32(0), tss.esi);
-    expectEqual(u32(0), tss.edi);
-    expectEqual(u32(0), tss.es);
-    expectEqual(u32(0), tss.cs);
-    expectEqual(u32(0), tss.ss);
-    expectEqual(u32(0), tss.ds);
-    expectEqual(u32(0), tss.fs);
-    expectEqual(u32(0), tss.gs);
-    expectEqual(u32(0), tss.ldtr);
-    expectEqual(u16(0), tss.trap);
-    expectEqual(u16(@sizeOf(TtsEntry)), tss.io_permissions_base_offset);
+    expectEqual(@as(u32, 0), tss.prev_tss);
+    expectEqual(@as(u32, 100), tss.esp0);
+    expectEqual(@as(u32, KERNEL_DATA_OFFSET), tss.ss0);
+    expectEqual(@as(u32, 0), tss.esp1);
+    expectEqual(@as(u32, 0), tss.ss1);
+    expectEqual(@as(u32, 0), tss.esp2);
+    expectEqual(@as(u32, 0), tss.ss2);
+    expectEqual(@as(u32, 0), tss.cr3);
+    expectEqual(@as(u32, 0), tss.eip);
+    expectEqual(@as(u32, 0), tss.eflags);
+    expectEqual(@as(u32, 0), tss.eax);
+    expectEqual(@as(u32, 0), tss.ecx);
+    expectEqual(@as(u32, 0), tss.edx);
+    expectEqual(@as(u32, 0), tss.ebx);
+    expectEqual(@as(u32, 0), tss.esp);
+    expectEqual(@as(u32, 0), tss.ebp);
+    expectEqual(@as(u32, 0), tss.esi);
+    expectEqual(@as(u32, 0), tss.edi);
+    expectEqual(@as(u32, 0), tss.es);
+    expectEqual(@as(u32, 0), tss.cs);
+    expectEqual(@as(u32, 0), tss.ss);
+    expectEqual(@as(u32, 0), tss.ds);
+    expectEqual(@as(u32, 0), tss.fs);
+    expectEqual(@as(u32, 0), tss.gs);
+    expectEqual(@as(u32, 0), tss.ldtr);
+    expectEqual(@as(u16, 0), tss.trap);
+    expectEqual(@as(u16, @sizeOf(TtsEntry)), tss.io_permissions_base_offset);
 
     // Clean up
-    setTssStack(u32(0));
+    setTssStack(0);
 
-    expectEqual(u32(0), tss.prev_tss);
-    expectEqual(u32(0), tss.esp0);
-    expectEqual(u32(KERNEL_DATA_OFFSET), tss.ss0);
-    expectEqual(u32(0), tss.esp1);
-    expectEqual(u32(0), tss.ss1);
-    expectEqual(u32(0), tss.esp2);
-    expectEqual(u32(0), tss.ss2);
-    expectEqual(u32(0), tss.cr3);
-    expectEqual(u32(0), tss.eip);
-    expectEqual(u32(0), tss.eflags);
-    expectEqual(u32(0), tss.eax);
-    expectEqual(u32(0), tss.ecx);
-    expectEqual(u32(0), tss.edx);
-    expectEqual(u32(0), tss.ebx);
-    expectEqual(u32(0), tss.esp);
-    expectEqual(u32(0), tss.ebp);
-    expectEqual(u32(0), tss.esi);
-    expectEqual(u32(0), tss.edi);
-    expectEqual(u32(0), tss.es);
-    expectEqual(u32(0), tss.cs);
-    expectEqual(u32(0), tss.ss);
-    expectEqual(u32(0), tss.ds);
-    expectEqual(u32(0), tss.fs);
-    expectEqual(u32(0), tss.gs);
-    expectEqual(u32(0), tss.ldtr);
-    expectEqual(u16(0), tss.trap);
-    expectEqual(u16(@sizeOf(TtsEntry)), tss.io_permissions_base_offset);
+    expectEqual(@as(u32, 0), tss.prev_tss);
+    expectEqual(@as(u32, 0), tss.esp0);
+    expectEqual(@as(u32, KERNEL_DATA_OFFSET), tss.ss0);
+    expectEqual(@as(u32, 0), tss.esp1);
+    expectEqual(@as(u32, 0), tss.ss1);
+    expectEqual(@as(u32, 0), tss.esp2);
+    expectEqual(@as(u32, 0), tss.ss2);
+    expectEqual(@as(u32, 0), tss.cr3);
+    expectEqual(@as(u32, 0), tss.eip);
+    expectEqual(@as(u32, 0), tss.eflags);
+    expectEqual(@as(u32, 0), tss.eax);
+    expectEqual(@as(u32, 0), tss.ecx);
+    expectEqual(@as(u32, 0), tss.edx);
+    expectEqual(@as(u32, 0), tss.ebx);
+    expectEqual(@as(u32, 0), tss.esp);
+    expectEqual(@as(u32, 0), tss.ebp);
+    expectEqual(@as(u32, 0), tss.esi);
+    expectEqual(@as(u32, 0), tss.edi);
+    expectEqual(@as(u32, 0), tss.es);
+    expectEqual(@as(u32, 0), tss.cs);
+    expectEqual(@as(u32, 0), tss.ss);
+    expectEqual(@as(u32, 0), tss.ds);
+    expectEqual(@as(u32, 0), tss.fs);
+    expectEqual(@as(u32, 0), tss.gs);
+    expectEqual(@as(u32, 0), tss.ldtr);
+    expectEqual(@as(u16, 0), tss.trap);
+    expectEqual(@as(u16, @sizeOf(TtsEntry)), tss.io_permissions_base_offset);
 }
 
 test "init" {
@@ -651,13 +651,13 @@ test "init" {
     const tss_limit = @sizeOf(TtsEntry) - 1;
     const tss_addr = @ptrToInt(&tss);
 
-    var expected = u64(0);
-    expected |= u64(@truncate(u16, tss_limit));
-    expected |= u64(@truncate(u24, tss_addr)) << 16;
-    expected |= u64(0x89) << (16 + 24);
-    expected |= u64(@truncate(u4, tss_limit >> 16)) << (16 + 24 + 8);
+    var expected: u64 = 0;
+    expected |= @as(u64, @truncate(u16, tss_limit));
+    expected |= @as(u64, @truncate(u24, tss_addr)) << 16;
+    expected |= @as(u64, 0x89) << (16 + 24);
+    expected |= @as(u64, @truncate(u4, tss_limit >> 16)) << (16 + 24 + 8);
     // Flags are zero
-    expected |= u64(@truncate(u8, tss_addr >> 24)) << (16 + 24 + 8 + 4 + 4);
+    expected |= @as(u64, @truncate(u8, tss_addr >> 24)) << (16 + 24 + 8 + 4 + 4);
 
     expectEqual(expected, @bitCast(u64, tss_entry));
 

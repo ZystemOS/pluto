@@ -190,10 +190,10 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
     var dir_entry = &dir.entries[entry];
     dir_entry.* |= DENTRY_PRESENT;
     dir_entry.* |= DENTRY_WRITABLE;
-    dir_entry.* &= ~u32(DENTRY_USER);
+    dir_entry.* &= ~DENTRY_USER;
     dir_entry.* |= DENTRY_WRITE_THROUGH;
-    dir_entry.* &= ~u32(DENTRY_CACHE_DISABLED);
-    dir_entry.* &= ~u32(DENTRY_4MB_PAGES);
+    dir_entry.* &= ~DENTRY_CACHE_DISABLED;
+    dir_entry.* &= ~DENTRY_4MB_PAGES;
 
     // Only create a new table if one hasn't already been created for this dir entry.
     // Prevents us from overriding previous mappings.
@@ -239,10 +239,10 @@ fn mapTableEntry(entry: *align(1) TableEntry, phys_addr: usize) PagingError!void
     }
     entry.* |= TENTRY_PRESENT;
     entry.* |= TENTRY_WRITABLE;
-    entry.* &= ~u32(TENTRY_USER);
+    entry.* &= ~TENTRY_USER;
     entry.* |= TENTRY_WRITE_THROUGH;
-    entry.* &= ~u32(TENTRY_CACHE_DISABLED);
-    entry.* &= ~u32(TENTRY_GLOBAL);
+    entry.* &= ~TENTRY_CACHE_DISABLED;
+    entry.* &= ~TENTRY_GLOBAL;
     entry.* |= TENTRY_PAGE_ADDR & @intCast(u32, phys_addr);
 }
 

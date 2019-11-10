@@ -102,8 +102,8 @@ pub inline fn physToVirt(phys: var) @typeOf(phys) {
 test "physToVirt" {
     ADDR_OFFSET = 0xC0000000;
     const offset: usize = ADDR_OFFSET;
-    expectEqual(physToVirt(usize(0)), offset + 0);
-    expectEqual(physToVirt(usize(123)), offset + 123);
+    expectEqual(physToVirt(@as(usize, 0)), offset + 0);
+    expectEqual(physToVirt(@as(usize, 123)), offset + 123);
     expectEqual(@ptrToInt(physToVirt(@intToPtr(*usize, 123))), offset + 123);
 }
 

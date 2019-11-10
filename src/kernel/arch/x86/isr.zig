@@ -258,7 +258,7 @@ test "openIsr" {
     idt.initTest();
     defer idt.freeTest();
 
-    const index = u8(0);
+    const index: u8 = 0;
     const handler = testFunction0;
     const ret: idt.IdtError!void = {};
 

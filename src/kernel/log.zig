@@ -36,7 +36,7 @@ pub fn runtimeTests() void {
     inline for (@typeInfo(Level).Enum.fields) |field| {
         const level = @field(Level, field.name);
         log(level, "Test " ++ field.name ++ " level\n");
-        log(level, "Test " ++ field.name ++ " level with args {}, {}\n", "a", u32(1));
+        log(level, "Test " ++ field.name ++ " level with args {}, {}\n", "a", @as(u32, 1));
         const logFn = switch (level) {
             .INFO => logInfo,
             .DEBUG => logDebug,
@@ -44,6 +44,6 @@ pub fn runtimeTests() void {
             .ERROR => logError,
         };
         logFn("Test " ++ field.name ++ " function\n");
-        logFn("Test " ++ field.name ++ " function with args {}, {}\n", "a", u32(1));
+        logFn("Test " ++ field.name ++ " function with args {}, {}\n", "a", @as(u32, 1));
     }
 }

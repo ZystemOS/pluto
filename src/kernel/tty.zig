@@ -29,13 +29,13 @@ const ROW_TOTAL: u16 = vga.HEIGHT - ROW_MIN;
 const TOTAL_NUM_PAGES: u16 = 5;
 
 /// The total number of VGA (or characters) elements are on a page
-const TOTAL_CHAR_ON_PAGE: u16 = u16(vga.WIDTH) * ROW_TOTAL;
+const TOTAL_CHAR_ON_PAGE: u16 = vga.WIDTH * ROW_TOTAL;
 
 /// The start of the displayable region in the video buffer memory
-const START_OF_DISPLAYABLE_REGION: u16 = u16(vga.WIDTH) * ROW_MIN;
+const START_OF_DISPLAYABLE_REGION: u16 = vga.WIDTH * ROW_MIN;
 
 /// The total number of VGA elements (or characters) the video buffer can display
-const VIDEO_BUFFER_SIZE: u16 = u16(vga.WIDTH) * u16(vga.HEIGHT);
+const VIDEO_BUFFER_SIZE: u16 = vga.WIDTH * vga.HEIGHT;
 
 /// The location of the kernel in virtual memory so can calculate the address of the VGA buffer
 extern var KERNEL_ADDR_OFFSET: *u32;
@@ -91,7 +91,7 @@ fn videoCopy(video_buf_offset: u16, data: []const u16, size: u16) TtyError!void 
         return TtyError.OutOfBounds;
     }
 
-    var i = u32(0);
+    var i: u32 = 0;
     while (i < size) : (i += 1) {
         video_buffer[video_buf_offset + i] = data[i];
     }
@@ -118,7 +118,7 @@ fn pageMove(dest: []u16, src: []u16, size: u16) TtyError!void {
 
     // Make sure we don't override the values we want to copy
     if (@ptrToInt(&dest[0]) < @ptrToInt(&src[0])) {
-        var i = u16(0);
+        var i: u16 = 0;
         while (i != size) : (i += 1) {
             dest[i] = src[i];
         }
@@ -190,7 +190,7 @@ fn displayPageNumber() void {
     // TODO: #89 TTY - print string with alignment
     // When print a string with alignment is available, can remove.
     // But for now we can calculate the alignment.
-    column = u8(vga.WIDTH) - @truncate(u8, fmt_text.len);
+    column = @truncate(u8, vga.WIDTH) - @truncate(u8, fmt_text.len);
     row = ROW_MIN - 1;
 
     writeString(fmt_text) catch |e| {
@@ -296,7 +296,7 @@ fn scroll() void {
         };
 
         // Move all rows up by rows_to_move
-        var i = u32(0);
+        var i: u32 = 0;
         while (i < (ROW_TOTAL - rows_to_move) * vga.WIDTH) : (i += 1) {
             video_buffer[START_OF_DISPLAYABLE_REGION + i] = video_buffer[(rows_to_move * vga.WIDTH) + START_OF_DISPLAYABLE_REGION + i];
         }
@@ -587,14 +587,14 @@ pub fn init() void {
     if (row != 0 or column != 0) {
         // Copy rows 7 down to make room for logo
         // If there isn't enough room, only take the bottom rows
-        var row_offset = u16(0);
+        var row_offset: u16 = 0;
         if (vga.HEIGHT - 1 - row < ROW_MIN) {
-            row_offset = u16(ROW_MIN - (vga.HEIGHT - 1 - row));
+            row_offset = ROW_MIN - (vga.HEIGHT - 1 - row);
         }
 
         // Make a copy into the pages
         // Assuming that there is only one page
-        var i = u16(0);
+        var i: u16 = 0;
         while (i < row * vga.WIDTH) : (i += 1) {
             pages[0][i] = video_buffer[i];
         }
@@ -708,7 +708,7 @@ fn setPagesIncrementing() void {
 
 fn defaultVariablesTesting(p_i: u8, r: u8, c: u8) void {
     expectEqual(test_colour, colour);
-    expectEqual(u16(test_colour) << 8, blank);
+    expectEqual(@as(u16, test_colour) << 8, blank);
     expectEqual(p_i, page_index);
     expectEqual(r, row);
     expectEqual(c, column);
@@ -756,7 +756,7 @@ test "updateCursor" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("updateCursor", u16(0), u16(0));
+    vga.addTestParams("updateCursor", @as(u16, 0), @as(u16, 0));
 
     // Pre testing
     defaultAllTesting(0, 0, 0);
@@ -779,7 +779,7 @@ test "getCursor zero" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("getCursor", u16(0));
+    vga.addTestParams("getCursor", @as(u16, 0));
 
     // Pre testing
     defaultAllTesting(0, 0, 0);
@@ -802,7 +802,7 @@ test "getCursor EEF" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("getCursor", u16(0x0EEF));
+    vga.addTestParams("getCursor", @as(u16, 0x0EEF));
 
     // Pre testing
     defaultAllTesting(0, 0, 0);
@@ -993,7 +993,7 @@ test "putEntryAt in displayable region page_index is not 0" {
             if (i == 0) {
                 expectEqual(ones, char);
             } else {
-                expectEqual(u16(0), char);
+                expectEqual(@as(u16, 0), char);
             }
         }
     }
@@ -1016,7 +1016,7 @@ test "putEntryAt in displayable region page_index is not 0" {
             } else if (i == 0) {
                 expectEqual(ones, c);
             } else {
-                expectEqual(u16(0), c);
+                expectEqual(@as(u16, 0), c);
             }
         }
     }
@@ -2036,7 +2036,7 @@ test "init 0,0" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("getCursor", u16(0));
+    vga.addTestParams("getCursor", @as(u16, 0));
 
     vga.addRepeatFunction("entryColour", vga.orig_entryColour);
     vga.addRepeatFunction("entry", vga.orig_entry);
@@ -2153,7 +2153,7 @@ fn rt_printString() void {
     print(text);
 
     // Check the video memory
-    var counter = u32(0);
+    var counter: u32 = 0;
     for (video_buffer) |buf| {
         if (counter < text.len and buf == vga.entry(text[counter], colour)) {
             counter += 1;
