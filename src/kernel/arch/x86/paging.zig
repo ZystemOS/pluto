@@ -331,9 +331,9 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
 
     // Map in each boot module
     for (mem_profile.boot_modules) |*module| {
-        const mod_p_struct_start = std.mem.alignBackward(@ptrToInt(module), PAGE_SIZE_4KB);
-        const mod_p_struct_end = std.mem.alignForward(mod_p_struct_start + @sizeOf(multiboot.multiboot_module_t), PAGE_SIZE_4KB);
-        mapDir(kernel_directory, mem.physToVirt(mod_p_struct_start), mem.physToVirt(mod_p_struct_end), mod_p_struct_start, mod_p_struct_end, allocator) catch |e| {
+        const mod_v_struct_start = std.mem.alignBackward(@ptrToInt(module), PAGE_SIZE_4KB);
+        const mod_v_struct_end = std.mem.alignForward(mod_v_struct_start + @sizeOf(multiboot.multiboot_module_t), PAGE_SIZE_4KB);
+        mapDir(kernel_directory, mod_v_struct_start, mod_v_struct_end, mem.virtToPhys(mod_v_struct_start), mem.virtToPhys(mod_v_struct_end), allocator) catch |e| {
             panic(@errorReturnTrace(), "Failed to map module struct: {}\n", e);
         };
         const mod_p_start = std.mem.alignBackward(module.mod_start, PAGE_SIZE_4KB);

@@ -50,8 +50,16 @@ pub fn build(b: *Builder) !void {
     cp_elf_cmd.step.dependOn(&grub_cmd.step);
     cp_elf_cmd.step.dependOn(&exec.step);
 
+    const modules_path = try fs.path.join(b.allocator, [_][]const u8{ b.exe_dir, "iso", "modules" });
+    const mkdir_modules_cmd = b.addSystemCommand([_][]const u8{ "mkdir", "-p", modules_path });
+
+    const map_file_path = try fs.path.join(b.allocator, [_][]const u8{ modules_path, "kernel.map" });
+    const map_file_cmd = b.addSystemCommand([_][]const u8{ "./make_map.sh", elf_path, map_file_path });
+    map_file_cmd.step.dependOn(&cp_elf_cmd.step);
+    map_file_cmd.step.dependOn(&mkdir_modules_cmd.step);
+
     const iso_cmd = b.addSystemCommand([_][]const u8{ "grub-mkrescue", "-o", iso_path, iso_dir_path });
-    iso_cmd.step.dependOn(&cp_elf_cmd.step);
+    iso_cmd.step.dependOn(&map_file_cmd.step);
     b.default_step.dependOn(&iso_cmd.step);
 
     const run_step = b.step("run", "Run with qemu");
