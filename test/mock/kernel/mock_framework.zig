@@ -145,7 +145,7 @@ fn Mock() type {
         ///     A DataElement with the data wrapped.
         ///
         fn createDataElement(arg: var) DataElement {
-            return switch (@typeOf(arg)) {
+            return switch (@TypeOf(arg)) {
                 bool => DataElement{ .BOOL = arg },
                 u4 => DataElement{ .U4 = arg },
                 u8 => DataElement{ .U8 = arg },
@@ -171,7 +171,7 @@ fn Mock() type {
                 fn (*const idt.IdtPtr) void => DataElement{ .FN_IPTRCONSTIDTPTR_OVOID = arg },
                 fn (u8, extern fn () void) idt.IdtError!void => DataElement{ .FN_IU8_IEFNOVOID_OERRORIDTERRORVOID = arg },
                 fn (u8, nakedcc fn () void) idt.IdtError!void => DataElement{ .FN_IU8_INFNOVOID_OERRORIDTERRORVOID = arg },
-                else => @compileError("Type not supported: " ++ @typeName(@typeOf(arg))),
+                else => @compileError("Type not supported: " ++ @typeName(@TypeOf(arg))),
             };
         }
 
@@ -266,11 +266,11 @@ fn Mock() type {
         /// Return: type
         ///     A function type that represents the return type and its arguments.
         ///
-        fn getFunctionType(comptime RetType: type, params: ...) type {
+        fn getFunctionType(comptime RetType: type, params: var) type {
             return switch (params.len) {
                 0 => fn () RetType,
-                1 => fn (@typeOf(params[0])) RetType,
-                2 => fn (@typeOf(params[0]), @typeOf(params[1])) RetType,
+                1 => fn (@TypeOf(params[0])) RetType,
+                2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
                 else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
             };
         }
@@ -288,7 +288,7 @@ fn Mock() type {
         fn expectTest(comptime ExpectedType: type, expected_value: ExpectedType, elem: DataElement) void {
             if (ExpectedType == void) {
                 // Can't test void as it has no value
-                std.debug.panic("Can not test a value for void\n");
+                std.debug.panic("Can not test a value for void\n", .{});
             }
 
             // Test that the types match
@@ -330,7 +330,7 @@ fn Mock() type {
 
                 return ret;
             } else {
-                std.debug.panic("No more test values for the return of function: " ++ fun_name ++ "\n");
+                std.debug.panic("No more test values for the return of function: " ++ fun_name ++ "\n", .{});
             }
         }
 
@@ -365,7 +365,7 @@ fn Mock() type {
             } else {
                 // Shouldn't get here as we would have just added a new mapping
                 // But just in case ;)
-                std.debug.panic("No function name: " ++ fun_name ++ "\n");
+                std.debug.panic("No function name: " ++ fun_name ++ "\n", .{});
             }
         }
 
@@ -382,7 +382,7 @@ fn Mock() type {
         /// Return: RetType
         ///     The return value of the mocked function. This can be void.
         ///
-        pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: ...) RetType {
+        pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: var) RetType {
             if (self.named_actions.get(fun_name)) |kv_actions_list| {
                 var action_list = kv_actions_list.value;
                 // Peak the first action to test the action type
@@ -397,7 +397,7 @@ fn Mock() type {
                                 const test_node = action_list.popFirst().?;
                                 const test_action = test_node.data;
                                 const param = params[i];
-                                const param_type = @typeOf(params[i]);
+                                const param_type = @TypeOf(params[i]);
 
                                 expectTest(param_type, param, test_action.data);
 
@@ -420,8 +420,8 @@ fn Mock() type {
                             // to be resolved
                             const expected_function = switch (params.len) {
                                 0 => fn () RetType,
-                                1 => fn (@typeOf(params[0])) RetType,
-                                2 => fn (@typeOf(params[0]), @typeOf(params[1])) RetType,
+                                1 => fn (@TypeOf(params[0])) RetType,
+                                2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
                                 else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
                             };
 
@@ -438,10 +438,10 @@ fn Mock() type {
                             action_list.destroyNode(test_node, GlobalAllocator);
 
                             // The data element will contain the function to call
-                            const r = switch (params.len) {
-                                0 => @noInlineCall(actual_function),
-                                1 => @noInlineCall(actual_function, params[0]),
-                                2 => @noInlineCall(actual_function, params[0], params[1]),
+                            var r = switch (params.len) {
+                                0 => actual_function(),
+                                1 => actual_function(params[0]),
+                                2 => actual_function(params[0], params[1]),
                                 else => @compileError(params.len ++ " or more parameters not supported"),
                             };
 
@@ -453,8 +453,8 @@ fn Mock() type {
                             const test_element = action.data;
                             const expected_function = switch (params.len) {
                                 0 => fn () RetType,
-                                1 => fn (@typeOf(params[0])) RetType,
-                                2 => fn (@typeOf(params[0]), @typeOf(params[1])) RetType,
+                                1 => fn (@TypeOf(params[0])) RetType,
+                                2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
                                 else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
                             };
 
@@ -469,9 +469,9 @@ fn Mock() type {
 
                             // The data element will contain the function to call
                             const r = switch (params.len) {
-                                0 => @noInlineCall(actual_function),
-                                1 => @noInlineCall(actual_function, params[0]),
-                                2 => @noInlineCall(actual_function, params[0], params[1]),
+                                0 => actual_function(),
+                                1 => actual_function(params[0]),
+                                2 => actual_function(params[0], params[1]),
                                 else => @compileError(params.len ++ " or more parameters not supported"),
                             };
 
@@ -483,10 +483,10 @@ fn Mock() type {
                     kv_actions_list.value = action_list;
                     return ret;
                 } else {
-                    std.debug.panic("No action list elements for function: " ++ fun_name ++ "\n");
+                    std.debug.panic("No action list elements for function: " ++ fun_name ++ "\n", .{});
                 }
             } else {
-                std.debug.panic("No function name: " ++ fun_name ++ "\n");
+                std.debug.panic("No function name: " ++ fun_name ++ "\n", .{});
             }
         }
 
@@ -520,7 +520,7 @@ fn Mock() type {
                     switch (action.action) {
                         ActionType.TestValue, ActionType.ConsumeFunctionCall => {
                             // These need to be all consumed
-                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{}'\n", action.action, @as(DataElementType, action.data), next.key);
+                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{}'\n", .{ action.action, @as(DataElementType, action.data), next.key });
                         },
                         ActionType.RepeatFunctionCall => {
                             // As this is a repeat action, the function will still be here
@@ -553,7 +553,7 @@ fn getMockObject() *Mock() {
     if (mock) |*m| {
         return m;
     } else {
-        warn("MOCK object doesn't exists, please initiate this test\n");
+        warn("MOCK object doesn't exists, please initiate this test\n", .{});
         expect(false);
         unreachable;
     }
@@ -565,7 +565,7 @@ fn getMockObject() *Mock() {
 pub fn initTest() void {
     // Make sure there isn't a mock object
     if (mock) |_| {
-        warn("MOCK object already exists, please free previous test\n");
+        warn("MOCK object already exists, please free previous test\n", .{});
         expect(false);
         unreachable;
     } else {
@@ -596,7 +596,7 @@ pub fn freeTest() void {
 ///     IN fun_name: []const u8 - The function name to add the test parameters to.
 ///     IN params: arglist      - The parameters to add.
 ///
-pub fn addTestParams(comptime fun_name: []const u8, params: ...) void {
+pub fn addTestParams(comptime fun_name: []const u8, params: var) void {
     var mock_obj = getMockObject();
     comptime var i = 0;
     inline while (i < params.len) : (i += 1) {
@@ -639,6 +639,6 @@ pub fn addRepeatFunction(comptime fun_name: []const u8, function: var) void {
 /// Return: RetType
 ///     The return value of the mocked function. This can be void.
 ///
-pub fn performAction(comptime fun_name: []const u8, comptime RetType: type, params: ...) RetType {
+pub fn performAction(comptime fun_name: []const u8, comptime RetType: type, params: var) RetType {
     return getMockObject().performAction(fun_name, RetType, params);
 }

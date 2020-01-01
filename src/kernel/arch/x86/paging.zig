@@ -292,7 +292,7 @@ fn pageFault(state: *arch.InterruptContext) void {
 ///     IN allocator: *std.mem.Allocator - The allocator to use
 ///
 pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
-    log.logInfo("Init paging\n");
+    log.logInfo("Init paging\n", .{});
     // Calculate start and end of mapping
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE_4KB);
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
@@ -300,14 +300,14 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
 
     var tmp = allocator.alignedAlloc(Directory, @truncate(u29, PAGE_SIZE_4KB), 1) catch |e| {
-        panic(@errorReturnTrace(), "Failed to allocate page directory: {}\n", e);
+        panic(@errorReturnTrace(), "Failed to allocate page directory: {}\n", .{e});
     };
     var kernel_directory = @ptrCast(*Directory, tmp.ptr);
     @memset(@ptrCast([*]u8, kernel_directory), 0, @sizeOf(Directory));
 
     // Map in kernel
     mapDir(kernel_directory, v_start, v_end, p_start, p_end, allocator) catch |e| {
-        panic(@errorReturnTrace(), "Failed to map kernel directory: {}\n", e);
+        panic(@errorReturnTrace(), "Failed to map kernel directory: {}\n", .{e});
     };
     const tty_addr = tty.getVideoBufferAddress();
     // If the previous mapping space didn't cover the tty buffer, do so now
@@ -315,7 +315,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
         const tty_phys = mem.virtToPhys(tty_addr);
         const tty_buff_size = 32 * 1024;
         mapDir(kernel_directory, tty_addr, tty_addr + tty_buff_size, tty_phys, tty_phys + tty_buff_size, allocator) catch |e| {
-            panic(@errorReturnTrace(), "Failed to map vga buffer in kernel directory: {}\n", e);
+            panic(@errorReturnTrace(), "Failed to map vga buffer in kernel directory: {}\n", .{e});
         };
     }
 
@@ -325,7 +325,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     if (v_start > mb_info_addr) {
         const mb_info_end = mb_info_addr + PAGE_SIZE_4MB / 2;
         mapDir(kernel_directory, mb_info_addr, mb_info_end, mem.virtToPhys(mb_info_addr), mem.virtToPhys(mb_info_end), allocator) catch |e| {
-            panic(@errorReturnTrace(), "Failed to map mb_info in kernel directory: {}\n", e);
+            panic(@errorReturnTrace(), "Failed to map mb_info in kernel directory: {}\n", .{e});
         };
     }
 
@@ -334,12 +334,12 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
         const mod_v_struct_start = std.mem.alignBackward(@ptrToInt(module), PAGE_SIZE_4KB);
         const mod_v_struct_end = std.mem.alignForward(mod_v_struct_start + @sizeOf(multiboot.multiboot_module_t), PAGE_SIZE_4KB);
         mapDir(kernel_directory, mod_v_struct_start, mod_v_struct_end, mem.virtToPhys(mod_v_struct_start), mem.virtToPhys(mod_v_struct_end), allocator) catch |e| {
-            panic(@errorReturnTrace(), "Failed to map module struct: {}\n", e);
+            panic(@errorReturnTrace(), "Failed to map module struct: {}\n", .{e});
         };
         const mod_p_start = std.mem.alignBackward(module.mod_start, PAGE_SIZE_4KB);
         const mod_p_end = std.mem.alignForward(module.mod_end, PAGE_SIZE_4KB);
         mapDir(kernel_directory, mem.physToVirt(mod_p_start), mem.physToVirt(mod_p_end), mod_p_start, mod_p_end, allocator) catch |e| {
-            panic(@errorReturnTrace(), "Failed to map boot module in kernel directory: {}\n", e);
+            panic(@errorReturnTrace(), "Failed to map boot module in kernel directory: {}\n", .{e});
         };
     }
 
@@ -349,9 +349,9 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
         : [addr] "{eax}" (dir_physaddr)
     );
     isr.registerIsr(isr.PAGE_FAULT, if (options.rt_test) rt_pageFault else pageFault) catch |e| {
-        panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", e);
+        panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", .{e});
     };
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
 
     if (options.rt_test) runtimeTests(v_end);
 }
@@ -482,7 +482,7 @@ fn rt_accessUnmappedMem(v_end: u32) void {
         \\rt_fault_callback:
     );
     testing.expect(faulted);
-    log.logInfo("Paging: Tested accessing unmapped memory\n");
+    log.logInfo("Paging: Tested accessing unmapped memory\n", .{});
 }
 
 fn rt_accessMappedMem(v_end: u32) void {
@@ -496,7 +496,7 @@ fn rt_accessMappedMem(v_end: u32) void {
         \\rt_fault_callback2:
     );
     testing.expect(!faulted);
-    log.logInfo("Paging: Tested accessing mapped memory\n");
+    log.logInfo("Paging: Tested accessing mapped memory\n", .{});
 }
 
 fn runtimeTests(v_end: u32) void {

@@ -39,7 +39,7 @@ const NUMBER_OF_ENTRIES: u16 = 256;
 const TABLE_SIZE: u16 = @sizeOf(IdtEntry) * NUMBER_OF_ENTRIES - 1;
 
 pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
-    return mock_framework.performAction("openInterruptGate", IdtError!void, index, handler);
+    return mock_framework.performAction("openInterruptGate", IdtError!void, .{ index, handler });
 }
 
 pub fn init() void {

@@ -36,35 +36,35 @@ pub const CursorShape = enum {
 };
 
 pub fn entryColour(fg: u4, bg: u4) u8 {
-    return mock_framework.performAction("entryColour", u8, fg, bg);
+    return mock_framework.performAction("entryColour", u8, .{ fg, bg });
 }
 
 pub fn entry(uc: u8, colour: u8) u16 {
-    return mock_framework.performAction("entry", u16, uc, colour);
+    return mock_framework.performAction("entry", u16, .{ uc, colour });
 }
 
 pub fn updateCursor(x: u16, y: u16) void {
-    return mock_framework.performAction("updateCursor", void, x, y);
+    return mock_framework.performAction("updateCursor", void, .{ x, y });
 }
 
 pub fn getCursor() u16 {
-    return mock_framework.performAction("getCursor", u16);
+    return mock_framework.performAction("getCursor", u16, .{});
 }
 
 pub fn enableCursor() void {
-    return mock_framework.performAction("enableCursor", void);
+    return mock_framework.performAction("enableCursor", void, .{});
 }
 
 pub fn disableCursor() void {
-    return mock_framework.performAction("disableCursor", void);
+    return mock_framework.performAction("disableCursor", void, .{});
 }
 
 pub fn setCursorShape(shape: CursorShape) void {
-    return mock_framework.performAction("setCursorShape", void, shape);
+    return mock_framework.performAction("setCursorShape", void, .{shape});
 }
 
 pub fn init() void {
-    return mock_framework.performAction("init", void);
+    return mock_framework.performAction("init", void, .{});
 }
 
 // User defined mocked functions

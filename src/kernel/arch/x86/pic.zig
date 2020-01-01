@@ -432,7 +432,7 @@ pub fn clearMask(irq_num: u8) void {
 /// by Intel up to 0x1F. So this will move the IRQs from 0x00-0x0F to 0x20-0x2F.
 ///
 pub fn init() void {
-    log.logInfo("Init pic\n");
+    log.logInfo("Init pic\n", .{});
 
     // Initiate
     sendCommandMaster(ICW1_INITIALISATION | ICW1_EXPECT_ICW4);
@@ -454,7 +454,7 @@ pub fn init() void {
     sendDataMaster(0xFF);
     sendDataSlave(0xFF);
 
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }
@@ -466,7 +466,7 @@ test "sendCommandMaster" {
 
     const cmd: u8 = 10;
 
-    arch.addTestParams("outb", MASTER_COMMAND_REG, cmd);
+    arch.addTestParams("outb", .{ MASTER_COMMAND_REG, cmd });
 
     sendCommandMaster(cmd);
 }
@@ -478,7 +478,7 @@ test "sendCommandSlave" {
 
     const cmd: u8 = 10;
 
-    arch.addTestParams("outb", SLAVE_COMMAND_REG, cmd);
+    arch.addTestParams("outb", .{ SLAVE_COMMAND_REG, cmd });
 
     sendCommandSlave(cmd);
 }
@@ -490,7 +490,7 @@ test "sendDataMaster" {
 
     const data: u8 = 10;
 
-    arch.addTestParams("outb", MASTER_DATA_REG, data);
+    arch.addTestParams("outb", .{ MASTER_DATA_REG, data });
 
     sendDataMaster(data);
 }
@@ -502,7 +502,7 @@ test "sendDataSlave" {
 
     const data: u8 = 10;
 
-    arch.addTestParams("outb", SLAVE_DATA_REG, data);
+    arch.addTestParams("outb", .{ SLAVE_DATA_REG, data });
 
     sendDataSlave(data);
 }
@@ -512,7 +512,7 @@ test "readDataMaster" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("inb", MASTER_DATA_REG, @as(u8, 10));
+    arch.addTestParams("inb", .{ MASTER_DATA_REG, @as(u8, 10) });
 
     expectEqual(@as(u8, 10), readDataMaster());
 }
@@ -522,7 +522,7 @@ test "readDataSlave" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("inb", SLAVE_DATA_REG, @as(u8, 10));
+    arch.addTestParams("inb", .{ SLAVE_DATA_REG, @as(u8, 10) });
 
     expectEqual(@as(u8, 10), readDataSlave());
 }
@@ -532,8 +532,8 @@ test "readMasterIrr" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", MASTER_COMMAND_REG, @as(u8, 0x0A));
-    arch.addTestParams("inb", MASTER_STATUS_REG, @as(u8, 10));
+    arch.addTestParams("outb", .{ MASTER_COMMAND_REG, @as(u8, 0x0A) });
+    arch.addTestParams("inb", .{ MASTER_STATUS_REG, @as(u8, 10) });
 
     expectEqual(@as(u8, 10), readMasterIrr());
 }
@@ -543,8 +543,8 @@ test "readSlaveIrr" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", SLAVE_COMMAND_REG, @as(u8, 0x0A));
-    arch.addTestParams("inb", SLAVE_STATUS_REG, @as(u8, 10));
+    arch.addTestParams("outb", .{ SLAVE_COMMAND_REG, @as(u8, 0x0A) });
+    arch.addTestParams("inb", .{ SLAVE_STATUS_REG, @as(u8, 10) });
 
     expectEqual(@as(u8, 10), readSlaveIrr());
 }
@@ -554,8 +554,8 @@ test "readMasterIsr" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", MASTER_COMMAND_REG, @as(u8, 0x0B));
-    arch.addTestParams("inb", MASTER_STATUS_REG, @as(u8, 10));
+    arch.addTestParams("outb", .{ MASTER_COMMAND_REG, @as(u8, 0x0B) });
+    arch.addTestParams("inb", .{ MASTER_STATUS_REG, @as(u8, 10) });
 
     expectEqual(@as(u8, 10), readMasterIsr());
 }
@@ -565,8 +565,8 @@ test "readSlaveIsr" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", SLAVE_COMMAND_REG, @as(u8, 0x0B));
-    arch.addTestParams("inb", SLAVE_STATUS_REG, @as(u8, 10));
+    arch.addTestParams("outb", .{ SLAVE_COMMAND_REG, @as(u8, 0x0B) });
+    arch.addTestParams("inb", .{ SLAVE_STATUS_REG, @as(u8, 10) });
 
     expectEqual(@as(u8, 10), readSlaveIsr());
 }
@@ -578,7 +578,7 @@ test "sendEndOfInterrupt master only" {
 
     var i: u8 = 0;
     while (i < 8) : (i += 1) {
-        arch.addTestParams("outb", MASTER_COMMAND_REG, OCW2_END_OF_INTERRUPT);
+        arch.addTestParams("outb", .{ MASTER_COMMAND_REG, OCW2_END_OF_INTERRUPT });
 
         sendEndOfInterrupt(i);
     }
@@ -591,8 +591,8 @@ test "sendEndOfInterrupt master and slave" {
 
     var i: u8 = 8;
     while (i < 16) : (i += 1) {
-        arch.addTestParams("outb", SLAVE_COMMAND_REG, OCW2_END_OF_INTERRUPT);
-        arch.addTestParams("outb", MASTER_COMMAND_REG, OCW2_END_OF_INTERRUPT);
+        arch.addTestParams("outb", .{ SLAVE_COMMAND_REG, OCW2_END_OF_INTERRUPT });
+        arch.addTestParams("outb", .{ MASTER_COMMAND_REG, OCW2_END_OF_INTERRUPT });
 
         sendEndOfInterrupt(i);
     }
@@ -621,9 +621,9 @@ test "spuriousIrq spurious master IRQ number not spurious" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", MASTER_COMMAND_REG, @as(u8, 0x0B));
+    arch.addTestParams("outb", .{ MASTER_COMMAND_REG, @as(u8, 0x0B) });
     // Return 0x80 from readMasterIsr() which will mean this was a real IRQ
-    arch.addTestParams("inb", MASTER_STATUS_REG, @as(u8, 0x80));
+    arch.addTestParams("inb", .{ MASTER_STATUS_REG, @as(u8, 0x80) });
 
     // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
@@ -643,9 +643,9 @@ test "spuriousIrq spurious master IRQ number spurious" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", MASTER_COMMAND_REG, @as(u8, 0x0B));
+    arch.addTestParams("outb", .{ MASTER_COMMAND_REG, @as(u8, 0x0B) });
     // Return 0x0 from readMasterIsr() which will mean this was a spurious IRQ
-    arch.addTestParams("inb", MASTER_STATUS_REG, @as(u8, 0x0));
+    arch.addTestParams("inb", .{ MASTER_STATUS_REG, @as(u8, 0x0) });
 
     // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
@@ -665,9 +665,9 @@ test "spuriousIrq spurious slave IRQ number not spurious" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", SLAVE_COMMAND_REG, @as(u8, 0x0B));
+    arch.addTestParams("outb", .{ SLAVE_COMMAND_REG, @as(u8, 0x0B) });
     // Return 0x80 from readSlaveIsr() which will mean this was a real IRQ
-    arch.addTestParams("inb", SLAVE_STATUS_REG, @as(u8, 0x80));
+    arch.addTestParams("inb", .{ SLAVE_STATUS_REG, @as(u8, 0x80) });
 
     // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
@@ -687,11 +687,11 @@ test "spuriousIrq spurious slave IRQ number spurious" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", SLAVE_COMMAND_REG, @as(u8, 0x0B));
+    arch.addTestParams("outb", .{ SLAVE_COMMAND_REG, @as(u8, 0x0B) });
     // Return 0x0 from readSlaveIsr() which will mean this was a spurious IRQ
-    arch.addTestParams("inb", SLAVE_STATUS_REG, @as(u8, 0x0));
+    arch.addTestParams("inb", .{ SLAVE_STATUS_REG, @as(u8, 0x0) });
     // A EOI will be sent for a spurious IRQ 15
-    arch.addTestParams("outb", MASTER_COMMAND_REG, OCW2_END_OF_INTERRUPT);
+    arch.addTestParams("outb", .{ MASTER_COMMAND_REG, OCW2_END_OF_INTERRUPT });
 
     // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
@@ -712,9 +712,9 @@ test "setMask master IRQ masked" {
     defer arch.freeTest();
 
     // Going to assume all bits are masked out
-    arch.addTestParams("inb", MASTER_DATA_REG, @as(u8, 0xFF));
+    arch.addTestParams("inb", .{ MASTER_DATA_REG, @as(u8, 0xFF) });
     // Expect the 2nd bit to be set
-    arch.addTestParams("outb", MASTER_DATA_REG, @as(u8, 0xFF));
+    arch.addTestParams("outb", .{ MASTER_DATA_REG, @as(u8, 0xFF) });
 
     setMask(1);
 }
@@ -725,9 +725,9 @@ test "setMask master IRQ unmasked" {
     defer arch.freeTest();
 
     // IRQ already unmasked
-    arch.addTestParams("inb", MASTER_DATA_REG, @as(u8, 0xFD));
+    arch.addTestParams("inb", .{ MASTER_DATA_REG, @as(u8, 0xFD) });
     // Expect the 2nd bit to be set
-    arch.addTestParams("outb", MASTER_DATA_REG, @as(u8, 0xFF));
+    arch.addTestParams("outb", .{ MASTER_DATA_REG, @as(u8, 0xFF) });
 
     setMask(1);
 }
@@ -738,9 +738,9 @@ test "clearMask master IRQ masked" {
     defer arch.freeTest();
 
     // Going to assume all bits are masked out
-    arch.addTestParams("inb", MASTER_DATA_REG, @as(u8, 0xFF));
+    arch.addTestParams("inb", .{ MASTER_DATA_REG, @as(u8, 0xFF) });
     // Expect the 2nd bit to be clear
-    arch.addTestParams("outb", MASTER_DATA_REG, @as(u8, 0xFD));
+    arch.addTestParams("outb", .{ MASTER_DATA_REG, @as(u8, 0xFD) });
 
     clearMask(1);
 }
@@ -751,9 +751,9 @@ test "clearMask master IRQ unmasked" {
     defer arch.freeTest();
 
     // IRQ already unmasked
-    arch.addTestParams("inb", MASTER_DATA_REG, @as(u8, 0xFD));
+    arch.addTestParams("inb", .{ MASTER_DATA_REG, @as(u8, 0xFD) });
     // Expect the 2nd bit to still be clear
-    arch.addTestParams("outb", MASTER_DATA_REG, @as(u8, 0xFD));
+    arch.addTestParams("outb", .{ MASTER_DATA_REG, @as(u8, 0xFD) });
 
     clearMask(1);
 }
@@ -764,8 +764,7 @@ test "init" {
     defer arch.freeTest();
 
     // Just a long list of OUT instructions setting up the PIC
-    arch.addTestParams(
-        "outb",
+    arch.addTestParams("outb", .{
         MASTER_COMMAND_REG,
         ICW1_INITIALISATION | ICW1_EXPECT_ICW4,
         SLAVE_COMMAND_REG,
@@ -786,7 +785,7 @@ test "init" {
         @as(u8, 0xFF),
         SLAVE_DATA_REG,
         @as(u8, 0xFF),
-    );
+    });
 
     init();
 }
@@ -796,14 +795,14 @@ test "init" {
 ///
 fn rt_picAllMasked() void {
     if (readDataMaster() != 0xFF) {
-        panic(@errorReturnTrace(), "Master masks are not set, found: {}\n", readDataMaster());
+        panic(@errorReturnTrace(), "Master masks are not set, found: {}\n", .{readDataMaster()});
     }
 
     if (readDataSlave() != 0xFF) {
-        panic(@errorReturnTrace(), "Slave masks are not set, found: {}\n", readDataSlave());
+        panic(@errorReturnTrace(), "Slave masks are not set, found: {}\n", .{readDataSlave()});
     }
 
-    log.logInfo("PIC: Tested masking\n");
+    log.logInfo("PIC: Tested masking\n", .{});
 }
 
 ///

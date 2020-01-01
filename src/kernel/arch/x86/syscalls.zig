@@ -53,10 +53,10 @@ fn handle(ctx: *arch.InterruptContext) void {
         if (handlers[syscall]) |handler| {
             ctx.eax = handler(ctx, syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
         } else {
-            log.logWarning("Syscall {} triggered but not registered\n", syscall);
+            log.logWarning("Syscall {} triggered but not registered\n", .{syscall});
         }
     } else {
-        log.logWarning("Syscall {} is invalid\n", syscall);
+        log.logWarning("Syscall {} is invalid\n", .{syscall});
     }
 }
 
@@ -237,9 +237,9 @@ inline fn syscallArg(ctx: *arch.InterruptContext, comptime arg_idx: u32) u32 {
 /// Initialise syscalls. Registers the isr associated with INTERRUPT.
 ///
 pub fn init() void {
-    log.logInfo("Init syscalls\n");
+    log.logInfo("Init syscalls\n", .{});
     isr.registerIsr(INTERRUPT, handle) catch unreachable;
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
     if (options.rt_test) runtimeTests();
 }
 
@@ -294,20 +294,20 @@ fn runtimeTests() void {
     assert(testInt == 0);
 
     if (syscall0(123) == 0 and testInt == 1)
-        log.logInfo("Syscalls: Tested no args\n");
+        log.logInfo("Syscalls: Tested no args\n", .{});
 
     if (syscall1(124, 2) == 1 and testInt == 3)
-        log.logInfo("Syscalls: Tested 1 arg\n");
+        log.logInfo("Syscalls: Tested 1 arg\n", .{});
 
     if (syscall2(125, 2, 3) == 2 and testInt == 8)
-        log.logInfo("Syscalls: Tested 2 args\n");
+        log.logInfo("Syscalls: Tested 2 args\n", .{});
 
     if (syscall3(126, 2, 3, 4) == 3 and testInt == 17)
-        log.logInfo("Syscalls: Tested 3 args\n");
+        log.logInfo("Syscalls: Tested 3 args\n", .{});
 
     if (syscall4(127, 2, 3, 4, 5) == 4 and testInt == 31)
-        log.logInfo("Syscalls: Tested 4 args\n");
+        log.logInfo("Syscalls: Tested 4 args\n", .{});
 
     if (syscall5(128, 2, 3, 4, 5, 6) == 5 and testInt == 51)
-        log.logInfo("Syscalls: Tested 5 args\n");
+        log.logInfo("Syscalls: Tested 5 args\n", .{});
 }

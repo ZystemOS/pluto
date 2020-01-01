@@ -182,8 +182,8 @@ fn displayPageNumber() void {
     var text_buf = [_]u8{0} ** vga.WIDTH;
 
     // Formate the page number string so can work out the right alignment.
-    const fmt_text = fmt.bufPrint(text_buf[0..], "Page {} of {}", page_index, TOTAL_NUM_PAGES - 1) catch |e| {
-        log.logError("TTY: Unable to print page number, buffer too small. Error: {}\n", e);
+    const fmt_text = fmt.bufPrint(text_buf[0..], "Page {} of {}", .{ page_index, TOTAL_NUM_PAGES - 1 }) catch |e| {
+        log.logError("TTY: Unable to print page number, buffer too small. Error: {}\n", .{e});
         return;
     };
 
@@ -194,7 +194,7 @@ fn displayPageNumber() void {
     row = ROW_MIN - 1;
 
     writeString(fmt_text) catch |e| {
-        log.logError("TTY: Unable to print page number, printing out of bounds. Error: {}\n", e);
+        log.logError("TTY: Unable to print page number, printing out of bounds. Error: {}\n", .{e});
     };
 }
 
@@ -292,7 +292,7 @@ fn scroll() void {
         // Move rows up pages by temp, will usually be one.
         // TODO: Maybe panic here as we have the check above, so if this fails, then is a big problem
         pagesMoveRowsUp(rows_to_move) catch |e| {
-            panic(@errorReturnTrace(), "Can't move {} rows up. Must be less than {}\n", rows_to_move, ROW_TOTAL);
+            panic(@errorReturnTrace(), "Can't move {} rows up. Must be less than {}\n", .{ rows_to_move, ROW_TOTAL });
         };
 
         // Move all rows up by rows_to_move
@@ -413,7 +413,7 @@ fn printLogo() void {
     row = 0;
 
     writeString(logo) catch |e| {
-        log.logError("TTY: Error print logo. Error {}\n", e);
+        log.logError("TTY: Error print logo. Error {}\n", .{e});
     };
 }
 
@@ -437,12 +437,12 @@ fn printCallback(ctx: void, str: []const u8) TtyError!void {
 ///
 /// Arguments:
 ///     IN comptime format: []const u8 - The format string to print
-///     IN args: ...                   - The arguments to be used in the formatted string
+///     IN args: var                   - The arguments to be used in the formatted string
 ///
-pub fn print(comptime format: []const u8, args: ...) void {
+pub fn print(comptime format: []const u8, args: var) void {
     // Printing can't error because of the scrolling, if it does, we have a big problem
     fmt.format({}, TtyError, printCallback, format, args) catch |e| {
-        log.logError("TTY: Error printing. Error: {}\n", e);
+        log.logError("TTY: Error printing. Error: {}\n", .{e});
     };
 }
 
@@ -456,7 +456,7 @@ pub fn pageUp() void {
         page_index += 1;
         // Bounds have been checked, so shouldn't error
         videoCopy(START_OF_DISPLAYABLE_REGION, pages[page_index][0..TOTAL_CHAR_ON_PAGE], TOTAL_CHAR_ON_PAGE) catch |e| {
-            log.logError("TTY: Error moving page up. Error: {}\n", e);
+            log.logError("TTY: Error moving page up. Error: {}\n", .{e});
         };
         displayPageNumber();
         vga.disableCursor();
@@ -473,7 +473,7 @@ pub fn pageDown() void {
         page_index -= 1;
         // Bounds have been checked, so shouldn't error
         videoCopy(START_OF_DISPLAYABLE_REGION, pages[page_index][0..TOTAL_CHAR_ON_PAGE], TOTAL_CHAR_ON_PAGE) catch |e| {
-            log.logError("TTY: Error moving page down. Error: {}\n", e);
+            log.logError("TTY: Error moving page down. Error: {}\n", .{e});
         };
 
         displayPageNumber();
@@ -494,7 +494,7 @@ pub fn clearScreen() void {
     // Move all the rows up
     // This is within bounds, so shouldn't error
     pagesMoveRowsUp(ROW_TOTAL) catch |e| {
-        log.logError("TTY: Error moving all pages up. Error: {}\n", e);
+        log.logError("TTY: Error moving all pages up. Error: {}\n", .{e});
     };
 
     // Clear the screen
@@ -569,7 +569,7 @@ pub fn getVideoBufferAddress() usize {
 /// entry, print the logo and display the 0'th page.
 ///
 pub fn init() void {
-    log.logInfo("Init tty\n");
+    log.logInfo("Init tty\n", .{});
 
     // Video buffer in higher half
     if (is_test) {
@@ -615,13 +615,13 @@ pub fn init() void {
 
         // Set the top 7 rows blank
         setVideoBuffer(blank, START_OF_DISPLAYABLE_REGION) catch |e| {
-            log.logError("TTY: Error clearing the top 7 rows. Error: {}\n", e);
+            log.logError("TTY: Error clearing the top 7 rows. Error: {}\n", .{e});
         };
         row += @truncate(u8, row_offset + ROW_MIN);
     } else {
         // Clear the screen
         setVideoBuffer(blank, VIDEO_BUFFER_SIZE) catch |e| {
-            log.logError("TTY: Error clearing the screen. Error: {}\n", e);
+            log.logError("TTY: Error clearing the screen. Error: {}\n", .{e});
         };
         // Set the row to below the logo
         row = ROW_MIN;
@@ -631,7 +631,7 @@ pub fn init() void {
     displayPageNumber();
     updateCursor();
 
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }
@@ -756,7 +756,7 @@ test "updateCursor" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("updateCursor", @as(u16, 0), @as(u16, 0));
+    vga.addTestParams("updateCursor", .{ @as(u16, 0), @as(u16, 0) });
 
     // Pre testing
     defaultAllTesting(0, 0, 0);
@@ -779,7 +779,7 @@ test "getCursor zero" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("getCursor", @as(u16, 0));
+    vga.addTestParams("getCursor", .{@as(u16, 0)});
 
     // Pre testing
     defaultAllTesting(0, 0, 0);
@@ -802,7 +802,7 @@ test "getCursor EEF" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("getCursor", @as(u16, 0x0EEF));
+    vga.addTestParams("getCursor", .{@as(u16, 0x0EEF)});
 
     // Pre testing
     defaultAllTesting(0, 0, 0);
@@ -2036,7 +2036,7 @@ test "init 0,0" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("getCursor", @as(u16, 0));
+    vga.addTestParams("getCursor", .{@as(u16, 0)});
 
     vga.addRepeatFunction("entryColour", vga.orig_entryColour);
     vga.addRepeatFunction("entry", vga.orig_entry);
@@ -2075,7 +2075,7 @@ test "init not 0,0" {
     vga.initTest();
     defer vga.freeTest();
 
-    vga.addTestParams("getCursor", vga.WIDTH);
+    vga.addTestParams("getCursor", .{vga.WIDTH});
 
     vga.addRepeatFunction("entryColour", vga.orig_entryColour);
     vga.addRepeatFunction("entry", vga.orig_entry);
@@ -2111,19 +2111,19 @@ test "init not 0,0" {
 ///
 fn rt_initialisedGlobals() void {
     if (@ptrToInt(video_buffer.ptr) != @ptrToInt(&KERNEL_ADDR_OFFSET) + 0xB8000) {
-        panic(@errorReturnTrace(), "Video buffer not at correct virtual address, found: {}\n", @ptrToInt(video_buffer.ptr));
+        panic(@errorReturnTrace(), "Video buffer not at correct virtual address, found: {}\n", .{@ptrToInt(video_buffer.ptr)});
     }
 
     if (page_index != 0) {
-        panic(@errorReturnTrace(), "Page index not at zero, found: {}\n", page_index);
+        panic(@errorReturnTrace(), "Page index not at zero, found: {}\n", .{page_index});
     }
 
     if (colour != vga.entryColour(vga.COLOUR_LIGHT_GREY, vga.COLOUR_BLACK)) {
-        panic(@errorReturnTrace(), "Colour not set up properly, found: {}\n", colour);
+        panic(@errorReturnTrace(), "Colour not set up properly, found: {}\n", .{colour});
     }
 
     if (blank != vga.entry(0, colour)) {
-        panic(@errorReturnTrace(), "Blank not set up properly, found: {}\n", blank);
+        panic(@errorReturnTrace(), "Blank not set up properly, found: {}\n", .{blank});
     }
 
     // Make sure the screen isn't all blank
@@ -2136,10 +2136,10 @@ fn rt_initialisedGlobals() void {
     }
 
     if (all_blank) {
-        panic(@errorReturnTrace(), "Screen all blank, should have logo and page number\n");
+        panic(@errorReturnTrace(), "Screen all blank, should have logo and page number\n", .{});
     }
 
-    log.logInfo("TTY: Tested globals\n");
+    log.logInfo("TTY: Tested globals\n", .{});
 }
 
 ///
@@ -2150,7 +2150,7 @@ fn rt_printString() void {
     const text = "abcdefg";
     const clear_text = "\x08" ** text.len;
 
-    print(text);
+    print(text, .{});
 
     // Check the video memory
     var counter: u32 = 0;
@@ -2166,7 +2166,7 @@ fn rt_printString() void {
     }
 
     if (counter != text.len) {
-        panic(@errorReturnTrace(), "Didn't find the printed text in video memory\n");
+        panic(@errorReturnTrace(), "Didn't find the printed text in video memory\n", .{});
     }
 
     // Check the pages
@@ -2183,13 +2183,13 @@ fn rt_printString() void {
     }
 
     if (counter != text.len) {
-        panic(@errorReturnTrace(), "Didn't find the printed text in pages\n");
+        panic(@errorReturnTrace(), "Didn't find the printed text in pages\n", .{});
     }
 
     // Clear the text
-    print(clear_text);
+    print(clear_text, .{});
 
-    log.logInfo("TTY: Tested printing\n");
+    log.logInfo("TTY: Tested printing\n", .{});
 }
 
 ///

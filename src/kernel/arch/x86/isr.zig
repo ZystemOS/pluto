@@ -150,18 +150,18 @@ export fn isrHandler(ctx: *arch.InterruptContext) void {
             if (syscall_handler) |handler| {
                 handler(ctx);
             } else {
-                panic(@errorReturnTrace(), "Syscall handler not registered\n");
+                panic(@errorReturnTrace(), "Syscall handler not registered\n", .{});
             }
         } else {
             if (isr_handlers[isr_num]) |handler| {
                 // Regular ISR exception, if there is one registered.
                 handler(ctx);
             } else {
-                panic(@errorReturnTrace(), "ISR not registered to: {}-{}\n", isr_num, exception_msg[isr_num]);
+                panic(@errorReturnTrace(), "ISR not registered to: {}-{}\n", .{ isr_num, exception_msg[isr_num] });
             }
         }
     } else {
-        panic(@errorReturnTrace(), "Invalid ISR index: {}\n", isr_num);
+        panic(@errorReturnTrace(), "Invalid ISR index: {}\n", .{isr_num});
     }
 }
 
@@ -175,7 +175,7 @@ export fn isrHandler(ctx: *arch.InterruptContext) void {
 fn openIsr(index: u8, handler: idt.InterruptHandler) void {
     idt.openInterruptGate(index, handler) catch |err| switch (err) {
         error.IdtEntryExists => {
-            panic(@errorReturnTrace(), "Error opening ISR number: {} exists\n", index);
+            panic(@errorReturnTrace(), "Error opening ISR number: {} exists\n", .{index});
         },
     };
 }
@@ -234,7 +234,7 @@ pub fn registerIsr(isr_num: u16, handler: IsrHandler) IsrError!void {
 /// Initialise the exception and opening up all the IDT interrupt gates for each exception.
 ///
 pub fn init() void {
-    log.logInfo("Init isr\n");
+    log.logInfo("Init isr\n", .{});
 
     comptime var i = 0;
     inline while (i < 32) : (i += 1) {
@@ -243,7 +243,7 @@ pub fn init() void {
 
     openIsr(syscalls.INTERRUPT, interrupts.getInterruptStub(syscalls.INTERRUPT));
 
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }
@@ -262,7 +262,7 @@ test "openIsr" {
     const handler = testFunction0;
     const ret: idt.IdtError!void = {};
 
-    idt.addTestParams("openInterruptGate", index, handler, ret);
+    idt.addTestParams("openInterruptGate", .{ index, handler, ret });
 
     openIsr(index, handler);
 }
@@ -363,15 +363,15 @@ fn rt_unregisteredHandlers() void {
     // Ensure all ISR are not registered yet
     for (isr_handlers) |h, i| {
         if (h) |_| {
-            panic(@errorReturnTrace(), "Handler found for ISR: {}-{}\n", i, h);
+            panic(@errorReturnTrace(), "Handler found for ISR: {}-{}\n", .{ i, h });
         }
     }
 
     if (syscall_handler) |h| {
-        panic(@errorReturnTrace(), "Pre-testing failed for syscall: {}\n", h);
+        panic(@errorReturnTrace(), "Pre-testing failed for syscall: {}\n", .{h});
     }
 
-    log.logInfo("ISR: Tested registered handlers\n");
+    log.logInfo("ISR: Tested registered handlers\n", .{});
 }
 
 ///
@@ -384,12 +384,12 @@ fn rt_openedIdtEntries() void {
     for (idt_entries) |entry, i| {
         if (isValidIsr(i)) {
             if (!idt.isIdtOpen(entry)) {
-                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", i);
+                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", .{i});
             }
         }
     }
 
-    log.logInfo("ISR: Tested opened IDT entries\n");
+    log.logInfo("ISR: Tested opened IDT entries\n", .{});
 }
 
 ///
