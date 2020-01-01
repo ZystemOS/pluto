@@ -36,47 +36,47 @@ pub const InterruptContext = struct {
 };
 
 pub fn outb(port: u16, data: u8) void {
-    return mock_framework.performAction("outb", void, port, data);
+    return mock_framework.performAction("outb", void, .{ port, data });
 }
 
 pub fn inb(port: u16) u8 {
-    return mock_framework.performAction("inb", u8, port);
+    return mock_framework.performAction("inb", u8, .{port});
 }
 
 pub fn ioWait() void {
-    return mock_framework.performAction("ioWait", void);
+    return mock_framework.performAction("ioWait", void, .{});
 }
 
 pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
-    return mock_framework.performAction("lgdt", void, gdt_ptr);
+    return mock_framework.performAction("lgdt", void, .{gdt_ptr});
 }
 
 pub fn sgdt() gdt.GdtPtr {
-    return mock_framework.performAction("sgdt", gdt.GdtPtr);
+    return mock_framework.performAction("sgdt", gdt.GdtPtr, .{});
 }
 
 pub fn ltr(offset: u16) void {
-    return mock_framework.performAction("ltr", void, offset);
+    return mock_framework.performAction("ltr", void, .{offset});
 }
 
 pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
-    return mock_framework.performAction("lidt", void, idt_ptr);
+    return mock_framework.performAction("lidt", void, .{idt_ptr});
 }
 
 pub fn sidt() idt.IdtPtr {
-    return mock_framework.performAction("sidt", idt.IdtPtr);
+    return mock_framework.performAction("sidt", idt.IdtPtr, .{});
 }
 
 pub fn enableInterrupts() void {
-    return mock_framework.performAction("enableInterrupts", void);
+    return mock_framework.performAction("enableInterrupts", void, .{});
 }
 
 pub fn disableInterrupts() void {
-    return mock_framework.performAction("disableInterrupts", void);
+    return mock_framework.performAction("disableInterrupts", void, .{});
 }
 
 pub fn halt() void {
-    return mock_framework.performAction("halt", void);
+    return mock_framework.performAction("halt", void, .{});
 }
 
 pub fn spinWait() noreturn {

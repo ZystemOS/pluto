@@ -46,7 +46,7 @@ var ADDR_OFFSET: usize = undefined;
 ///     The memory profile constructed from the exported linker symbols and the relevant multiboot info.
 ///
 pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
-    log.logInfo("Init mem\n");
+    log.logInfo("Init mem\n", .{});
     const mods_count = mb_info.mods_count;
     ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
     const mem_profile = MemProfile{
@@ -59,7 +59,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
         .fixed_alloc_size = FIXED_ALLOC_SIZE,
         .boot_modules = @intToPtr([*]multiboot.multiboot_mod_list, physToVirt(mb_info.mods_addr))[0..mods_count],
     };
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
     return mem_profile;
 }
 
@@ -69,11 +69,11 @@ pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
 /// Arguments:
 ///     IN virt: var - The virtual address to covert. Either an integer or pointer.
 ///
-/// Return: @typeOf(virt)
+/// Return: @TypeOf(virt)
 ///     The physical address.
 ///
-pub inline fn virtToPhys(virt: var) @typeOf(virt) {
-    const T = @typeOf(virt);
+pub inline fn virtToPhys(virt: var) @TypeOf(virt) {
+    const T = @TypeOf(virt);
     return switch (@typeId(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(virt) - ADDR_OFFSET),
         .Int => virt - ADDR_OFFSET,
@@ -87,11 +87,11 @@ pub inline fn virtToPhys(virt: var) @typeOf(virt) {
 /// Arguments:
 ///     IN phys: var - The physical address to covert. Either an integer or pointer.
 ///
-/// Return: @typeOf(virt)
+/// Return: @TypeOf(virt)
 ///     The virtual address.
 ///
-pub inline fn physToVirt(phys: var) @typeOf(phys) {
-    const T = @typeOf(phys);
+pub inline fn physToVirt(phys: var) @TypeOf(phys) {
+    const T = @TypeOf(phys);
     return switch (@typeId(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(phys) + ADDR_OFFSET),
         .Int => phys + ADDR_OFFSET,
@@ -104,7 +104,7 @@ test "physToVirt" {
     const offset: usize = ADDR_OFFSET;
     expectEqual(physToVirt(@as(usize, 0)), offset + 0);
     expectEqual(physToVirt(@as(usize, 123)), offset + 123);
-    expectEqual(@ptrToInt(physToVirt(@intToPtr(*usize, 123))), offset + 123);
+    expectEqual(@ptrToInt(physToVirt(@intToPtr(*align(1) usize, 123))), offset + 123);
 }
 
 test "virtToPhys" {
@@ -112,5 +112,5 @@ test "virtToPhys" {
     const offset: usize = ADDR_OFFSET;
     expectEqual(virtToPhys(offset + 0), 0);
     expectEqual(virtToPhys(offset + 123), 123);
-    expectEqual(@ptrToInt(virtToPhys(@intToPtr(*usize, offset + 123))), 123);
+    expectEqual(@ptrToInt(virtToPhys(@intToPtr(*align(1) usize, offset + 123))), 123);
 }

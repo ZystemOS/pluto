@@ -44,7 +44,7 @@ var irq_handlers: [NUMBER_OF_ENTRIES]?IrqHandler = [_]?IrqHandler{null} ** NUMBE
 export fn irqHandler(ctx: *arch.InterruptContext) void {
     // Get the IRQ index, by getting the interrupt number and subtracting the offset.
     if (ctx.int_num < IRQ_OFFSET) {
-        panic(@errorReturnTrace(), "Not an IRQ number: {}\n", ctx.int_num);
+        panic(@errorReturnTrace(), "Not an IRQ number: {}\n", .{ctx.int_num});
     }
 
     const irq_offset = ctx.int_num - IRQ_OFFSET;
@@ -59,10 +59,10 @@ export fn irqHandler(ctx: *arch.InterruptContext) void {
                 pic.sendEndOfInterrupt(irq_num);
             }
         } else {
-            panic(@errorReturnTrace(), "IRQ not registered: {}", irq_num);
+            panic(@errorReturnTrace(), "IRQ not registered: {}", .{irq_num});
         }
     } else {
-        panic(@errorReturnTrace(), "Invalid IRQ index: {}", irq_offset);
+        panic(@errorReturnTrace(), "Invalid IRQ index: {}", .{irq_offset});
     }
 }
 
@@ -76,7 +76,7 @@ export fn irqHandler(ctx: *arch.InterruptContext) void {
 fn openIrq(index: u8, handler: idt.InterruptHandler) void {
     idt.openInterruptGate(index, handler) catch |err| switch (err) {
         error.IdtEntryExists => {
-            panic(@errorReturnTrace(), "Error opening IRQ number: {} exists", index);
+            panic(@errorReturnTrace(), "Error opening IRQ number: {} exists", .{index});
         },
     };
 }
@@ -128,14 +128,14 @@ pub fn registerIrq(irq_num: u8, handler: IrqHandler) IrqError!void {
 /// the IDT interrupt gates for each IRQ.
 ///
 pub fn init() void {
-    log.logInfo("Init irq\n");
+    log.logInfo("Init irq\n", .{});
 
     comptime var i = IRQ_OFFSET;
     inline while (i < IRQ_OFFSET + 16) : (i += 1) {
         openIrq(i, interrupts.getInterruptStub(i));
     }
 
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }
@@ -152,7 +152,7 @@ test "openIrq" {
     const handler = testFunction0;
     const ret: idt.IdtError!void = {};
 
-    idt.addTestParams("openInterruptGate", index, handler, ret);
+    idt.addTestParams("openInterruptGate", .{ index, handler, ret });
 
     openIrq(index, handler);
 }
@@ -171,7 +171,7 @@ test "registerIrq re-register irq handler" {
     pic.initTest();
     defer pic.freeTest();
 
-    pic.addTestParams("clearMask", @as(u16, 0));
+    pic.addTestParams("clearMask", .{@as(u16, 0)});
 
     // Pre testing
     for (irq_handlers) |h| {
@@ -200,7 +200,7 @@ test "registerIrq register irq handler" {
     pic.initTest();
     defer pic.freeTest();
 
-    pic.addTestParams("clearMask", @as(u16, 0));
+    pic.addTestParams("clearMask", .{@as(u16, 0)});
 
     // Pre testing
     for (irq_handlers) |h| {
@@ -234,11 +234,11 @@ fn rt_unregisteredHandlers() void {
     // Ensure all ISR are not registered yet
     for (irq_handlers) |h, i| {
         if (h) |_| {
-            panic(@errorReturnTrace(), "Handler found for IRQ: {}-{}\n", i, h);
+            panic(@errorReturnTrace(), "Handler found for IRQ: {}-{}\n", .{ i, h });
         }
     }
 
-    log.logInfo("IRQ: Tested registered handlers\n");
+    log.logInfo("IRQ: Tested registered handlers\n", .{});
 }
 
 ///
@@ -251,12 +251,12 @@ fn rt_openedIdtEntries() void {
     for (idt_entries) |entry, i| {
         if (i >= IRQ_OFFSET and isValidIrq(i - IRQ_OFFSET)) {
             if (!idt.isIdtOpen(entry)) {
-                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", i);
+                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", .{i});
             }
         }
     }
 
-    log.logInfo("IRQ: Tested opened IDT entries\n");
+    log.logInfo("IRQ: Tested opened IDT entries\n", .{});
 }
 
 ///

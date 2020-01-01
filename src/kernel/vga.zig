@@ -286,7 +286,7 @@ pub fn setCursorShape(shape: CursorShape) void {
 /// Initialise the VGA text mode. This sets the cursor and underline shape.
 ///
 pub fn init() void {
-    log.logInfo("Init vga\n");
+    log.logInfo("Init vga\n", .{});
 
     // Set the maximum scan line to 0x0F
     sendPortData(REG_MAXIMUM_SCAN_LINE, CURSOR_SCANLINE_END);
@@ -294,7 +294,7 @@ pub fn init() void {
     // Set by default the underline cursor
     setCursorShape(CursorShape.UNDERLINE);
 
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }
@@ -345,7 +345,7 @@ test "updateCursor width out of bounds" {
     defer arch.freeTest();
 
     // Mocking out the arch.outb calls for changing the hardware cursor:
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper });
 
     updateCursor(x, y);
 }
@@ -362,7 +362,7 @@ test "updateCursor height out of bounds" {
     defer arch.freeTest();
 
     // Mocking out the arch.outb calls for changing the hardware cursor:
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper });
 
     updateCursor(x, y);
 }
@@ -379,7 +379,7 @@ test "updateCursor width and height out of bounds" {
     defer arch.freeTest();
 
     // Mocking out the arch.outb calls for changing the hardware cursor:
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper });
 
     updateCursor(x, y);
 }
@@ -396,7 +396,7 @@ test "updateCursor width-1 and height out of bounds" {
     defer arch.freeTest();
 
     // Mocking out the arch.outb calls for changing the hardware cursor:
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper });
 
     updateCursor(x, y);
 }
@@ -413,7 +413,7 @@ test "updateCursor width and height-1 out of bounds" {
     defer arch.freeTest();
 
     // Mocking out the arch.outb calls for changing the hardware cursor:
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper });
 
     updateCursor(x, y);
 }
@@ -430,7 +430,7 @@ test "updateCursor in bounds" {
     defer arch.freeTest();
 
     // Mocking out the arch.outb calls for changing the hardware cursor:
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_LOW, PORT_DATA, expected_lower, PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH, PORT_DATA, expected_upper });
     updateCursor(x, y);
 }
 
@@ -441,10 +441,10 @@ test "getCursor 1: 10" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW);
-    arch.addTestParams("inb", PORT_DATA, @as(u8, 10));
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH);
-    arch.addTestParams("inb", PORT_DATA, @as(u8, 0));
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_LOW });
+    arch.addTestParams("inb", .{ PORT_DATA, @as(u8, 10) });
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH });
+    arch.addTestParams("inb", .{ PORT_DATA, @as(u8, 0) });
 
     const actual = getCursor();
     expectEqual(expect, actual);
@@ -457,10 +457,10 @@ test "getCursor 2: 0xBEEF" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_LOW);
-    arch.addTestParams("inb", PORT_DATA, @as(u8, 0xEF));
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH);
-    arch.addTestParams("inb", PORT_DATA, @as(u8, 0xBE));
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_LOW });
+    arch.addTestParams("inb", .{ PORT_DATA, @as(u8, 0xEF) });
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_LOCATION_HIGH });
+    arch.addTestParams("inb", .{ PORT_DATA, @as(u8, 0xBE) });
 
     const actual = getCursor();
     expectEqual(expect, actual);
@@ -471,10 +471,12 @@ test "enableCursor" {
     defer arch.freeTest();
 
     // Need to init the cursor start and end positions, so call the init() to set this up
-    arch.addTestParams("outb", PORT_ADDRESS, REG_MAXIMUM_SCAN_LINE, PORT_DATA, CURSOR_SCANLINE_END, PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END,
-    // Mocking out the arch.outb calls for enabling the cursor:
-    // These are the default cursor positions from init()
-    PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END);
+    arch.addTestParams("outb", .{
+        PORT_ADDRESS, REG_MAXIMUM_SCAN_LINE, PORT_DATA, CURSOR_SCANLINE_END,    PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END,
+        // Mocking out the arch.outb calls for enabling the cursor:
+        // These are the default cursor positions from init()
+        PORT_ADDRESS, REG_CURSOR_START,      PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END,   PORT_DATA, CURSOR_SCANLINE_END,
+    });
 
     init();
     enableCursor();
@@ -485,7 +487,7 @@ test "disableCursor" {
     defer arch.freeTest();
 
     // Mocking out the arch.outb calls for disabling the cursor:
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_DISABLE);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_DISABLE });
     disableCursor();
 }
 
@@ -496,7 +498,7 @@ test "setCursorShape UNDERLINE" {
     // Mocking out the arch.outb calls for setting the cursor shape to underline:
     // This will also check that the scan line variables were set properly as these are using in
     // the arch.outb call
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END });
 
     setCursorShape(CursorShape.UNDERLINE);
 }
@@ -508,7 +510,7 @@ test "setCursorShape BLOCK" {
     // Mocking out the arch.outb calls for setting the cursor shape to block:
     // This will also check that the scan line variables were set properly as these are using in
     // the arch.outb call
-    arch.addTestParams("outb", PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_START, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_START, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END });
 
     setCursorShape(CursorShape.BLOCK);
 }
@@ -520,7 +522,7 @@ test "init" {
     // Mocking out the arch.outb calls for setting the cursor max scan line and the shape to block:
     // This will also check that the scan line variables were set properly as these are using in
     // the arch.outb call for setting the cursor shape.
-    arch.addTestParams("outb", PORT_ADDRESS, REG_MAXIMUM_SCAN_LINE, PORT_DATA, CURSOR_SCANLINE_END, PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END);
+    arch.addTestParams("outb", .{ PORT_ADDRESS, REG_MAXIMUM_SCAN_LINE, PORT_DATA, CURSOR_SCANLINE_END, PORT_ADDRESS, REG_CURSOR_START, PORT_DATA, CURSOR_SCANLINE_MIDDLE, PORT_ADDRESS, REG_CURSOR_END, PORT_DATA, CURSOR_SCANLINE_END });
 
     init();
 }
@@ -532,10 +534,10 @@ fn rt_correctMaxScanLine() void {
     const max_scan_line = getPortData(REG_MAXIMUM_SCAN_LINE);
 
     if (max_scan_line != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Max scan line not {}, found {}\n", CURSOR_SCANLINE_END, max_scan_line);
+        panic(@errorReturnTrace(), "Max scan line not {}, found {}\n", .{ CURSOR_SCANLINE_END, max_scan_line });
     }
 
-    log.logInfo("VGA: Tested max scan line\n");
+    log.logInfo("VGA: Tested max scan line\n", .{});
 }
 
 ///
@@ -544,17 +546,17 @@ fn rt_correctMaxScanLine() void {
 fn rt_correctCursorShape() void {
     // Check the global variables are correct
     if (cursor_scanline_start != CURSOR_SCANLINE_MIDDLE or cursor_scanline_end != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Global cursor scanline incorrect. Start: {}, end: {}\n", cursor_scanline_start, cursor_scanline_end);
+        panic(@errorReturnTrace(), "Global cursor scanline incorrect. Start: {}, end: {}\n", .{ cursor_scanline_start, cursor_scanline_end });
     }
 
     const cursor_start = getPortData(REG_CURSOR_START);
     const cursor_end = getPortData(REG_CURSOR_END);
 
     if (cursor_start != CURSOR_SCANLINE_MIDDLE or cursor_end != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Cursor scanline are incorrect. Start: {}, end: {}\n", cursor_start, cursor_end);
+        panic(@errorReturnTrace(), "Cursor scanline are incorrect. Start: {}, end: {}\n", .{ cursor_start, cursor_end });
     }
 
-    log.logInfo("VGA: Tested cursor shape\n");
+    log.logInfo("VGA: Tested cursor shape\n", .{});
 }
 
 ///
@@ -580,13 +582,13 @@ fn rt_setCursorGetCursor() void {
     const actual_y_loc = @truncate(u8, actual_linear_loc / WIDTH);
 
     if (x != actual_x_loc or y != actual_y_loc) {
-        panic(@errorReturnTrace(), "VGA cursor not the same: a_x: {}, a_y: {}, e_x: {}, e_y: {}\n", x, y, actual_x_loc, actual_y_loc);
+        panic(@errorReturnTrace(), "VGA cursor not the same: a_x: {}, a_y: {}, e_x: {}, e_y: {}\n", .{ x, y, actual_x_loc, actual_y_loc });
     }
 
     // Restore the previous x and y
     updateCursor(prev_x_loc, prev_y_loc);
 
-    log.logInfo("VGA: Tested updating cursor\n");
+    log.logInfo("VGA: Tested updating cursor\n", .{});
 }
 
 ///
