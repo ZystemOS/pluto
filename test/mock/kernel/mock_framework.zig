@@ -5,8 +5,6 @@ const expectEqual = std.testing.expectEqual;
 const GlobalAllocator = std.debug.global_allocator;
 const TailQueue = std.TailQueue;
 const warn = std.debug.warn;
-const builtin = @import("builtin");
-const Modifier = builtin.CallOptions.Modifier;
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
 
