@@ -437,7 +437,7 @@ fn printCallback(ctx: void, str: []const u8) TtyError!void {
 ///
 /// Arguments:
 ///     IN comptime format: []const u8 - The format string to print
-///     IN args: ...                   - The arguments to be used in the formatted string
+///     IN args: var                   - The arguments to be used in the formatted string
 ///
 pub fn print(comptime format: []const u8, args: var) void {
     // Printing can't error because of the scrolling, if it does, we have a big problem
