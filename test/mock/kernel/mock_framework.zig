@@ -268,7 +268,7 @@ fn Mock() type {
         /// Return: type
         ///     A function type that represents the return type and its arguments.
         ///
-        fn getFunctionType(comptime RetType: type, params: ...) type {
+        fn getFunctionType(comptime RetType: type, params: var) type {
             return switch (params.len) {
                 0 => fn () RetType,
                 1 => fn (@TypeOf(params[0])) RetType,
