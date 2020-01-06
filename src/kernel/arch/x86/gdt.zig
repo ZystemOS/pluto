@@ -424,7 +424,7 @@ pub fn setTssStack(esp0: u32) void {
 /// Initialise the Global Descriptor table.
 ///
 pub fn init() void {
-    log.logInfo("Init gdt\n");
+    log.logInfo("Init gdt\n", .{});
     // Initiate TSS
     gdt_entries[TSS_INDEX] = makeEntry(@intCast(u32, @ptrToInt(&tss)), @sizeOf(TtsEntry) - 1, TSS_SEGMENT, NULL_FLAGS);
 
@@ -437,7 +437,7 @@ pub fn init() void {
     // Load the TSS
     arch.ltr(TSS_OFFSET);
 
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }
@@ -639,7 +639,7 @@ test "init" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("ltr", TSS_OFFSET);
+    arch.addTestParams("ltr", .{TSS_OFFSET});
 
     arch.addConsumeFunction("lgdt", mock_lgdt);
 
@@ -681,5 +681,5 @@ fn rt_loadedGDTSuccess() void {
 ///
 fn runtimeTests() void {
     rt_loadedGDTSuccess();
-    log.logInfo("GDT: Tested loading GDT\n");
+    log.logInfo("GDT: Tested loading GDT\n", .{});
 }

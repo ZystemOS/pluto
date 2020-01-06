@@ -179,12 +179,12 @@ pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
 /// Initialise the Interrupt descriptor table
 ///
 pub fn init() void {
-    log.logInfo("Init idt\n");
+    log.logInfo("Init idt\n", .{});
 
     idt_ptr.base = @intCast(u32, @ptrToInt(&idt_entries));
 
     arch.lidt(&idt_ptr);
-    log.logInfo("Done\n");
+    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }
@@ -327,7 +327,7 @@ fn rt_loadedIDTSuccess() void {
     const loaded_idt = arch.sidt();
     expect(idt_ptr.limit == loaded_idt.limit);
     expect(idt_ptr.base == loaded_idt.base);
-    log.logInfo("IDT: Tested loading IDT\n");
+    log.logInfo("IDT: Tested loading IDT\n", .{});
 }
 
 ///

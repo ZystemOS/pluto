@@ -77,12 +77,11 @@ const SymbolMap = struct {
     ///     The function name associated with that program address, or null if one wasn't found.
     ///
     pub fn search(self: *const SymbolMap, addr: usize) ?[]const u8 {
-        if (self.symbols.count() == 0)
+        if (self.symbols.len == 0)
             return null;
         // Find the first element whose address is greater than addr
         var previous_name: ?[]const u8 = null;
-        var it = self.symbols.iterator();
-        while (it.next()) |entry| {
+        for (self.symbols.toSliceConst()) |entry| {
             if (entry.addr > addr)
                 return previous_name;
             previous_name = entry.func_name;
@@ -102,10 +101,10 @@ var symbol_map: ?SymbolMap = null;
 ///
 fn logTraceAddress(addr: usize) void {
     const str = if (symbol_map) |syms| syms.search(addr) orelse "?????" else "(no symbols available)";
-    log.logError("{x}: {}\n", addr, str);
+    log.logError("{x}: {}\n", .{ addr, str });
 }
 
-pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: ...) noreturn {
+pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var) noreturn {
     @setCold(true);
     log.logError("Kernel panic: " ++ format ++ "\n", args);
     if (trace) |trc| {
@@ -278,8 +277,8 @@ fn parseMapEntry(start: *[*]const u8, end: *const u8) !MapEntry {
 ///     std.fmt.ParseUnsignedError: See parseMapEntry.
 ///
 pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !void {
-    log.logInfo("Init panic\n");
-    defer log.logInfo("Done\n");
+    log.logInfo("Init panic\n", .{});
+    defer log.logInfo("Done\n", .{});
     // Exit if we haven't loaded all debug modules
     if (mem_profile.boot_modules.len < 1)
         return;
@@ -288,7 +287,7 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     for (mem_profile.boot_modules) |module| {
         const mod_start = mem.physToVirt(module.mod_start);
         const mod_end = mem.physToVirt(module.mod_end) - 1;
-        const mod_str_ptr = mem.physToVirt(@intToPtr([*]u8, module.cmdline));
+        const mod_str_ptr = mem.physToVirt(@intToPtr([*:0]u8, module.cmdline));
         if (std.mem.eql(u8, std.mem.toSlice(u8, mod_str_ptr), "kernel.map")) {
             kmap_start = mod_start;
             kmap_end = mod_end;

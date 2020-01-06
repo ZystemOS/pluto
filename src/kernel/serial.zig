@@ -140,14 +140,14 @@ pub fn init(baud: u32, port: Port) SerialError!void {
     const port_int = @enumToInt(port);
     // Send a byte to start setting the baudrate
     arch.outb(port_int + LCR, lcrValue(0, false, false, 1) catch |e| {
-        panic(@errorReturnTrace(), "Failed to initialise serial output setup: {}", e);
+        panic(@errorReturnTrace(), "Failed to initialise serial output setup: {}", .{e});
     });
     // Send the divisor's lsb
     arch.outb(port_int, @truncate(u8, divisor));
     // Send the divisor's msb
     arch.outb(port_int + 1, @truncate(u8, divisor >> 8));
     // Send the properties to use
-    arch.outb(port_int + LCR, lcrValue(CHAR_LEN, SINGLE_STOP_BIT, PARITY_BIT, 0) catch |e| panic(@errorReturnTrace(), "Failed to setup serial properties: {}", e));
+    arch.outb(port_int + LCR, lcrValue(CHAR_LEN, SINGLE_STOP_BIT, PARITY_BIT, 0) catch |e| panic(@errorReturnTrace(), "Failed to setup serial properties: {}", .{e}));
     // Stop initialisation
     arch.outb(port_int + 1, 0);
 
@@ -212,5 +212,5 @@ fn rt_writeByte() void {
 /// Test writing a series of bytes
 ///
 fn rt_writeBytes() void {
-    writeBytes([_]u8{ '1', '2', '3', '\n' }, Port.COM1);
+    writeBytes(&[_]u8{ '1', '2', '3', '\n' }, Port.COM1);
 }
