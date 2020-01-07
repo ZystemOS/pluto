@@ -25,7 +25,7 @@ export fn handler(ctx: *arch.InterruptContext) void {
 ///
 /// The common assembly that all exceptions and interrupts will call.
 ///
-export nakedcc fn commonStub() void {
+export fn commonStub() callconv(.Naked) void {
     asm volatile (
         \\pusha
         \\push  %%ds
@@ -63,7 +63,7 @@ export nakedcc fn commonStub() void {
 ///
 pub fn getInterruptStub(comptime interrupt_num: u32) idt.InterruptHandler {
     return struct {
-        nakedcc fn func() void {
+        fn func() callconv(.Naked) void {
             asm volatile (
                 \\ cli
             );
