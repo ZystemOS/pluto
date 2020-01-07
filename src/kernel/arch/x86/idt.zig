@@ -48,7 +48,7 @@ pub const IdtPtr = packed struct {
     base: u32,
 };
 
-pub const InterruptHandler = nakedcc fn () void;
+pub const InterruptHandler = fn () callconv(.Naked) void;
 
 /// The error set for the IDT
 pub const IdtError = error{
@@ -189,8 +189,8 @@ pub fn init() void {
     if (build_options.rt_test) runtimeTests();
 }
 
-nakedcc fn testHandler0() void {}
-nakedcc fn testHandler1() void {}
+fn testHandler0() callconv(.Naked) void {}
+fn testHandler1() callconv(.Naked) void {}
 
 fn mock_lidt(ptr: *const IdtPtr) void {
     expectEqual(TABLE_SIZE, ptr.limit);

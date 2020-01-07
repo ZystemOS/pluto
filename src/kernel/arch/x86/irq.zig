@@ -140,7 +140,7 @@ pub fn init() void {
     if (build_options.rt_test) runtimeTests();
 }
 
-nakedcc fn testFunction0() void {}
+fn testFunction0() callconv(.Naked) void {}
 fn testFunction1(ctx: *arch.InterruptContext) void {}
 fn testFunction2(ctx: *arch.InterruptContext) void {}
 
