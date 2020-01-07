@@ -66,7 +66,7 @@ export var kernel_stack: [16 * 1024]u8 align(16) linksection(".bss.stack") = und
 
 extern fn kmain() void;
 
-export nakedcc fn _start() align(16) linksection(".text.boot") noreturn {
+export fn _start() align(16) linksection(".text.boot") callconv(.Naked) noreturn {
     // Set the page directory to the boot directory
     asm volatile (
         \\.extern boot_page_directory
@@ -91,7 +91,7 @@ export nakedcc fn _start() align(16) linksection(".text.boot") noreturn {
     while (true) {}
 }
 
-export nakedcc fn start_higher_half() noreturn {
+export fn start_higher_half() callconv(.Naked) noreturn {
     // Invalidate the page for the first 4MiB as it's no longer needed
     asm volatile ("invlpg (0)");
 
