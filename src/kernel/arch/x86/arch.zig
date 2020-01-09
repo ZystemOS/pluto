@@ -11,6 +11,7 @@ const paging = @import("paging.zig");
 const syscalls = @import("syscalls.zig");
 const mem = @import("../../mem.zig");
 const multiboot = @import("../../multiboot.zig");
+const pmm = @import("pmm.zig");
 const MemProfile = mem.MemProfile;
 
 /// The interrupt context that is given to a interrupt handler. It contains most of the registers
@@ -45,6 +46,9 @@ pub const InterruptContext = struct {
     user_esp: u32,
     ss: u32,
 };
+
+/// The size of each allocatable block of memory, normally set to the page size.
+pub const MEMORY_BLOCK_SIZE = paging.PAGE_SIZE_4KB;
 
 ///
 /// Assembly to write to a given port with a byte of data.

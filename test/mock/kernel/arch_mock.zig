@@ -5,6 +5,7 @@ const MemProfile = mem.MemProfile;
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
 const multiboot = @import("../../../src/kernel/multiboot.zig");
+const paging = @import("paging_mock.zig");
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
@@ -34,6 +35,8 @@ pub const InterruptContext = struct {
     user_esp: u32,
     ss: u32,
 };
+
+pub const MEMORY_BLOCK_SIZE = paging.PAGE_SIZE_4KB;
 
 pub fn outb(port: u16, data: u8) void {
     return mock_framework.performAction("outb", void, .{ port, data });

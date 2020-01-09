@@ -83,12 +83,6 @@ const ENTRIES_PER_DIRECTORY: u32 = 1024;
 /// Each table has 1024 entries
 const ENTRIES_PER_TABLE: u32 = 1024;
 
-/// The number of bytes in 4MB
-const PAGE_SIZE_4MB: u32 = 0x400000;
-
-/// The number of bytes in 4KB
-const PAGE_SIZE_4KB: u32 = PAGE_SIZE_4MB / 1024;
-
 /// There are 1024 entries per directory with each one covering 4KB
 const PAGES_PER_DIR_ENTRY: u32 = 1024;
 
@@ -120,6 +114,12 @@ const TENTRY_ZERO: u32 = 0x80;
 const TENTRY_GLOBAL: u32 = 0x100;
 const TENTRY_AVAILABLE: u32 = 0xE00;
 const TENTRY_PAGE_ADDR: u32 = 0xFFFFF000;
+
+/// The number of bytes in 4MB
+pub const PAGE_SIZE_4MB: u32 = 0x400000;
+
+/// The number of bytes in 4KB
+pub const PAGE_SIZE_4KB: u32 = PAGE_SIZE_4MB / 1024;
 
 ///
 /// Convert a virtual address to an index within an array of directory entries.
