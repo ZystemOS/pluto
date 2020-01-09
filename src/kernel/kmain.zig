@@ -15,9 +15,11 @@ const panic_root = if (is_test) @import(mock_path ++ "panic_mock.zig") else @imp
 const options = @import("build_options");
 
 comptime {
-    switch (builtin.arch) {
-        .i386 => _ = @import("arch/x86/boot.zig"),
-        else => {},
+    if (!is_test) {
+        switch (builtin.arch) {
+            .i386 => _ = @import("arch/x86/boot.zig"),
+            else => {},
+        }
     }
 }
 

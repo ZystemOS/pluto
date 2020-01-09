@@ -426,10 +426,10 @@ pub fn setTssStack(esp0: u32) void {
 pub fn init() void {
     log.logInfo("Init gdt\n", .{});
     // Initiate TSS
-    gdt_entries[TSS_INDEX] = makeEntry(@intCast(u32, @ptrToInt(&tss)), @sizeOf(TtsEntry) - 1, TSS_SEGMENT, NULL_FLAGS);
+    gdt_entries[TSS_INDEX] = makeEntry(@ptrToInt(&tss), @sizeOf(TtsEntry) - 1, TSS_SEGMENT, NULL_FLAGS);
 
     // Set the base address where all the GDT entries are.
-    gdt_ptr.base = @intCast(u32, @ptrToInt(&gdt_entries[0]));
+    gdt_ptr.base = @ptrToInt(&gdt_entries[0]);
 
     // Load the GDT
     arch.lgdt(&gdt_ptr);
@@ -444,7 +444,7 @@ pub fn init() void {
 
 fn mock_lgdt(ptr: *const GdtPtr) void {
     expectEqual(TABLE_SIZE, ptr.limit);
-    expectEqual(@intCast(u32, @ptrToInt(&gdt_entries[0])), ptr.base);
+    expectEqual(@ptrToInt(&gdt_entries[0]), ptr.base);
 }
 
 test "GDT entries" {
