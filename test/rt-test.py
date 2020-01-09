@@ -40,20 +40,22 @@ def get_pre_archinit_cases():
             TestCase("Mem init", [r"Init mem"]),
             TestCase("Mem done", [r"Done mem"]),
 
+            TestCase("Panic init", [r"Init panic"]),
+            TestCase("Panic done", [r"Done panic"]),
+
             TestCase("PMM init", [r"Init pmm"]),
             TestCase("PMM tests", [r"PMM: Tested allocation"]),
             TestCase("PMM done", [r"Done pmm"]),
 
+            TestCase("VMM init", [r"Init vmm"]),
+            TestCase("VMM tests", [r"VMM: Tested allocations"]),
+            TestCase("VMM done", [r"Done vmm"]),
             TestCase("Arch init starts", [r"Init arch \w+"])
         ]
 
 def get_post_archinit_cases():
     return [
             TestCase("Arch init finishes", [r"Arch init done"]),
-
-            TestCase("Panic init", [r"Init panic"]),
-            TestCase("Panic done", [r"Done panic"]),
-
             TestCase("VGA init", [r"Init vga"]),
             TestCase("VGA tests", [r"VGA: Tested max scan line", r"VGA: Tested cursor shape", r"VGA: Tested updating cursor"]),
             TestCase("VGA done", [r"Done vga"]),
