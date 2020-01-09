@@ -205,7 +205,7 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
         table = &(try allocator.alignedAlloc(Table, @truncate(u29, PAGE_SIZE_4KB), 1))[0];
         @memset(@ptrCast([*]u8, table), 0, @sizeOf(Table));
         const table_phys_addr = @ptrToInt(mem.virtToPhys(table));
-        dir_entry.* |= @intCast(u32, DENTRY_PAGE_ADDR & table_phys_addr);
+        dir_entry.* |= DENTRY_PAGE_ADDR & table_phys_addr;
         dir.tables[entry] = table;
     }
 
@@ -243,7 +243,7 @@ fn mapTableEntry(entry: *align(1) TableEntry, phys_addr: usize) PagingError!void
     entry.* |= TENTRY_WRITE_THROUGH;
     entry.* &= ~TENTRY_CACHE_DISABLED;
     entry.* &= ~TENTRY_GLOBAL;
-    entry.* |= TENTRY_PAGE_ADDR & @intCast(u32, phys_addr);
+    entry.* |= TENTRY_PAGE_ADDR & phys_addr;
 }
 
 ///
@@ -385,7 +385,7 @@ fn checkTableEntry(entry: TableEntry, page_phys: usize) void {
     expectEqual(entry & TENTRY_CACHE_DISABLED, 0);
     expectEqual(entry & TENTRY_ZERO, 0);
     expectEqual(entry & TENTRY_GLOBAL, 0);
-    expectEqual(entry & TENTRY_PAGE_ADDR, @intCast(u32, page_phys));
+    expectEqual(entry & TENTRY_PAGE_ADDR, page_phys);
 }
 
 test "virtToDirEntryIdx" {

@@ -9,9 +9,17 @@ const Mode = builtin.Mode;
 
 pub fn build(b: *Builder) !void {
     const target = Target{
-        .Cross = std.build.CrossTarget{
+        .Cross = Target.Cross{
             .arch = .i386,
             .os = .freestanding,
+            .abi = .gnu,
+        },
+    };
+
+    const test_target = Target{
+        .Cross = Target.Cross{
+            .arch = .i386,
+            .os = .linux,
             .abi = .gnu,
         },
     };
@@ -21,78 +29,29 @@ pub fn build(b: *Builder) !void {
         else => unreachable,
     };
 
+    const main_src = "src/kernel/kmain.zig";
+    const constants_path = try fs.path.join(b.allocator, &[_][]const u8{ "src/kernel/arch", target_str, "constants.zig" });
+
     const build_mode = b.standardReleaseOptions();
     const rt_test = b.option(bool, "rt-test", "enable/disable runtime testing") orelse false;
 
-    const main_src = "src/kernel/kmain.zig";
-
     const exec = b.addExecutable("pluto", main_src);
-    const constants_path = try fs.path.join(b.allocator, &[_][]const u8{ "src/kernel/arch", target_str, "constants.zig" });
     exec.addPackagePath("constants", constants_path);
-    exec.setBuildMode(build_mode);
+    exec.setOutputDir(b.cache_root);
     exec.addBuildOption(bool, "rt_test", rt_test);
+    exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath("link.ld");
     exec.setTheTarget(target);
 
-    const iso_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
-    const grub_build_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
+    const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
     const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso" });
-
-    const mkdir_cmd = b.addSystemCommand(&[_][]const u8{ "mkdir", "-p", fs.path.dirname(grub_build_path).? });
-
-    const grub_cmd = b.addSystemCommand(&[_][]const u8{ "cp", "-r", "grub", grub_build_path });
-    grub_cmd.step.dependOn(&mkdir_cmd.step);
-
-    const cp_elf_cmd = b.addSystemCommand(&[_][]const u8{"cp"});
-    const elf_path = try fs.path.join(b.allocator, &[_][]const u8{ grub_build_path, "pluto.elf" });
-    cp_elf_cmd.addArtifactArg(exec);
-    cp_elf_cmd.addArg(elf_path);
-    cp_elf_cmd.step.dependOn(&grub_cmd.step);
-    cp_elf_cmd.step.dependOn(&exec.step);
-
+    const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
     const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
-    const mkdir_modules_cmd = b.addSystemCommand(&[_][]const u8{ "mkdir", "-p", modules_path });
 
-    const map_file_path = try fs.path.join(b.allocator, &[_][]const u8{ modules_path, "kernel.map" });
-    const map_file_cmd = b.addSystemCommand(&[_][]const u8{ "./make_map.sh", elf_path, map_file_path });
-    map_file_cmd.step.dependOn(&cp_elf_cmd.step);
-    map_file_cmd.step.dependOn(&mkdir_modules_cmd.step);
+    const make_iso = b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso });
 
-    const iso_cmd = b.addSystemCommand(&[_][]const u8{ "grub-mkrescue", "-o", iso_path, iso_dir_path });
-    iso_cmd.step.dependOn(&map_file_cmd.step);
-    b.default_step.dependOn(&iso_cmd.step);
-
-    const run_step = b.step("run", "Run with qemu");
-    const run_debug_step = b.step("debug-run", "Run with qemu and wait for a gdb connection");
-
-    const qemu_bin = switch (target.getArch()) {
-        .i386 => "qemu-system-i386",
-        else => unreachable,
-    };
-    const qemu_args = &[_][]const u8{
-        qemu_bin,
-        "-cdrom",
-        iso_path,
-        "-boot",
-        "d",
-        "-serial",
-        "stdio",
-    };
-    const qemu_cmd = b.addSystemCommand(qemu_args);
-    const qemu_debug_cmd = b.addSystemCommand(qemu_args);
-    qemu_debug_cmd.addArgs(&[_][]const u8{ "-s", "-S" });
-
-    if (rt_test) {
-        const qemu_rt_test_args = &[_][]const u8{ "-display", "none" };
-        qemu_cmd.addArgs(qemu_rt_test_args);
-        qemu_debug_cmd.addArgs(qemu_rt_test_args);
-    }
-
-    qemu_cmd.step.dependOn(&iso_cmd.step);
-    qemu_debug_cmd.step.dependOn(&iso_cmd.step);
-
-    run_step.dependOn(&qemu_cmd.step);
-    run_debug_step.dependOn(&qemu_debug_cmd.step);
+    make_iso.step.dependOn(&exec.step);
+    b.default_step.dependOn(&make_iso.step);
 
     const test_step = b.step("test", "Run tests");
     if (rt_test) {
@@ -108,11 +67,53 @@ pub fn build(b: *Builder) !void {
         unit_tests.addBuildOption(bool, "rt_test", rt_test);
         unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
         unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
+
+        const qemu_bin = switch (test_target.getArch()) {
+            .i386 => "qemu-i386",
+            else => unreachable,
+        };
+
+        // We need this as the build as the make() doesn't handle it properly
+        unit_tests.setExecCmd(&[_]?[]const u8{ qemu_bin, null });
+        unit_tests.setTheTarget(test_target);
+
         test_step.dependOn(&unit_tests.step);
     }
 
+    const run_step = b.step("run", "Run with qemu");
+    const run_debug_step = b.step("debug-run", "Run with qemu and wait for a gdb connection");
+
+    const qemu_bin = switch (target.getArch()) {
+        .i386 => "qemu-system-i386",
+        else => unreachable,
+    };
+    const qemu_args = &[_][]const u8{
+        qemu_bin,
+        "-cdrom",
+        output_iso,
+        "-boot",
+        "d",
+        "-serial",
+        "stdio",
+    };
+    const qemu_cmd = b.addSystemCommand(qemu_args);
+    const qemu_debug_cmd = b.addSystemCommand(qemu_args);
+    qemu_debug_cmd.addArgs(&[_][]const u8{ "-s", "-S" });
+
+    if (rt_test) {
+        const qemu_rt_test_args = &[_][]const u8{ "-display", "none" };
+        qemu_cmd.addArgs(qemu_rt_test_args);
+        qemu_debug_cmd.addArgs(qemu_rt_test_args);
+    }
+
+    qemu_cmd.step.dependOn(&make_iso.step);
+    qemu_debug_cmd.step.dependOn(&make_iso.step);
+
+    run_step.dependOn(&qemu_cmd.step);
+    run_debug_step.dependOn(&qemu_debug_cmd.step);
+
     const debug_step = b.step("debug", "Debug with gdb and connect to a running qemu instance");
-    const symbol_file_arg = try std.mem.join(b.allocator, " ", &[_][]const u8{ "symbol-file", elf_path });
+    const symbol_file_arg = try std.mem.join(b.allocator, " ", &[_][]const u8{ "symbol-file", exec.getOutputPath() });
     const debug_cmd = b.addSystemCommand(&[_][]const u8{
         "gdb",
         "-ex",

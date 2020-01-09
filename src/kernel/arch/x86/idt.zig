@@ -172,7 +172,7 @@ pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
         return IdtError.IdtEntryExists;
     }
 
-    idt_entries[index] = makeEntry(@intCast(u32, @ptrToInt(handler)), gdt.KERNEL_CODE_OFFSET, INTERRUPT_GATE, PRIVILEGE_RING_0);
+    idt_entries[index] = makeEntry(@ptrToInt(handler), gdt.KERNEL_CODE_OFFSET, INTERRUPT_GATE, PRIVILEGE_RING_0);
 }
 
 ///
@@ -181,7 +181,7 @@ pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
 pub fn init() void {
     log.logInfo("Init idt\n", .{});
 
-    idt_ptr.base = @intCast(u32, @ptrToInt(&idt_entries));
+    idt_ptr.base = @ptrToInt(&idt_entries);
 
     arch.lidt(&idt_ptr);
     log.logInfo("Done\n", .{});
@@ -194,7 +194,7 @@ fn testHandler1() callconv(.Naked) void {}
 
 fn mock_lidt(ptr: *const IdtPtr) void {
     expectEqual(TABLE_SIZE, ptr.limit);
-    expectEqual(@intCast(u32, @ptrToInt(&idt_entries[0])), ptr.base);
+    expectEqual(@ptrToInt(&idt_entries[0]), ptr.base);
 }
 
 test "IDT entries" {
@@ -244,8 +244,8 @@ test "openInterruptGate" {
     openInterruptGate(index, testHandler0) catch unreachable;
     expectError(IdtError.IdtEntryExists, openInterruptGate(index, testHandler0));
 
-    const test_fn_0_addr = @intCast(u32, @ptrToInt(testHandler0));
-    const test_fn_1_addr = @intCast(u32, @ptrToInt(testHandler1));
+    const test_fn_0_addr = @ptrToInt(testHandler0);
+    const test_fn_1_addr = @ptrToInt(testHandler1);
 
     const expected_entry0 = IdtEntry{
         .base_low = @truncate(u16, test_fn_0_addr),
@@ -313,7 +313,7 @@ test "init" {
     init();
 
     // Post testing
-    expectEqual(@intCast(u32, @ptrToInt(&idt_entries)), idt_ptr.base);
+    expectEqual(@ptrToInt(&idt_entries), idt_ptr.base);
 
     // Reset
     idt_ptr.base = 0;
