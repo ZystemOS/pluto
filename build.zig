@@ -29,6 +29,13 @@ pub fn build(b: *Builder) !void {
         else => unreachable,
     };
 
+    const fmt_step = b.addFmt(&[_][]const u8{
+        "build.zig",
+        "src",
+        "test",
+    });
+    b.default_step.dependOn(&fmt_step.step);
+
     const main_src = "src/kernel/kmain.zig";
     const constants_path = try fs.path.join(b.allocator, &[_][]const u8{ "src/kernel/arch", target_str, "constants.zig" });
 
