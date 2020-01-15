@@ -7,6 +7,7 @@ const pic = @import("pic.zig");
 const irq = @import("irq.zig");
 const isr = @import("isr.zig");
 const pit = @import("pit.zig");
+const rtc = @import("rtc.zig");
 const paging = @import("paging.zig");
 const syscalls = @import("syscalls.zig");
 const mem = @import("../../mem.zig");
@@ -79,6 +80,13 @@ pub fn inb(port: u16) u8 {
         : [result] "={al}" (-> u8)
         : [port] "N{dx}" (port)
     );
+}
+
+///
+/// Force the CPU to wait for an I/O operation to compete. Use port 0x80 as this is unused.
+///
+pub fn ioWait() void {
+    outb(0x80, 0);
 }
 
 ///
@@ -230,9 +238,10 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     isr.init();
     irq.init();
 
-    pit.init();
-
     paging.init(mb_info, mem_profile, allocator);
+
+    pit.init();
+    rtc.init();
 
     syscalls.init();
 
@@ -246,6 +255,8 @@ test "" {
     _ = @import("isr.zig");
     _ = @import("irq.zig");
     _ = @import("pit.zig");
+    _ = @import("cmos.zig");
+    _ = @import("rtc.zig");
     _ = @import("syscalls.zig");
     _ = @import("paging.zig");
 }
