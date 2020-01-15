@@ -436,23 +436,36 @@ pub fn init() void {
 
     // Initiate
     sendCommandMaster(ICW1_INITIALISATION | ICW1_EXPECT_ICW4);
+    arch.ioWait();
     sendCommandSlave(ICW1_INITIALISATION | ICW1_EXPECT_ICW4);
+    arch.ioWait();
 
     // Offsets
     sendDataMaster(ICW2_MASTER_REMAP_OFFSET);
+    arch.ioWait();
     sendDataSlave(ICW2_SLAVE_REMAP_OFFSET);
+    arch.ioWait();
 
     // IRQ lines
     sendDataMaster(ICW3_MASTER_IRQ_MAP_FROM_SLAVE);
+    arch.ioWait();
     sendDataSlave(ICW3_SLAVE_IRQ_MAP_TO_MASTER);
+    arch.ioWait();
 
     // 80x86 mode
     sendDataMaster(ICW4_80x86_MODE);
+    arch.ioWait();
     sendDataSlave(ICW4_80x86_MODE);
+    arch.ioWait();
 
     // Mask all interrupts
     sendDataMaster(0xFF);
+    arch.ioWait();
     sendDataSlave(0xFF);
+    arch.ioWait();
+
+    // Clear the IRQ for the slave
+    clearMask(IRQ_CASCADE_FOR_SLAVE);
 
     log.logInfo("Done\n", .{});
 
@@ -763,6 +776,8 @@ test "init" {
     arch.initTest();
     defer arch.freeTest();
 
+    arch.addRepeatFunction("ioWait", arch.mock_ioWait);
+
     // Just a long list of OUT instructions setting up the PIC
     arch.addTestParams("outb", .{
         MASTER_COMMAND_REG,
@@ -785,7 +800,11 @@ test "init" {
         @as(u8, 0xFF),
         SLAVE_DATA_REG,
         @as(u8, 0xFF),
+        MASTER_DATA_REG,
+        @as(u8, 0xFB),
     });
+
+    arch.addTestParams("inb", .{ MASTER_DATA_REG, @as(u8, 0xFF) });
 
     init();
 }
@@ -794,7 +813,8 @@ test "init" {
 /// Test that all the PIC masks are set so no interrupts can fire.
 ///
 fn rt_picAllMasked() void {
-    if (readDataMaster() != 0xFF) {
+    // The master will have interrupt 2 clear because this is the link to the slave (third bit)
+    if (readDataMaster() != 0xFB) {
         panic(@errorReturnTrace(), "Master masks are not set, found: {}\n", .{readDataMaster()});
     }
 

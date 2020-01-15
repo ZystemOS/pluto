@@ -7,6 +7,7 @@ const TailQueue = std.TailQueue;
 const warn = std.debug.warn;
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
+const cmos = @import("cmos_mock.zig");
 
 ///
 /// The enumeration of types that the mocking framework supports. These include basic types like u8
@@ -18,6 +19,8 @@ const DataElementType = enum {
     U8,
     U16,
     U32,
+    ECmosStatusRegister,
+    ECmosRtcRegister,
     PTR_CONST_GdtPtr,
     PTR_CONST_IdtPtr,
     ERROR_IDTERROR_VOID,
@@ -34,6 +37,9 @@ const DataElementType = enum {
     FN_IU8_IU8_OU16,
     FN_IU16_IU8_OVOID,
     FN_IU16_IU16_OVOID,
+    FN_IECmosStatusRegister_IBOOL_OU8,
+    FN_IECmosStatusRegister_IU8_IBOOL_OVOID,
+    FN_IECmosRtcRegister_OU8,
     FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
     FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
     FN_IPTRCONSTGDTPTR_OVOID,
@@ -44,6 +50,9 @@ const DataElementType = enum {
 /// A tagged union of all the data elements that the mocking framework can work with. This can be
 /// expanded to add new types. This is needed as need a list of data that all have different types,
 /// so this wraps the data into a union, (which is of one type) so can have a list of them.
+/// When https://github.com/ziglang/zig/issues/383 anf https://github.com/ziglang/zig/issues/2907
+/// is done, can programitaclly create types for this. Can use a compile time block that loops
+/// through the available basic types and create function types so don't have a long list.
 ///
 const DataElement = union(DataElementType) {
     BOOL: bool,
@@ -51,6 +60,8 @@ const DataElement = union(DataElementType) {
     U8: u8,
     U16: u16,
     U32: u32,
+    ECmosStatusRegister: cmos.StatusRegister,
+    ECmosRtcRegister: cmos.RtcRegister,
     PTR_CONST_GdtPtr: *const gdt.GdtPtr,
     PTR_CONST_IdtPtr: *const idt.IdtPtr,
     ERROR_IDTERROR_VOID: idt.IdtError!void,
@@ -67,6 +78,9 @@ const DataElement = union(DataElementType) {
     FN_IU8_IU8_OU16: fn (u8, u8) u16,
     FN_IU16_IU8_OVOID: fn (u16, u8) void,
     FN_IU16_IU16_OVOID: fn (u16, u16) void,
+    FN_IECmosStatusRegister_IBOOL_OU8: fn (cmos.StatusRegister, bool) u8,
+    FN_IECmosStatusRegister_IU8_IBOOL_OVOID: fn (cmos.StatusRegister, u8, bool) void,
+    FN_IECmosRtcRegister_OU8: fn (cmos.RtcRegister) u8,
     FN_IU8_IEFNOVOID_OERRORIDTERRORVOID: fn (u8, extern fn () void) idt.IdtError!void,
     FN_IU8_INFNOVOID_OERRORIDTERRORVOID: fn (u8, fn () callconv(.Naked) void) idt.IdtError!void,
     FN_IPTRCONSTGDTPTR_OVOID: fn (*const gdt.GdtPtr) void,
@@ -151,6 +165,8 @@ fn Mock() type {
                 u8 => DataElement{ .U8 = arg },
                 u16 => DataElement{ .U16 = arg },
                 u32 => DataElement{ .U32 = arg },
+                cmos.StatusRegister => DataElement{ .ECmosStatusRegister = arg },
+                cmos.RtcRegister => DataElement{ .ECmosRtcRegister = arg },
                 *const gdt.GdtPtr => DataElement{ .PTR_CONST_GdtPtr = arg },
                 *const idt.IdtPtr => DataElement{ .PTR_CONST_IdtPtr = arg },
                 idt.IdtError!void => DataElement{ .ERROR_IDTERROR_VOID = arg },
@@ -167,6 +183,9 @@ fn Mock() type {
                 fn (u8, u8) u16 => DataElement{ .FN_IU8_IU8_OU16 = arg },
                 fn (u16, u8) void => DataElement{ .FN_IU16_IU8_OVOID = arg },
                 fn (u16, u16) void => DataElement{ .FN_IU16_IU16_OVOID = arg },
+                fn (cmos.StatusRegister, bool) u8 => DataElement{ .FN_IECmosStatusRegister_IBOOL_OU8 = arg },
+                fn (cmos.StatusRegister, u8, bool) void => DataElement{ .FN_IECmosStatusRegister_IU8_IBOOL_OVOID = arg },
+                fn (cmos.RtcRegister) u8 => DataElement{ .FN_IECmosRtcRegister_OU8 = arg },
                 fn (*const gdt.GdtPtr) void => DataElement{ .FN_IPTRCONSTGDTPTR_OVOID = arg },
                 fn (*const idt.IdtPtr) void => DataElement{ .FN_IPTRCONSTIDTPTR_OVOID = arg },
                 fn (u8, extern fn () void) idt.IdtError!void => DataElement{ .FN_IU8_IEFNOVOID_OERRORIDTERRORVOID = arg },
@@ -191,6 +210,8 @@ fn Mock() type {
                 u8 => DataElementType.U8,
                 u16 => DataElementType.U16,
                 u32 => DataElementType.U32,
+                cmos.StatusRegister => DataElementType.ECmosStatusRegister,
+                cmos.RtcRegister => DataElementType.ECmosRtcRegister,
                 *const gdt.GdtPtr => DataElement.PTR_CONST_GdtPtr,
                 *const idt.IdtPtr => DataElement.PTR_CONST_IdtPtr,
                 idt.IdtError!void => DataElement.ERROR_IDTERROR_VOID,
@@ -206,6 +227,9 @@ fn Mock() type {
                 fn (u8, u8) u16 => DataElementType.FN_IU8_IU8_OU16,
                 fn (u16, u8) void => DataElementType.FN_IU16_IU8_OVOID,
                 fn (u16, u16) void => DataElementType.FN_IU16_IU16_OVOID,
+                fn (cmos.StatusRegister, bool) u8 => DataElementType.FN_IECmosStatusRegister_IBOOL_OU8,
+                fn (cmos.StatusRegister, u8, bool) void => DataElementType.FN_IECmosStatusRegister_IU8_IBOOL_OVOID,
+                fn (cmos.RtcRegister) u8 => DataElementType.FN_IECmosRtcRegister_OU8,
                 fn (*const gdt.GdtPtr) void => DataElementType.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => DataElementType.FN_IPTRCONSTIDTPTR_OVOID,
                 fn (u8, extern fn () void) idt.IdtError!void => DataElementType.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
@@ -232,6 +256,8 @@ fn Mock() type {
                 u8 => element.U8,
                 u16 => element.U16,
                 u32 => element.U32,
+                cmos.StatusRegister => element.ECmosStatusRegister,
+                cmos.RtcRegister => element.ECmosRtcRegister,
                 *const gdt.GdtPtr => element.PTR_CONST_GdtPtr,
                 *const idt.IdtPtr => element.PTR_CONST_IdtPtr,
                 idt.IdtError!void => element.ERROR_IDTERROR_VOID,
@@ -247,6 +273,9 @@ fn Mock() type {
                 fn (u8, u8) u16 => element.FN_IU8_IU8_OU16,
                 fn (u16, u8) void => element.FN_IU16_IU8_OVOID,
                 fn (u16, u16) void => element.FN_IU16_IU16_OVOID,
+                fn (cmos.StatusRegister, bool) u8 => element.FN_IECmosStatusRegister_IBOOL_OU8,
+                fn (cmos.StatusRegister, u8, bool) void => element.FN_IECmosStatusRegister_IU8_IBOOL_OVOID,
+                fn (cmos.RtcRegister) u8 => element.FN_IECmosRtcRegister_OU8,
                 fn (*const gdt.GdtPtr) void => element.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => element.FN_IPTRCONSTIDTPTR_OVOID,
                 fn (u8, extern fn () void) idt.IdtError!void => element.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
@@ -261,7 +290,7 @@ fn Mock() type {
         ///
         /// Arguments:
         ///     IN RetType: type   - The return type of the function.
-        ///     IN params: arglist - The argument list for the function.
+        ///     IN params: var     - The argument list for the function.
         ///
         /// Return: type
         ///     A function type that represents the return type and its arguments.
@@ -271,7 +300,7 @@ fn Mock() type {
                 0 => fn () RetType,
                 1 => fn (@TypeOf(params[0])) RetType,
                 2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
+                else => @compileError("Couldn't generate function type for " ++ len ++ " parameters\n"),
             };
         }
 
@@ -377,7 +406,7 @@ fn Mock() type {
         ///                               perform a action.
         ///     IN fun_name: []const u8 - The function name to act on.
         ///     IN RetType: type        - The return type of the function being mocked.
-        ///     IN params: arglist      - The list of parameters of the mocked function.
+        ///     IN params: var          - The list of parameters of the mocked function.
         ///
         /// Return: RetType
         ///     The return value of the mocked function. This can be void.
@@ -418,11 +447,18 @@ fn Mock() type {
                             // Waiting for this:
                             // error: compiler bug: unable to call var args function at compile time. https://github.com/ziglang/zig/issues/313
                             // to be resolved
+
+                            comptime const param_len = [1]u8{switch (params.len) {
+                                0...9 => params.len + @as(u8, '0'),
+                                else => unreachable,
+                            }};
+
                             const expected_function = switch (params.len) {
                                 0 => fn () RetType,
                                 1 => fn (@TypeOf(params[0])) RetType,
                                 2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                                else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
+                                3 => fn (@TypeOf(params[0]), @TypeOf(params[1]), @TypeOf(params[2])) RetType,
+                                else => @compileError("Couldn't generate function type for " ++ param_len ++ " parameters\n"),
                             };
 
                             // Get the corresponding DataElementType
@@ -438,11 +474,12 @@ fn Mock() type {
                             action_list.destroyNode(test_node, GlobalAllocator);
 
                             // The data element will contain the function to call
-                            var r = switch (params.len) {
+                            const r = switch (params.len) {
                                 0 => actual_function(),
                                 1 => actual_function(params[0]),
                                 2 => actual_function(params[0], params[1]),
-                                else => @compileError(params.len ++ " or more parameters not supported"),
+                                3 => actual_function(params[0], params[1], params[2]),
+                                else => @compileError(param_len ++ " or more parameters not supported"),
                             };
 
                             break :ret r;
@@ -451,11 +488,18 @@ fn Mock() type {
                             // Do the same for ActionType.ConsumeFunctionCall but instead of
                             // popping the function, just peak
                             const test_element = action.data;
+
+                            comptime const param_len = [1]u8{switch (params.len) {
+                                0...9 => params.len + @as(u8, '0'),
+                                else => unreachable,
+                            }};
+
                             const expected_function = switch (params.len) {
                                 0 => fn () RetType,
                                 1 => fn (@TypeOf(params[0])) RetType,
                                 2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                                else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
+                                3 => fn (@TypeOf(params[0]), @TypeOf(params[1]), @TypeOf(params[2])) RetType,
+                                else => @compileError("Couldn't generate function type for " ++ param_len ++ " parameters\n"),
                             };
 
                             // Get the corresponding DataElementType
@@ -472,7 +516,8 @@ fn Mock() type {
                                 0 => actual_function(),
                                 1 => actual_function(params[0]),
                                 2 => actual_function(params[0], params[1]),
-                                else => @compileError(params.len ++ " or more parameters not supported"),
+                                3 => actual_function(params[0], params[1], params[2]),
+                                else => @compileError(param_len ++ " or more parameters not supported"),
                             };
 
                             break :ret r;
@@ -634,7 +679,7 @@ pub fn addRepeatFunction(comptime fun_name: []const u8, function: var) void {
 /// Arguments:
 ///     IN fun_name: []const u8 - The function name to act on.
 ///     IN RetType: type        - The return type of the function being mocked.
-///     IN params: arglist      - The list of parameters of the mocked function.
+///     IN params: var          - The list of parameters of the mocked function.
 ///
 /// Return: RetType
 ///     The return value of the mocked function. This can be void.

@@ -101,3 +101,5 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
 pub fn mock_disableInterrupts() void {}
 
 pub fn mock_enableInterrupts() void {}
+
+pub fn mock_ioWait() void {}
