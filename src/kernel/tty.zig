@@ -731,13 +731,17 @@ fn blankPagesTesting() void {
 }
 
 fn incrementingVideoBufferTesting() void {
-    for (video_buffer) |b, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const b = video_buffer[i];
         expectEqual(i, b);
     }
 }
 
 fn defaultVideoBufferTesting() void {
-    for (video_buffer) |b| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const b = video_buffer[i];
         expectEqual(vga.orig_entry(0, test_colour), b);
     }
 }
@@ -842,7 +846,9 @@ test "displayPageNumber column and row is reset" {
     const text = "Page 0 of 4";
 
     // Test both video and pages for page number 0
-    for (video_buffer) |b, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const b = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION - 11) {
             expectEqual(blank, b);
         } else if (i < START_OF_DISPLAYABLE_REGION) {
@@ -900,7 +906,9 @@ test "putEntryAt not in displayable region" {
     defaultVariablesTesting(0, 0, 0);
     blankPagesTesting();
 
-    for (video_buffer) |b, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const b = video_buffer[i];
         if (i == y * vga.WIDTH + x) {
             expectEqual(vga.orig_entry(char, test_colour), b);
         } else {
@@ -944,7 +952,9 @@ test "putEntryAt in displayable region page_index is 0" {
         }
     }
 
-    for (video_buffer) |b, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const b = video_buffer[i];
         if (i == y * vga.WIDTH + x) {
             expectEqual(vga.orig_entry(char, test_colour), b);
         } else {
@@ -1022,7 +1032,9 @@ test "putEntryAt in displayable region page_index is not 0" {
     }
 
     // The top 7 rows won't be copied
-    for (video_buffer) |b, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const b = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION - 11) {
             expectEqual(blank, b);
         } else if (i < START_OF_DISPLAYABLE_REGION) {
@@ -1254,7 +1266,9 @@ test "scroll row is equal to height" {
         }
     }
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
             expectEqual(i, buf);
         } else if (i >= VIDEO_BUFFER_SIZE - to_add) {
@@ -1305,7 +1319,9 @@ test "scroll row is more than height" {
         }
     }
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
             expectEqual(i, buf);
         } else if (i >= VIDEO_BUFFER_SIZE - to_add) {
@@ -1506,7 +1522,9 @@ test "putChar any char in row" {
     defaultVariablesTesting(0, 0, 1);
     blankPagesTesting();
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i == 0) {
             expectEqual(vga.orig_entry('A', colour), buf);
         } else {
@@ -1539,7 +1557,9 @@ test "putChar any char end of row" {
     defaultVariablesTesting(0, 1, 0);
     blankPagesTesting();
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i == vga.WIDTH - 1) {
             expectEqual(vga.orig_entry('A', colour), buf);
         } else {
@@ -1581,7 +1601,9 @@ test "putChar any char end of screen" {
         }
     }
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i == VIDEO_BUFFER_SIZE - vga.WIDTH - 1) {
             expectEqual(vga.orig_entry('A', colour), buf);
         } else {
@@ -1617,7 +1639,9 @@ test "printLogo" {
     defaultVariablesTesting(0, ROW_MIN, 0);
     blankPagesTesting();
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
             // This is where the logo will be, but is a complex string so no testing
             // Just take my word it works :P
@@ -1682,7 +1706,9 @@ test "pageUp bottom page" {
 
     const text = "Page 1 of 4";
 
-    for (video_buffer) |b, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const b = video_buffer[i];
         // Ignore the ROW_MIN row as this is where the page number is printed and is already
         // tested, page number is printed 11 from the end
         if (i < START_OF_DISPLAYABLE_REGION - 11) {
@@ -1750,7 +1776,9 @@ test "pageDown top page" {
 
     const text = "Page 3 of 4";
 
-    for (video_buffer) |b, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const b = video_buffer[i];
         // Ignore the ROW_MIN row as this is where the page number is printed and is already
         // tested, page number is printed 11 from the end
         if (i < START_OF_DISPLAYABLE_REGION - 11) {
@@ -1787,7 +1815,9 @@ test "clearScreen" {
 
     // Post test
     defaultVariablesTesting(0, ROW_MIN, 0);
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
             expectEqual(i, buf);
         } else {
@@ -1795,13 +1825,13 @@ test "clearScreen" {
         }
     }
 
-    for (pages) |page, i| {
-        for (page) |c, j| {
-            if (i == 0) {
+    for (pages) |page, j| {
+        for (page) |c, k| {
+            if (j == 0) {
                 // The last rows will be blanks
                 expectEqual(blank, c);
             } else {
-                expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + j, c);
+                expectEqual((j - 1) * TOTAL_CHAR_ON_PAGE + k, c);
             }
         }
     }
@@ -2012,7 +2042,9 @@ test "writeString" {
         }
     }
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i == START_OF_DISPLAYABLE_REGION) {
             expectEqual(vga.orig_entry('A', colour), buf);
         } else if (i == START_OF_DISPLAYABLE_REGION + 1) {
@@ -2054,7 +2086,9 @@ test "init 0,0" {
     defaultVariablesTesting(0, ROW_MIN, 0);
     blankPagesTesting();
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
             // This is where the logo will be, but is a complex string so no testing
             // Just take my word it works :P
@@ -2093,7 +2127,9 @@ test "init not 0,0" {
     defaultVariablesTesting(0, ROW_MIN + 1, 0);
     blankPagesTesting();
 
-    for (video_buffer) |buf, i| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
             // This is where the logo will be, but is a complex string so no testing
             // Just take my word it works :P
@@ -2128,7 +2164,9 @@ fn rt_initialisedGlobals() void {
 
     // Make sure the screen isn't all blank
     var all_blank = true;
-    for (video_buffer) |buf| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (buf != blank and buf != 0) {
             all_blank = false;
             break;
@@ -2154,7 +2192,9 @@ fn rt_printString() void {
 
     // Check the video memory
     var counter: u32 = 0;
-    for (video_buffer) |buf| {
+    var i: u32 = 0;
+    while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
+        const buf = video_buffer[i];
         if (counter < text.len and buf == vga.entry(text[counter], colour)) {
             counter += 1;
         } else if (counter == text.len) {
