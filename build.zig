@@ -13,6 +13,7 @@ pub fn build(b: *Builder) !void {
             .arch = .i386,
             .os = .freestanding,
             .abi = .gnu,
+            .cpu_features = Target.CpuFeatures.initFromCpu(.i386, &builtin.Target.x86.cpu._i686),
         },
     };
 
@@ -21,6 +22,7 @@ pub fn build(b: *Builder) !void {
             .arch = .i386,
             .os = .linux,
             .abi = .gnu,
+            .cpu_features = Target.CpuFeatures.initFromCpu(.i386, &builtin.Target.x86.cpu._i686),
         },
     };
 
