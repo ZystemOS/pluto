@@ -35,7 +35,7 @@ SECTIONS {
 	}
 
 	.bss.stack ALIGN(4K) : AT (ADDR(.bss.stack) - KERNEL_ADDR_OFFSET) {
-		*(.bss.stack)
+		KEEP(*(.bss.stack))
         KERNEL_STACK_END = .;
     }
 
