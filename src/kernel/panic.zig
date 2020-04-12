@@ -77,11 +77,11 @@ const SymbolMap = struct {
     ///     The function name associated with that program address, or null if one wasn't found.
     ///
     pub fn search(self: *const SymbolMap, addr: usize) ?[]const u8 {
-        if (self.symbols.len == 0)
+        if (self.symbols.items.len == 0)
             return null;
         // Find the first element whose address is greater than addr
         var previous_name: ?[]const u8 = null;
-        for (self.symbols.toSliceConst()) |entry| {
+        for (self.symbols.items) |entry| {
             if (entry.addr > addr)
                 return previous_name;
             previous_name = entry.func_name;
@@ -116,7 +116,7 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var
     } else {
         const first_ret_addr = @returnAddress();
         var last_addr: u64 = 0;
-        var it = std.debug.StackIterator.init(first_ret_addr);
+        var it = std.debug.StackIterator.init(first_ret_addr, null);
         while (it.next()) |ret_addr| {
             if (ret_addr != last_addr) logTraceAddress(ret_addr);
             last_addr = ret_addr;
@@ -278,7 +278,8 @@ fn parseMapEntry(start: *[*]const u8, end: *const u8) !MapEntry {
 ///
 pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !void {
     log.logInfo("Init panic\n", .{});
-    defer log.logInfo("Done\n", .{});
+    defer log.logInfo("Done panic\n", .{});
+
     // Exit if we haven't loaded all debug modules
     if (mem_profile.boot_modules.len < 1)
         return;
@@ -288,7 +289,7 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
         const mod_start = mem.physToVirt(module.mod_start);
         const mod_end = mem.physToVirt(module.mod_end) - 1;
         const mod_str_ptr = mem.physToVirt(@intToPtr([*:0]u8, module.cmdline));
-        if (std.mem.eql(u8, std.mem.toSlice(u8, mod_str_ptr), "kernel.map")) {
+        if (std.mem.eql(u8, std.mem.span(mod_str_ptr), "kernel.map")) {
             kmap_start = mod_start;
             kmap_end = mod_end;
             break;
@@ -422,7 +423,7 @@ test "parseMapEntry fails without a name" {
 }
 
 test "SymbolMap" {
-    var allocator = std.heap.direct_allocator;
+    var allocator = std.heap.page_allocator;
     var map = SymbolMap.init(allocator);
     try map.add("abc"[0..], 123);
     try map.addEntry(MapEntry{ .func_name = "def"[0..], .addr = 456 });

@@ -31,26 +31,40 @@ def test_pass(case, exp, expected_idx, found):
 def get_pre_archinit_cases():
     return [
             TestCase("Serial tests", [r"c", r"123"], ""),
-            TestCase("Log info tests", [r"Test INFO level", r"Test INFO level with args a, 1", r"Test INFO function", r"Test INFO function with args a, 1"], "\[INFO\] "),
-            TestCase("Log debug tests", [r"Test DEBUG level", r"Test DEBUG level with args a, 1", r"Test DEBUG function", r"Test DEBUG function with args a, 1"], "\[DEBUG\] "),
-            TestCase("Log warning tests", [r"Test WARNING level", r"Test WARNING level with args a, 1", r"Test WARNING function", r"Test WARNING function with args a, 1"], "\[WARNING\] "),
-            TestCase("Log error tests", [r"Test ERROR level", r"Test ERROR level with args a, 1", r"Test ERROR function", r"Test ERROR function with args a, 1"], "\[ERROR\] "),
-            TestCase("Mem init", [r"Init mem", r"Done"]),
-            TestCase("PMM init", [r"Init pmm", r"Done"]),
+
+            TestCase("Log info tests", [r"Test INFO level", r"Test INFO level with args a, 1", r"Test INFO function", r"Test INFO function with args a, 1"], r"\[INFO\] "),
+            TestCase("Log debug tests", [r"Test DEBUG level", r"Test DEBUG level with args a, 1", r"Test DEBUG function", r"Test DEBUG function with args a, 1"], r"\[DEBUG\] "),
+            TestCase("Log warning tests", [r"Test WARNING level", r"Test WARNING level with args a, 1", r"Test WARNING function", r"Test WARNING function with args a, 1"], r"\[WARNING\] "),
+            TestCase("Log error tests", [r"Test ERROR level", r"Test ERROR level with args a, 1", r"Test ERROR function", r"Test ERROR function with args a, 1"], r"\[ERROR\] "),
+
+            TestCase("Mem init", [r"Init mem"]),
+            TestCase("Mem done", [r"Done mem"]),
+
+            TestCase("PMM init", [r"Init pmm"]),
             TestCase("PMM tests", [r"PMM: Tested allocation"]),
+            TestCase("PMM done", [r"Done pmm"]),
+
             TestCase("Arch init starts", [r"Init arch \w+"])
         ]
 
 def get_post_archinit_cases():
     return [
             TestCase("Arch init finishes", [r"Arch init done"]),
-            TestCase("Panic init", [r"Init panic", r"Done"]),
-            TestCase("VGA init", [r"Init vga", r"Done"]),
+
+            TestCase("Panic init", [r"Init panic"]),
+            TestCase("Panic done", [r"Done panic"]),
+
+            TestCase("VGA init", [r"Init vga"]),
             TestCase("VGA tests", [r"VGA: Tested max scan line", r"VGA: Tested cursor shape", r"VGA: Tested updating cursor"]),
-            TestCase("TTY init", [r"Init tty", r"Done"]),
+            TestCase("VGA done", [r"Done vga"]),
+
+            TestCase("TTY init", [r"Init tty"]),
             TestCase("TTY tests", [r"TTY: Tested globals", r"TTY: Tested printing"]),
+            TestCase("TTY done", [r"Done tty"]),
+
             TestCase("Init finishes", [r"Init done"]),
-            TestCase("Panic tests", [r"Kernel panic: integer overflow", r"c[a-z\d]+: panic", r"c[a-z\d]+: panic.runtimeTests", r"c[a-z\d]+: kmain", r"c[a-z\d]+: start_higher_half"], "\[ERROR\] ")
+
+            TestCase("Panic tests", [r"Kernel panic: integer overflow", r"c[a-z\d]+: panic", r"c[a-z\d]+: panic.runtimeTests", r"c[a-z\d]+: kmain", r"c[a-z\d]+: start_higher_half"], r"\[ERROR\] ")
         ]
 
 def read_messages(proc):

@@ -145,7 +145,6 @@ inline fn sendData(data: u8) void {
 inline fn getData() u8 {
     return arch.inb(PORT_DATA);
 }
-
 ///
 /// Set the VGA register port to write to and sending data to that VGA register port.
 ///
@@ -287,14 +286,13 @@ pub fn setCursorShape(shape: CursorShape) void {
 ///
 pub fn init() void {
     log.logInfo("Init vga\n", .{});
+    defer log.logInfo("Done vga\n", .{});
 
     // Set the maximum scan line to 0x0F
     sendPortData(REG_MAXIMUM_SCAN_LINE, CURSOR_SCANLINE_END);
 
     // Set by default the underline cursor
     setCursorShape(CursorShape.UNDERLINE);
-
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

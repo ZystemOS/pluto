@@ -371,6 +371,8 @@ pub fn getFrequency() u32 {
 ///
 pub fn init() void {
     log.logInfo("Init pit\n", .{});
+    defer log.logInfo("Done pit\n", .{});
+
     // Set up counter 0 at 10000hz in a square wave mode counting in binary
     const freq: u32 = 10000;
     setupCounter(CounterSelect.Counter0, freq, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY) catch |e| {
@@ -388,8 +390,6 @@ pub fn init() void {
             panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} is invalid", .{pic.IRQ_PIT});
         },
     };
-
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

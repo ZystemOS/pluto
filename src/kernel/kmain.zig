@@ -39,8 +39,9 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
         serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
         };
-        if (build_options.rt_test)
-            log.runtimeTests();
+
+        if (build_options.rt_test) log.runtimeTests();
+
         const mem_profile = mem.init(mb_info);
         var buffer = mem_profile.vaddr_end[0..mem_profile.fixed_alloc_size];
         var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer);
@@ -56,6 +57,7 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
         tty.init();
 
         log.logInfo("Init done\n", .{});
+
         tty.print("Hello Pluto from kernel :)\n", .{});
         // The panic runtime tests must run last as they never return
         if (options.rt_test) panic_root.runtimeTests();

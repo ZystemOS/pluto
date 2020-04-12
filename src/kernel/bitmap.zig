@@ -157,7 +157,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
 }
 
 test "setEntry" {
-    var bmp = try Bitmap(u32).init(31, std.heap.direct_allocator);
+    var bmp = try Bitmap(u32).init(31, std.heap.page_allocator);
     testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
 
     try bmp.setEntry(0);
@@ -178,7 +178,7 @@ test "setEntry" {
 }
 
 test "clearEntry" {
-    var bmp = try Bitmap(u32).init(32, std.heap.direct_allocator);
+    var bmp = try Bitmap(u32).init(32, std.heap.page_allocator);
     testing.expectEqual(@as(u32, 32), bmp.num_free_entries);
 
     try bmp.setEntry(0);
@@ -204,7 +204,7 @@ test "clearEntry" {
 }
 
 test "setFirstFree multiple bitmaps" {
-    var bmp = try Bitmap(u8).init(9, std.heap.direct_allocator);
+    var bmp = try Bitmap(u8).init(9, std.heap.page_allocator);
 
     // Allocate the first entry
     testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
@@ -239,7 +239,7 @@ test "setFirstFree multiple bitmaps" {
     testing.expectEqual(bmp.bitmaps[1], 1);
 }
 test "setFirstFree" {
-    var bmp = try Bitmap(u32).init(32, std.heap.direct_allocator);
+    var bmp = try Bitmap(u32).init(32, std.heap.page_allocator);
 
     // Allocate the first entry
     testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
@@ -260,7 +260,7 @@ test "setFirstFree" {
 }
 
 test "isSet" {
-    var bmp = try Bitmap(u32).init(32, std.heap.direct_allocator);
+    var bmp = try Bitmap(u32).init(32, std.heap.page_allocator);
 
     bmp.bitmaps[0] = 1;
     // Make sure that only the set entry is considered set
@@ -292,7 +292,7 @@ test "isSet" {
 }
 
 test "indexToBit" {
-    var bmp = try Bitmap(u8).init(10, std.heap.direct_allocator);
+    var bmp = try Bitmap(u8).init(10, std.heap.page_allocator);
     testing.expectEqual(bmp.indexToBit(0), 1);
     testing.expectEqual(bmp.indexToBit(1), 2);
     testing.expectEqual(bmp.indexToBit(2), 4);

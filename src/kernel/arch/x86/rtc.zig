@@ -252,6 +252,7 @@ fn enableInterrupts() void {
 ///
 pub fn init() void {
     log.logInfo("Init rtc\n", .{});
+    defer log.logInfo("Done rtc\n", .{});
 
     // Register the interrupt handler
     irq.registerIrq(pic.IRQ_REAL_TIME_CLOCK, rtcHandler) catch |err| switch (err) {
@@ -276,15 +277,11 @@ pub fn init() void {
     // Enable RTC interrupts
     enableInterrupts();
 
-    // Read status register C to clear any interrupts that may have happened during set up
-    //const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
-
     // Can now enable interrupts
     arch.enableInterrupts();
 
+    // Read status register C to clear any interrupts that may have happened during set up
     const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
-
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

@@ -129,13 +129,12 @@ pub fn registerIrq(irq_num: u8, handler: IrqHandler) IrqError!void {
 ///
 pub fn init() void {
     log.logInfo("Init irq\n", .{});
+    defer log.logInfo("Done irq\n", .{});
 
     comptime var i = IRQ_OFFSET;
     inline while (i < IRQ_OFFSET + 16) : (i += 1) {
         openIrq(i, interrupts.getInterruptStub(i));
     }
-
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

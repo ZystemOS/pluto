@@ -3,30 +3,19 @@ const builtin = @import("builtin");
 const Builder = std.build.Builder;
 const LibExeObjStep = std.build.LibExeObjStep;
 const Step = std.build.Step;
-const Target = std.build.Target;
+const Target = std.Target;
+const CrossTarget = std.zig.CrossTarget;
 const fs = std.fs;
 const Mode = builtin.Mode;
 
 pub fn build(b: *Builder) !void {
-    const target = Target{
-        .Cross = Target.Cross{
-            .arch = .i386,
-            .os = .freestanding,
-            .abi = .gnu,
-            .cpu_features = Target.CpuFeatures.initFromCpu(.i386, &builtin.Target.x86.cpu._i686),
-        },
+    const target = CrossTarget{
+        .cpu_arch = .i386,
+        .os_tag = .freestanding,
+        .cpu_model = .{ .explicit = &Target.x86.cpu._i686 },
     };
 
-    const test_target = Target{
-        .Cross = Target.Cross{
-            .arch = .i386,
-            .os = .linux,
-            .abi = .gnu,
-            .cpu_features = Target.CpuFeatures.initFromCpu(.i386, &builtin.Target.x86.cpu._i686),
-        },
-    };
-
-    const target_str = switch (target.getArch()) {
+    const target_str = switch (target.getCpuArch()) {
         .i386 => "x86",
         else => unreachable,
     };
@@ -50,7 +39,7 @@ pub fn build(b: *Builder) !void {
     exec.addBuildOption(bool, "rt_test", rt_test);
     exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath("link.ld");
-    exec.setTheTarget(target);
+    exec.setTarget(target);
 
     const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
     const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso" });
@@ -77,14 +66,9 @@ pub fn build(b: *Builder) !void {
         unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
         unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
 
-        const qemu_bin = switch (test_target.getArch()) {
-            .i386 => "qemu-i386",
-            else => unreachable,
-        };
+        if (builtin.os.tag != .windows) unit_tests.enable_qemu = true;
 
-        // We need this as the build as the make() doesn't handle it properly
-        unit_tests.setExecCmd(&[_]?[]const u8{ qemu_bin, null });
-        unit_tests.setTheTarget(test_target);
+        unit_tests.setTarget(.{ .cpu_arch = .i386 });
 
         test_step.dependOn(&unit_tests.step);
     }
@@ -92,7 +76,7 @@ pub fn build(b: *Builder) !void {
     const run_step = b.step("run", "Run with qemu");
     const run_debug_step = b.step("debug-run", "Run with qemu and wait for a gdb connection");
 
-    const qemu_bin = switch (target.getArch()) {
+    const qemu_bin = switch (target.getCpuArch()) {
         .i386 => "qemu-system-i386",
         else => unreachable,
     };

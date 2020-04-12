@@ -11,6 +11,9 @@ const vga = if (is_test) @import(mock_path ++ "vga_mock.zig") else @import("vga.
 const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
 const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("panic.zig").panic;
 
+/// The OutStream for the format function
+const OutStream = std.io.OutStream(void, TtyError, printCallback);
+
 /// The error set for if there is an error whiles printing.
 const TtyError = error{
     /// If the printing tries to print outside the video buffer.
@@ -427,8 +430,9 @@ fn printLogo() void {
 /// Errors:
 ///     TtyError.OutOfBounds - If trying to print beyond the video buffer.
 ///
-fn printCallback(ctx: void, str: []const u8) TtyError!void {
+fn printCallback(ctx: void, str: []const u8) TtyError!usize {
     try writeString(str);
+    return str.len;
 }
 
 ///
@@ -441,7 +445,7 @@ fn printCallback(ctx: void, str: []const u8) TtyError!void {
 ///
 pub fn print(comptime format: []const u8, args: var) void {
     // Printing can't error because of the scrolling, if it does, we have a big problem
-    fmt.format({}, TtyError, printCallback, format, args) catch |e| {
+    fmt.format(OutStream{ .context = {} }, format, args) catch |e| {
         log.logError("TTY: Error printing. Error: {}\n", .{e});
     };
 }
@@ -570,6 +574,7 @@ pub fn getVideoBufferAddress() usize {
 ///
 pub fn init() void {
     log.logInfo("Init tty\n", .{});
+    defer log.logInfo("Done tty\n", .{});
 
     // Video buffer in higher half
     if (is_test) {
@@ -630,8 +635,6 @@ pub fn init() void {
     printLogo();
     displayPageNumber();
     updateCursor();
-
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

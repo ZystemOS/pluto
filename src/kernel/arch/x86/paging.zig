@@ -293,6 +293,8 @@ fn pageFault(state: *arch.InterruptContext) void {
 ///
 pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
     log.logInfo("Init paging\n", .{});
+    defer log.logInfo("Done paging\n", .{});
+
     // Calculate start and end of mapping
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), PAGE_SIZE_4KB);
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
@@ -351,7 +353,6 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     isr.registerIsr(isr.PAGE_FAULT, if (options.rt_test) rt_pageFault else pageFault) catch |e| {
         panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", .{e});
     };
-    log.logInfo("Done\n", .{});
 
     if (options.rt_test) runtimeTests(v_end);
 }
@@ -410,7 +411,7 @@ test "virtToTableEntryIdx" {
 }
 
 test "mapDirEntry" {
-    var allocator = std.heap.direct_allocator;
+    var allocator = std.heap.page_allocator;
     var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
     var phys: usize = 0 * PAGE_SIZE_4MB;
     const phys_end: usize = phys + PAGE_SIZE_4MB;
@@ -425,7 +426,7 @@ test "mapDirEntry" {
 }
 
 test "mapDirEntry returns errors correctly" {
-    var allocator = std.heap.direct_allocator;
+    var allocator = std.heap.page_allocator;
     var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = undefined };
     testing.expectError(PagingError.UnalignedVirtAddresses, mapDirEntry(&dir, 1, PAGE_SIZE_4KB + 1, 0, PAGE_SIZE_4KB, allocator));
     testing.expectError(PagingError.UnalignedPhysAddresses, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB + 1, allocator));
@@ -435,7 +436,7 @@ test "mapDirEntry returns errors correctly" {
 }
 
 test "mapDir" {
-    var allocator = std.heap.direct_allocator;
+    var allocator = std.heap.page_allocator;
     var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
     const phys_start: usize = PAGE_SIZE_4MB * 2;
     const virt_start: usize = PAGE_SIZE_4MB * 4;

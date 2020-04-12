@@ -425,6 +425,7 @@ pub fn setTssStack(esp0: u32) void {
 ///
 pub fn init() void {
     log.logInfo("Init gdt\n", .{});
+    defer log.logInfo("Done gdt\n", .{});
     // Initiate TSS
     gdt_entries[TSS_INDEX] = makeEntry(@ptrToInt(&tss), @sizeOf(TtsEntry) - 1, TSS_SEGMENT, NULL_FLAGS);
 
@@ -436,8 +437,6 @@ pub fn init() void {
 
     // Load the TSS
     arch.ltr(TSS_OFFSET);
-
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

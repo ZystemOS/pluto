@@ -235,6 +235,7 @@ pub fn registerIsr(isr_num: u16, handler: IsrHandler) IsrError!void {
 ///
 pub fn init() void {
     log.logInfo("Init isr\n", .{});
+    defer log.logInfo("Done isr\n", .{});
 
     comptime var i = 0;
     inline while (i < 32) : (i += 1) {
@@ -242,8 +243,6 @@ pub fn init() void {
     }
 
     openIsr(syscalls.INTERRUPT, interrupts.getInterruptStub(syscalls.INTERRUPT));
-
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

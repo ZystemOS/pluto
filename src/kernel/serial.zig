@@ -1,7 +1,7 @@
 const arch = @import("arch.zig").internals;
 const panic = @import("panic.zig").panic;
 const testing = @import("std").testing;
-const options = @import("build_options");
+const build_options = @import("build_options");
 
 /// The I/O port numbers associated with each serial port
 pub const Port = enum(u16) {
@@ -147,12 +147,13 @@ pub fn init(baud: u32, port: Port) SerialError!void {
     // Send the divisor's msb
     arch.outb(port_int + 1, @truncate(u8, divisor >> 8));
     // Send the properties to use
-    arch.outb(port_int + LCR, lcrValue(CHAR_LEN, SINGLE_STOP_BIT, PARITY_BIT, 0) catch |e| panic(@errorReturnTrace(), "Failed to setup serial properties: {}", .{e}));
+    arch.outb(port_int + LCR, lcrValue(CHAR_LEN, SINGLE_STOP_BIT, PARITY_BIT, 0) catch |e| {
+        panic(@errorReturnTrace(), "Failed to setup serial properties: {}", .{e});
+    });
     // Stop initialisation
     arch.outb(port_int + 1, 0);
 
-    if (options.rt_test)
-        runtimeTests();
+    if (build_options.rt_test) runtimeTests();
 }
 
 test "lcrValue computes the correct value" {

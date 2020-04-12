@@ -91,6 +91,8 @@ pub fn free(addr: usize) (PmmBitmap.BitmapError || PmmError)!void {
 ///
 pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
     log.logInfo("Init pmm\n", .{});
+    defer log.logInfo("Done pmm\n", .{});
+
     bitmap = PmmBitmap.init(mem.mem_kb * 1024 / BLOCK_SIZE, allocator) catch @panic("Bitmap allocation failed");
 
     // Occupy the regions of memory that the memory map describes as reserved
@@ -118,10 +120,8 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
             else => panic(@errorReturnTrace(), "Failed setting kernel code address 0x{x} as occupied: {}", .{ addr, e }),
         };
     }
-    log.logInfo("Done\n", .{});
-    if (build_options.rt_test) {
-        runtimeTests(mem);
-    }
+
+    if (build_options.rt_test) runtimeTests(mem);
 }
 
 ///
@@ -154,7 +154,7 @@ fn runtimeTests(mem: *const MemProfile) void {
 }
 
 test "alloc" {
-    bitmap = try Bitmap(u32).init(32, std.heap.direct_allocator);
+    bitmap = try Bitmap(u32).init(32, std.heap.page_allocator);
     comptime var addr = 0;
     comptime var i = 0;
     // Allocate all entries, making sure they succeed and return the correct addresses
@@ -171,7 +171,7 @@ test "alloc" {
 }
 
 test "free" {
-    bitmap = try Bitmap(u32).init(32, std.heap.direct_allocator);
+    bitmap = try Bitmap(u32).init(32, std.heap.page_allocator);
     comptime var i = 0;
     // Allocate and free all entries
     inline while (i < 32) : (i += 1) {
@@ -186,7 +186,7 @@ test "free" {
 
 test "setAddr and isSet" {
     const num_entries: u32 = 32;
-    bitmap = try Bitmap(u32).init(num_entries, std.heap.direct_allocator);
+    bitmap = try Bitmap(u32).init(num_entries, std.heap.page_allocator);
     var addr: u32 = 0;
     var i: u32 = 0;
     while (i < num_entries) : ({
