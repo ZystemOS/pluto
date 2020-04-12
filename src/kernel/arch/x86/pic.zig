@@ -433,6 +433,7 @@ pub fn clearMask(irq_num: u8) void {
 ///
 pub fn init() void {
     log.logInfo("Init pic\n", .{});
+    defer log.logInfo("Done pic\n", .{});
 
     // Initiate
     sendCommandMaster(ICW1_INITIALISATION | ICW1_EXPECT_ICW4);
@@ -466,8 +467,6 @@ pub fn init() void {
 
     // Clear the IRQ for the slave
     clearMask(IRQ_CASCADE_FOR_SLAVE);
-
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

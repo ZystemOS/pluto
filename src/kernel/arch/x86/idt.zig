@@ -180,11 +180,11 @@ pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
 ///
 pub fn init() void {
     log.logInfo("Init idt\n", .{});
+    defer log.logInfo("Done idt\n", .{});
 
     idt_ptr.base = @ptrToInt(&idt_entries);
 
     arch.lidt(&idt_ptr);
-    log.logInfo("Done\n", .{});
 
     if (build_options.rt_test) runtimeTests();
 }

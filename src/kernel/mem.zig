@@ -54,36 +54,6 @@ const FIXED_ALLOC_SIZE: usize = 1024 * 1024;
 var ADDR_OFFSET: usize = undefined;
 
 ///
-/// Initialise the system's memory profile based on linker symbols and the multiboot info struct.
-///
-/// Arguments:
-///     IN mb_info: *multiboot.multiboot_info_t - The multiboot info passed by the bootloader.
-///
-/// Return: MemProfile
-///     The memory profile constructed from the exported linker symbols and the relevant multiboot info.
-///
-pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
-    log.logInfo("Init mem\n", .{});
-    defer log.logInfo("Done\n", .{});
-    const mods_count = mb_info.mods_count;
-    ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
-    const mmap_addr = mb_info.mmap_addr;
-    const num_mmap_entries = mb_info.mmap_length / @sizeOf(multiboot.multiboot_memory_map_t);
-    const mem_profile = MemProfile{
-        .vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END),
-        .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
-        .physaddr_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END),
-        .physaddr_start = @ptrCast([*]u8, &KERNEL_PHYSADDR_START),
-        // Total memory available including the initial 1MiB that grub doesn't include
-        .mem_kb = mb_info.mem_upper + mb_info.mem_lower + 1024,
-        .fixed_alloc_size = FIXED_ALLOC_SIZE,
-        .boot_modules = @intToPtr([*]multiboot.multiboot_mod_list, physToVirt(mb_info.mods_addr))[0..mods_count],
-        .mem_map = @intToPtr([*]multiboot.multiboot_memory_map_t, mmap_addr)[0..num_mmap_entries],
-    };
-    return mem_profile;
-}
-
-///
 /// Convert a virtual address to its physical counterpart by subtracting the kernel virtual offset from the virtual address.
 ///
 /// Arguments:
@@ -94,7 +64,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
 ///
 pub inline fn virtToPhys(virt: var) @TypeOf(virt) {
     const T = @TypeOf(virt);
-    return switch (@typeId(T)) {
+    return switch (@typeInfo(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(virt) - ADDR_OFFSET),
         .Int => virt - ADDR_OFFSET,
         else => @compileError("Only pointers and integers are supported"),
@@ -112,10 +82,40 @@ pub inline fn virtToPhys(virt: var) @TypeOf(virt) {
 ///
 pub inline fn physToVirt(phys: var) @TypeOf(phys) {
     const T = @TypeOf(phys);
-    return switch (@typeId(T)) {
+    return switch (@typeInfo(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(phys) + ADDR_OFFSET),
         .Int => phys + ADDR_OFFSET,
         else => @compileError("Only pointers and integers are supported"),
+    };
+}
+
+///
+/// Initialise the system's memory profile based on linker symbols and the multiboot info struct.
+///
+/// Arguments:
+///     IN mb_info: *multiboot.multiboot_info_t - The multiboot info passed by the bootloader.
+///
+/// Return: MemProfile
+///     The memory profile constructed from the exported linker symbols and the relevant multiboot info.
+///
+pub fn init(mb_info: *multiboot.multiboot_info_t) MemProfile {
+    log.logInfo("Init mem\n", .{});
+    defer log.logInfo("Done mem\n", .{});
+
+    const mods_count = mb_info.mods_count;
+    ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
+    const mmap_addr = mb_info.mmap_addr;
+    const num_mmap_entries = mb_info.mmap_length / @sizeOf(multiboot.multiboot_memory_map_t);
+    return .{
+        .vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END),
+        .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
+        .physaddr_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END),
+        .physaddr_start = @ptrCast([*]u8, &KERNEL_PHYSADDR_START),
+        // Total memory available including the initial 1MiB that grub doesn't include
+        .mem_kb = mb_info.mem_upper + mb_info.mem_lower + 1024,
+        .fixed_alloc_size = FIXED_ALLOC_SIZE,
+        .boot_modules = @intToPtr([*]multiboot.multiboot_mod_list, physToVirt(mb_info.mods_addr))[0..mods_count],
+        .mem_map = @intToPtr([*]multiboot.multiboot_memory_map_t, mmap_addr)[0..num_mmap_entries],
     };
 }
 

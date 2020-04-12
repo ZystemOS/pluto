@@ -1,5 +1,12 @@
 const serial = @import("serial.zig");
-const fmt = @import("std").fmt;
+const std = @import("std");
+const fmt = std.fmt;
+
+/// The errors that can occur when logging
+const LoggingError = error{};
+
+/// The OutStream for the format function
+const OutStream = std.io.OutStream(void, LoggingError, logCallback);
 
 pub const Level = enum {
     INFO,
@@ -8,8 +15,9 @@ pub const Level = enum {
     ERROR,
 };
 
-fn logCallback(context: void, str: []const u8) anyerror!void {
+fn logCallback(context: void, str: []const u8) LoggingError!usize {
     serial.writeBytes(str, serial.Port.COM1);
+    return str.len;
 }
 
 ///
@@ -21,7 +29,7 @@ fn logCallback(context: void, str: []const u8) anyerror!void {
 ///     IN args: var - A struct of the parameters for the format string.
 ///
 pub fn log(comptime level: Level, comptime format: []const u8, args: var) void {
-    fmt.format({}, anyerror, logCallback, "[" ++ @tagName(level) ++ "] " ++ format, args) catch unreachable;
+    fmt.format(OutStream{ .context = {} }, "[" ++ @tagName(level) ++ "] " ++ format, args) catch unreachable;
 }
 
 ///

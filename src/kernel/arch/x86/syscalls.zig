@@ -238,8 +238,9 @@ inline fn syscallArg(ctx: *arch.InterruptContext, comptime arg_idx: u32) u32 {
 ///
 pub fn init() void {
     log.logInfo("Init syscalls\n", .{});
+    defer log.logInfo("Done syscalls\n", .{});
+
     isr.registerIsr(INTERRUPT, handle) catch unreachable;
-    log.logInfo("Done\n", .{});
     if (options.rt_test) runtimeTests();
 }
 
