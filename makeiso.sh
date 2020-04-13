@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 BOOT_DIR=$1
 MODULES_DIR=$2
