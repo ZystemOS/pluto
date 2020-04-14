@@ -10,6 +10,7 @@ const vga = @import("vga.zig");
 const log = @import("log.zig");
 const serial = @import("serial.zig");
 const pmm = @import("pmm.zig");
+const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
 const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
 const panic_root = if (is_test) @import(mock_path ++ "panic_mock.zig") else @import("panic.zig");
 const options = @import("build_options");
@@ -22,6 +23,9 @@ comptime {
         }
     }
 }
+
+/// The virtual memory manager associated with the kernel address space
+var kernel_vmm: vmm.VirtualMemoryManager(arch.VmmPayload) = undefined;
 
 // This is for unit testing as we need to export KERNEL_ADDR_OFFSET as it is no longer available
 // from the linker script
@@ -46,13 +50,17 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
         var buffer = mem_profile.vaddr_end[0..mem_profile.fixed_alloc_size];
         var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer);
 
-        pmm.init(&mem_profile, &fixed_allocator.allocator);
-        log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
-        arch.init(mb_info, &mem_profile, &fixed_allocator.allocator);
-        log.logInfo("Arch init done\n", .{});
         panic_root.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}", .{e});
         };
+
+        pmm.init(&mem_profile, &fixed_allocator.allocator);
+        kernel_vmm = vmm.init(&mem_profile, mb_info, &fixed_allocator.allocator) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
+
+        log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+        arch.init(mb_info, &mem_profile, &fixed_allocator.allocator);
+        log.logInfo("Arch init done\n", .{});
+
         vga.init();
         tty.init();
 

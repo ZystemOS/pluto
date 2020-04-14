@@ -105,14 +105,80 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Convert a global bitmap index into the bit corresponding to an entry within a single BitmapType.
         ///
         /// Arguments:
-        ///     IN self: *Self - The bitmap to use.
+        ///     IN self: *const Self - The bitmap to use.
         ///     IN idx: u32 - The index into all of the bitmap's entries.
         ///
         /// Return: BitmapType.
         ///     The bit corresponding to that index but within a single BitmapType.
         ///
-        fn indexToBit(self: *Self, idx: u32) BitmapType {
+        fn indexToBit(self: *const Self, idx: u32) BitmapType {
             return @as(BitmapType, 1) << @intCast(IndexType, idx % ENTRIES_PER_BITMAP);
+        }
+
+        ///
+        /// Find a number of contiguous free entries and set them.
+        ///
+        /// Arguments:
+        ///     INOUT self: *Self - The bitmap to modify.
+        ///     IN num: u32 - The number of entries to set.
+        ///
+        /// Return: ?u32
+        ///     The first entry set or null if there weren't enough contiguous entries.
+        ///
+        pub fn setContiguous(self: *Self, num: u32) ?u32 {
+            if (num > self.num_free_entries) {
+                return null;
+            }
+
+            var count: u32 = 0;
+            var start: ?u32 = null;
+            for (self.bitmaps) |bmp, i| {
+                var bit: IndexType = 0;
+                while (true) {
+                    const entry = bit + @intCast(u32, i * ENTRIES_PER_BITMAP);
+                    if (entry >= self.num_entries) {
+                        return null;
+                    }
+                    if ((bmp & @as(u32, 1) << bit) != 0) {
+                        // This is a one so clear the progress
+                        count = 0;
+                        start = null;
+                    } else {
+                        // It's a zero so increment the count
+                        count += 1;
+                        if (start == null) {
+                            // Start of the contiguous zeroes
+                            start = entry;
+                        }
+                        if (count == num) {
+                            // Reached the desired number
+                            break;
+                        }
+                    }
+                    // Avoiding overflow by checking if bit is less than the max - 1
+                    if (bit < ENTRIES_PER_BITMAP - 1) {
+                        bit += 1;
+                    } else {
+                        // Reached the end of the bitmap
+                        break;
+                    }
+                }
+                if (count == num) {
+                    break;
+                }
+            }
+
+            if (count == num) {
+                if (start) |start_entry| {
+                    var i: u32 = 0;
+                    while (i < num) : (i += 1) {
+                        // Can't fail as the entry was found to be free
+                        self.setEntry(start_entry + i) catch unreachable;
+                    }
+                    return start_entry;
+                }
+            }
+            return null;
         }
 
         ///
@@ -140,7 +206,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Check if an entry is set.
         ///
         /// Arguments:
-        ///     IN self: *Bitmap - The bitmap to check.
+        ///     IN self: *const Self - The bitmap to check.
         ///     IN idx: u32 - The entry to check.
         ///
         /// Return: bool.
@@ -149,7 +215,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Error: BitmapError.
         ///     OutOfBounds: The index given is out of bounds.
         ///
-        pub fn isSet(self: *Self, idx: u32) BitmapError!bool {
+        pub fn isSet(self: *const Self, idx: u32) BitmapError!bool {
             if (idx >= self.num_entries) return BitmapError.OutOfBounds;
             return (self.bitmaps[idx / ENTRIES_PER_BITMAP] & self.indexToBit(idx)) != 0;
         }
@@ -303,4 +369,26 @@ test "indexToBit" {
     testing.expectEqual(bmp.indexToBit(7), 128);
     testing.expectEqual(bmp.indexToBit(8), 1);
     testing.expectEqual(bmp.indexToBit(9), 2);
+}
+
+test "setContiguous" {
+    var bmp = try Bitmap(u4).init(15, std.heap.page_allocator);
+    // Test trying to set more entries than the bitmap has
+    testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1), null);
+    // All entries should still be free
+    testing.expectEqual(bmp.num_free_entries, bmp.num_entries);
+
+    testing.expectEqual(bmp.setContiguous(3) orelse unreachable, 0);
+    testing.expectEqual(bmp.setContiguous(4) orelse unreachable, 3);
+    // 0b0000.0000.0111.1111
+    bmp.bitmaps[2] |= 2;
+    // 0b0000.0010.0111.1111
+    testing.expectEqual(bmp.setContiguous(3) orelse unreachable, 10);
+    // 0b0001.1110.0111.1111
+    testing.expectEqual(bmp.setContiguous(5), null);
+    testing.expectEqual(bmp.setContiguous(2), 7);
+    // 0b001.1111.1111.1111
+    // Test trying to set beyond the end of the bitmaps
+    testing.expectEqual(bmp.setContiguous(3), null);
+    testing.expectEqual(bmp.setContiguous(2), 13);
 }

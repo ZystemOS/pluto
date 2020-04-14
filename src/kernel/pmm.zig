@@ -6,7 +6,7 @@ const arch = @import("arch.zig").internals;
 const MemProfile = (if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig")).MemProfile;
 const testing = std.testing;
 const panic = @import("panic.zig").panic;
-const log = @import("log.zig");
+const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
 const MEMORY_AVAILABLE = @import("multiboot.zig").MULTIBOOT_MEMORY_AVAILABLE;
 const Bitmap = @import("bitmap.zig").Bitmap;
 
@@ -19,7 +19,7 @@ const PmmError = error{
 };
 
 /// The size of memory associated with each bitmap entry
-const BLOCK_SIZE = arch.MEMORY_BLOCK_SIZE;
+pub const BLOCK_SIZE = arch.MEMORY_BLOCK_SIZE;
 
 var bitmap: PmmBitmap = undefined;
 
@@ -32,7 +32,7 @@ var bitmap: PmmBitmap = undefined;
 /// Error: PmmBitmap.BitmapError.
 ///     *: See PmmBitmap.setEntry. Could occur if the address is out of bounds.
 ///
-fn setAddr(addr: usize) PmmBitmap.BitmapError!void {
+pub fn setAddr(addr: usize) PmmBitmap.BitmapError!void {
     try bitmap.setEntry(@intCast(u32, addr / BLOCK_SIZE));
 }
 
@@ -47,7 +47,7 @@ fn setAddr(addr: usize) PmmBitmap.BitmapError!void {
 /// Error: PmmBitmap.BitmapError.
 ///     *: See PmmBitmap.setEntry. Could occur if the address is out of bounds.
 ///
-fn isSet(addr: usize) PmmBitmap.BitmapError!bool {
+pub fn isSet(addr: usize) PmmBitmap.BitmapError!bool {
     return bitmap.isSet(@intCast(u32, addr / BLOCK_SIZE));
 }
 
@@ -83,6 +83,15 @@ pub fn free(addr: usize) (PmmBitmap.BitmapError || PmmError)!void {
 }
 
 ///
+/// Get the number of unallocated blocks of memory.
+///
+/// Return: u32.
+///     The number of unallocated blocks of memory
+///
+pub fn blocksFree() u32 {
+    return bitmap.num_free_entries;
+}
+
 /// Intiialise the physical memory manager and set all unavailable regions as occupied (those from the memory map and those from the linker symbols).
 ///
 /// Arguments:
@@ -112,16 +121,10 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
             }
         }
     }
-    // Occupy kernel memory
-    var addr = std.mem.alignBackward(@ptrToInt(mem.physaddr_start), BLOCK_SIZE);
-    while (addr < @ptrToInt(mem.physaddr_end)) : (addr += BLOCK_SIZE) {
-        setAddr(addr) catch |e| switch (e) {
-            error.OutOfBounds => panic(@errorReturnTrace(), "Failed setting kernel code address 0x{x} as occupied. The amount of system memory seems to be too low for the kernel image: {}", .{ addr, e }),
-            else => panic(@errorReturnTrace(), "Failed setting kernel code address 0x{x} as occupied: {}", .{ addr, e }),
-        };
-    }
 
-    if (build_options.rt_test) runtimeTests(mem);
+    if (build_options.rt_test) {
+        runtimeTests(mem, allocator);
+    }
 }
 
 ///
@@ -129,10 +132,13 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
 ///
 /// Arguments:
 ///     IN mem: *const MemProfile - The memory profile to check for reserved memory regions.
+///     INOUT allocator: *std.mem.Allocator - The allocator to use when needing to create intermediate structures used for testing
 ///
-fn runtimeTests(mem: *const MemProfile) void {
+fn runtimeTests(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
     // Make sure that occupied memory can't be allocated
     var prev_alloc: usize = std.math.maxInt(usize);
+    var alloc_list = std.ArrayList(usize).init(allocator);
+    defer alloc_list.deinit();
     while (alloc()) |alloced| {
         if (prev_alloc == alloced) {
             panic(null, "PMM allocated the same address twice: 0x{x}", .{alloced});
@@ -146,9 +152,11 @@ fn runtimeTests(mem: *const MemProfile) void {
                 }
             }
         }
-        if (alloced >= std.mem.alignBackward(@ptrToInt(mem.physaddr_start), BLOCK_SIZE) and alloced < std.mem.alignForward(@ptrToInt(mem.physaddr_end), BLOCK_SIZE)) {
-            panic(null, "PMM allocated an address that should be reserved by kernel code: 0x{x}", .{alloced});
-        }
+        alloc_list.append(alloced) catch |e| panic(@errorReturnTrace(), "Failed to add PMM allocation to list: {}", .{e});
+    }
+    // Clean up
+    for (alloc_list.items) |alloced| {
+        free(alloced) catch |e| panic(@errorReturnTrace(), "Failed freeing allocation in PMM rt test: {}", .{e});
     }
     log.logInfo("PMM: Tested allocation\n", .{});
 }
@@ -165,6 +173,7 @@ test "alloc" {
         testing.expect(!(try isSet(addr)));
         testing.expect(alloc().? == addr);
         testing.expect(try isSet(addr));
+        testing.expectEqual(blocksFree(), 31 - i);
     }
     // Allocation should now fail
     testing.expect(alloc() == null);
@@ -177,7 +186,9 @@ test "free" {
     inline while (i < 32) : (i += 1) {
         const addr = alloc().?;
         testing.expect(try isSet(addr));
+        testing.expectEqual(blocksFree(), 31);
         try free(addr);
+        testing.expectEqual(blocksFree(), 32);
         testing.expect(!(try isSet(addr)));
         // Double frees should be caught
         testing.expectError(PmmError.NotAllocated, free(addr));
@@ -203,9 +214,11 @@ test "setAddr and isSet" {
             testing.expect(try isSet(addr2));
         }
 
+        testing.expectEqual(blocksFree(), num_entries - i);
         // Set the current block
         try setAddr(addr);
         testing.expect(try isSet(addr));
+        testing.expectEqual(blocksFree(), num_entries - i - 1);
 
         // Ensure all successive entries are not set
         var j: u32 = i + 1;

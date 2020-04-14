@@ -13,6 +13,7 @@ const syscalls = @import("syscalls.zig");
 const mem = @import("../../mem.zig");
 const multiboot = @import("../../multiboot.zig");
 const pmm = @import("pmm.zig");
+const vmm = @import("../../vmm.zig");
 const MemProfile = mem.MemProfile;
 
 /// The interrupt context that is given to a interrupt handler. It contains most of the registers
@@ -47,6 +48,18 @@ pub const InterruptContext = struct {
     user_esp: u32,
     ss: u32,
 };
+
+/// The type of the payload passed to a virtual memory mapper.
+/// For x86 it's the page directory that should be mapped.
+pub const VmmPayload = *paging.Directory;
+
+/// The payload used in the kernel virtual memory manager.
+/// For x86 it's the kernel's page directory.
+pub const KERNEL_VMM_PAYLOAD = &paging.kernel_directory;
+
+/// The architecture's virtual memory mapper.
+/// For x86, it simply forwards the calls to the paging subsystem.
+pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = vmm.Mapper(VmmPayload){ .mapFn = paging.map, .unmapFn = paging.unmap };
 
 /// The size of each allocatable block of memory, normally set to the page size.
 pub const MEMORY_BLOCK_SIZE = paging.PAGE_SIZE_4KB;
