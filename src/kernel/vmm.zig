@@ -345,7 +345,7 @@ pub fn init(mem_profile: *const mem.MemProfile, mb_info: *multiboot.multiboot_in
     log.logInfo("Init vmm\n", .{});
     defer log.logInfo("Done vmm\n", .{});
 
-    var vmm = try VirtualMemoryManager(arch.VmmPayload).init(0, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
+    var vmm = try VirtualMemoryManager(arch.VmmPayload).init(BLOCK_SIZE, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
 
     // Map in kernel
     // Calculate start and end of mapping
