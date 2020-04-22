@@ -104,6 +104,9 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
 
     bitmap = PmmBitmap.init(mem.mem_kb * 1024 / BLOCK_SIZE, allocator) catch @panic("Bitmap allocation failed");
 
+    // Occupy first block as much of the bios resides here
+    setAddr(0) catch |e| panic(@errorReturnTrace(), "Failed setting BIOS area as occupied: {}", .{e});
+
     // Occupy the regions of memory that the memory map describes as reserved
     for (mem.mem_map) |entry| {
         if (entry.@"type" != MEMORY_AVAILABLE) {
@@ -144,6 +147,8 @@ fn runtimeTests(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
             panic(null, "PMM allocated the same address twice: 0x{x}", .{alloced});
         }
         prev_alloc = alloced;
+        if (alloced >= 0 and alloced < BLOCK_SIZE)
+            panic(null, "PMM allocated bottom 4KB of memory that should be reserved", .{});
         for (mem.mem_map) |entry| {
             if (entry.@"type" != MEMORY_AVAILABLE) {
                 var addr = std.mem.alignBackward(@intCast(usize, entry.addr), BLOCK_SIZE);
