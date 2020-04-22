@@ -270,21 +270,18 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                     try block_list.ensureCapacity(num);
 
                     var i: u32 = 0;
-                    var first_addr: ?usize = null;
-                    const vaddr_start = entry * BLOCK_SIZE;
+                    const vaddr_start = self.start + entry * BLOCK_SIZE;
                     var vaddr = vaddr_start;
                     // Map the blocks to physical memory
                     while (i < num) : (i += 1) {
                         const addr = pmm.alloc() orelse unreachable;
-                        if (i == 0)
-                            first_addr = addr;
                         try block_list.append(addr);
                         // The map function failing isn't the caller's responsibility so panic as it shouldn't happen
                         self.mapper.mapFn(vaddr, vaddr + BLOCK_SIZE, addr, addr + BLOCK_SIZE, attrs, self.allocator, self.payload) catch |e| panic(@errorReturnTrace(), "Failed to map virtual memory: {}\n", .{e});
                         vaddr += BLOCK_SIZE;
                     }
                     _ = try self.allocations.put(vaddr_start, Allocation{ .physical = block_list });
-                    return first_addr;
+                    return vaddr_start;
                 }
             }
             return null;
@@ -408,7 +405,7 @@ test "alloc and free" {
             should_be_set = false;
         } else {
             // Else it should have succedded and allocated the correct address
-            std.testing.expectEqual(@as(?usize, entry * BLOCK_SIZE), result);
+            std.testing.expectEqual(@as(?usize, vmm.start + entry * BLOCK_SIZE), result);
             try virtual_allocations.append(result orelse unreachable);
         }
 
@@ -439,7 +436,7 @@ test "alloc and free" {
         // All later entries should not be set
         var later_entry = entry;
         while (later_entry < num_entries) : (later_entry += 1) {
-            std.testing.expect(!(try vmm.isSet(later_entry * BLOCK_SIZE)));
+            std.testing.expect(!(try vmm.isSet(vmm.start + later_entry * BLOCK_SIZE)));
             std.testing.expect(!(try pmm.isSet(later_entry * BLOCK_SIZE)));
         }
     }
