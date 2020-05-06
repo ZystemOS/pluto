@@ -64,6 +64,8 @@ def get_post_archinit_cases():
             TestCase("TTY tests", [r"TTY: Tested globals", r"TTY: Tested printing"]),
             TestCase("TTY done", [r"Done tty"]),
 
+            TestCase("Heap", [r"Init heap", r"Done heap"]),
+
             TestCase("Init finishes", [r"Init done"]),
 
             TestCase("Panic tests", [r"Kernel panic: integer overflow", r"c[a-z\d]+: panic", r"c[a-z\d]+: panic.runtimeTests", r"c[a-z\d]+: kmain", r"c[a-z\d]+: start_higher_half"], r"\[ERROR\] ")
