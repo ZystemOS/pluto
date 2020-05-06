@@ -358,12 +358,30 @@ pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (std.mem
 }
 
 ///
-/// Called when a page fault occurs.
+/// Called when a page fault occurs. This will log the CPU state and control registers.
 ///
 /// Arguments:
 ///     IN state: *arch.InterruptContext - The CPU's state when the fault occurred.
 ///
 fn pageFault(state: *arch.InterruptContext) void {
+    log.logInfo("State: {X}\n", .{state});
+    var cr0: u32 = 0;
+    var cr2: u32 = 0;
+    var cr3: u32 = 0;
+    var cr4: u32 = 0;
+    asm volatile ("mov %%cr0, %[cr0]"
+        : [cr0] "=r" (cr0)
+    );
+    asm volatile ("mov %%cr2, %[cr2]"
+        : [cr2] "=r" (cr2)
+    );
+    asm volatile ("mov %%cr3, %[cr3]"
+        : [cr3] "=r" (cr3)
+    );
+    asm volatile ("mov %%cr4, %[cr4]"
+        : [cr4] "=r" (cr4)
+    );
+    log.logInfo("CR0: {X}, CR2: {X}, CR3: {X}, CR4: {X}\n\n", .{ cr0, cr2, cr3, cr4 });
     @panic("Page fault");
 }
 
