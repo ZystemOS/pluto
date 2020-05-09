@@ -814,11 +814,11 @@ test "init" {
 fn rt_picAllMasked() void {
     // The master will have interrupt 2 clear because this is the link to the slave (third bit)
     if (readDataMaster() != 0xFB) {
-        panic(@errorReturnTrace(), "Master masks are not set, found: {}\n", .{readDataMaster()});
+        panic(@errorReturnTrace(), "FAILURE: Master masks are not set, found: {}\n", .{readDataMaster()});
     }
 
     if (readDataSlave() != 0xFF) {
-        panic(@errorReturnTrace(), "Slave masks are not set, found: {}\n", .{readDataSlave()});
+        panic(@errorReturnTrace(), "FAILURE: Slave masks are not set, found: {}\n", .{readDataSlave()});
     }
 
     log.logInfo("PIC: Tested masking\n", .{});

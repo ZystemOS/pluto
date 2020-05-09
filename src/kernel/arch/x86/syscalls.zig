@@ -4,6 +4,7 @@ const assert = @import("std").debug.assert;
 const isr = @import("isr.zig");
 const log = @import("../../log.zig");
 const options = @import("build_options");
+const panic = @import("../../panic.zig").panic;
 
 /// The isr number associated with syscalls
 pub const INTERRUPT: u16 = 0x80;
@@ -286,29 +287,40 @@ test "registerSyscall returns SyscallExists" {
 }
 
 fn runtimeTests() void {
-    registerSyscall(123, testHandler0) catch unreachable;
-    registerSyscall(124, testHandler1) catch unreachable;
-    registerSyscall(125, testHandler2) catch unreachable;
-    registerSyscall(126, testHandler3) catch unreachable;
-    registerSyscall(127, testHandler4) catch unreachable;
-    registerSyscall(128, testHandler5) catch unreachable;
-    assert(testInt == 0);
+    registerSyscall(123, testHandler0) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
+    registerSyscall(124, testHandler1) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
+    registerSyscall(125, testHandler2) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
+    registerSyscall(126, testHandler3) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
+    registerSyscall(127, testHandler4) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
+    registerSyscall(128, testHandler5) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
 
-    if (syscall0(123) == 0 and testInt == 1)
-        log.logInfo("Syscalls: Tested no args\n", .{});
+    if (testInt != 0) {
+        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    }
 
-    if (syscall1(124, 2) == 1 and testInt == 3)
-        log.logInfo("Syscalls: Tested 1 arg\n", .{});
+    if (syscall0(123) != 0 or testInt != 1) {
+        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    }
 
-    if (syscall2(125, 2, 3) == 2 and testInt == 8)
-        log.logInfo("Syscalls: Tested 2 args\n", .{});
+    if (syscall1(124, 2) != 1 or testInt != 3) {
+        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    }
 
-    if (syscall3(126, 2, 3, 4) == 3 and testInt == 17)
-        log.logInfo("Syscalls: Tested 3 args\n", .{});
+    if (syscall2(125, 2, 3) != 2 or testInt != 8) {
+        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    }
 
-    if (syscall4(127, 2, 3, 4, 5) == 4 and testInt == 31)
-        log.logInfo("Syscalls: Tested 4 args\n", .{});
+    if (syscall3(126, 2, 3, 4) != 3 or testInt != 17) {
+        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    }
 
-    if (syscall5(128, 2, 3, 4, 5, 6) == 5 and testInt == 51)
-        log.logInfo("Syscalls: Tested 5 args\n", .{});
+    if (syscall4(127, 2, 3, 4, 5) != 4 or testInt != 31) {
+        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    }
+
+    if (syscall5(128, 2, 3, 4, 5, 6) != 5 or testInt != 51) {
+        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    }
+
+    log.logInfo("Syscall tests\n", .{});
 }

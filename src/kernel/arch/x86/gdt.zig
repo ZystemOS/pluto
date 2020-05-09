@@ -3,7 +3,7 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
-
+const panic = @import("../../panic.zig").panic;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
@@ -671,8 +671,13 @@ test "init" {
 ///
 fn rt_loadedGDTSuccess() void {
     const loaded_gdt = arch.sgdt();
-    expect(gdt_ptr.limit == loaded_gdt.limit);
-    expect(gdt_ptr.base == loaded_gdt.base);
+    if (gdt_ptr.limit != loaded_gdt.limit) {
+        panic(@errorReturnTrace(), "FAILURE: GDT not loaded properly: 0x{X} != 0x{X}\n", .{ gdt_ptr.limit, loaded_gdt.limit });
+    }
+    if (gdt_ptr.base != loaded_gdt.base) {
+        panic(@errorReturnTrace(), "FAILURE: GDT not loaded properly: 0x{X} != {X}\n", .{ gdt_ptr.base, loaded_gdt.base });
+    }
+    log.logInfo("GDT: Tested loading GDT\n", .{});
 }
 
 ///
@@ -680,5 +685,4 @@ fn rt_loadedGDTSuccess() void {
 ///
 fn runtimeTests() void {
     rt_loadedGDTSuccess();
-    log.logInfo("GDT: Tested loading GDT\n", .{});
 }

@@ -2150,19 +2150,19 @@ test "init not 0,0" {
 ///
 fn rt_initialisedGlobals() void {
     if (@ptrToInt(video_buffer.ptr) != @ptrToInt(&KERNEL_ADDR_OFFSET) + 0xB8000) {
-        panic(@errorReturnTrace(), "Video buffer not at correct virtual address, found: {}\n", .{@ptrToInt(video_buffer.ptr)});
+        panic(@errorReturnTrace(), "FAILURE: Video buffer not at correct virtual address, found: {}\n", .{@ptrToInt(video_buffer.ptr)});
     }
 
     if (page_index != 0) {
-        panic(@errorReturnTrace(), "Page index not at zero, found: {}\n", .{page_index});
+        panic(@errorReturnTrace(), "FAILURE: Page index not at zero, found: {}\n", .{page_index});
     }
 
     if (colour != vga.entryColour(vga.COLOUR_LIGHT_GREY, vga.COLOUR_BLACK)) {
-        panic(@errorReturnTrace(), "Colour not set up properly, found: {}\n", .{colour});
+        panic(@errorReturnTrace(), "FAILURE: Colour not set up properly, found: {}\n", .{colour});
     }
 
     if (blank != vga.entry(0, colour)) {
-        panic(@errorReturnTrace(), "Blank not set up properly, found: {}\n", .{blank});
+        panic(@errorReturnTrace(), "FAILURE: Blank not set up properly, found: {}\n", .{blank});
     }
 
     // Make sure the screen isn't all blank
@@ -2177,7 +2177,7 @@ fn rt_initialisedGlobals() void {
     }
 
     if (all_blank) {
-        panic(@errorReturnTrace(), "Screen all blank, should have logo and page number\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: Screen all blank, should have logo and page number\n", .{});
     }
 
     log.logInfo("TTY: Tested globals\n", .{});
@@ -2209,7 +2209,7 @@ fn rt_printString() void {
     }
 
     if (counter != text.len) {
-        panic(@errorReturnTrace(), "Didn't find the printed text in video memory\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: Didn't find the printed text in video memory\n", .{});
     }
 
     // Check the pages
@@ -2226,7 +2226,7 @@ fn rt_printString() void {
     }
 
     if (counter != text.len) {
-        panic(@errorReturnTrace(), "Didn't find the printed text in pages\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: Didn't find the printed text in pages\n", .{});
     }
 
     // Clear the text

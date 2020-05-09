@@ -127,40 +127,6 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
     }
 }
 
-///
-/// Allocate all blocks and make sure they don't overlap with any reserved addresses.
-///
-/// Arguments:
-///     IN mem: *const MemProfile - The memory profile to check for reserved memory regions.
-///     INOUT allocator: *std.mem.Allocator - The allocator to use when needing to create intermediate structures used for testing
-///
-fn runtimeTests(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
-    // Make sure that occupied memory can't be allocated
-    var prev_alloc: usize = std.math.maxInt(usize);
-    var alloc_list = std.ArrayList(usize).init(allocator);
-    defer alloc_list.deinit();
-    while (alloc()) |alloced| {
-        if (prev_alloc == alloced) {
-            panic(null, "PMM allocated the same address twice: 0x{x}", .{alloced});
-        }
-        prev_alloc = alloced;
-        for (mem.mem_map) |entry| {
-            if (entry.@"type" != MEMORY_AVAILABLE) {
-                var addr = std.mem.alignBackward(@intCast(usize, entry.addr), BLOCK_SIZE);
-                if (addr == alloced) {
-                    panic(null, "PMM allocated an address that should be reserved by the memory map: 0x{x}", .{addr});
-                }
-            }
-        }
-        alloc_list.append(alloced) catch |e| panic(@errorReturnTrace(), "Failed to add PMM allocation to list: {}", .{e});
-    }
-    // Clean up
-    for (alloc_list.items) |alloced| {
-        free(alloced) catch |e| panic(@errorReturnTrace(), "Failed freeing allocation in PMM rt test: {}", .{e});
-    }
-    log.logInfo("PMM: Tested allocation\n", .{});
-}
-
 test "alloc" {
     bitmap = try Bitmap(u32).init(32, std.heap.page_allocator);
     comptime var addr = 0;
@@ -230,4 +196,38 @@ test "setAddr and isSet" {
             testing.expect(!try isSet(addr3));
         }
     }
+}
+
+///
+/// Allocate all blocks and make sure they don't overlap with any reserved addresses.
+///
+/// Arguments:
+///     IN mem: *const MemProfile - The memory profile to check for reserved memory regions.
+///     IN/OUT allocator: *std.mem.Allocator - The allocator to use when needing to create intermediate structures used for testing
+///
+fn runtimeTests(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
+    // Make sure that occupied memory can't be allocated
+    var prev_alloc: usize = std.math.maxInt(usize);
+    var alloc_list = std.ArrayList(usize).init(allocator);
+    defer alloc_list.deinit();
+    while (alloc()) |alloced| {
+        if (prev_alloc == alloced) {
+            panic(null, "FAILURE: PMM allocated the same address twice: 0x{x}", .{alloced});
+        }
+        prev_alloc = alloced;
+        for (mem.mem_map) |entry| {
+            if (entry.@"type" != MEMORY_AVAILABLE) {
+                var addr = std.mem.alignBackward(@intCast(usize, entry.addr), BLOCK_SIZE);
+                if (addr == alloced) {
+                    panic(null, "FAILURE: PMM allocated an address that should be reserved by the memory map: 0x{x}", .{addr});
+                }
+            }
+        }
+        alloc_list.append(alloced) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to add PMM allocation to list: {}", .{e});
+    }
+    // Clean up
+    for (alloc_list.items) |alloced| {
+        free(alloced) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed freeing allocation in PMM rt test: {}", .{e});
+    }
+    log.logInfo("PMM: Tested allocation\n", .{});
 }

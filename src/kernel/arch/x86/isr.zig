@@ -362,12 +362,12 @@ fn rt_unregisteredHandlers() void {
     // Ensure all ISR are not registered yet
     for (isr_handlers) |h, i| {
         if (h) |_| {
-            panic(@errorReturnTrace(), "Handler found for ISR: {}-{}\n", .{ i, h });
+            panic(@errorReturnTrace(), "FAILURE: Handler found for ISR: {}-{}\n", .{ i, h });
         }
     }
 
     if (syscall_handler) |h| {
-        panic(@errorReturnTrace(), "Pre-testing failed for syscall: {}\n", .{h});
+        panic(@errorReturnTrace(), "FAILURE: Pre-testing failed for syscall: {}\n", .{h});
     }
 
     log.logInfo("ISR: Tested registered handlers\n", .{});
@@ -383,7 +383,7 @@ fn rt_openedIdtEntries() void {
     for (idt_entries) |entry, i| {
         if (isValidIsr(i)) {
             if (!idt.isIdtOpen(entry)) {
-                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", .{i});
+                panic(@errorReturnTrace(), "FAILURE: IDT entry for {} is not open\n", .{i});
             }
         }
     }

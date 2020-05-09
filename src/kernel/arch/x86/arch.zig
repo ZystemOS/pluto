@@ -12,7 +12,6 @@ const paging = @import("paging.zig");
 const syscalls = @import("syscalls.zig");
 const mem = @import("../../mem.zig");
 const multiboot = @import("../../multiboot.zig");
-const pmm = @import("pmm.zig");
 const vmm = @import("../../vmm.zig");
 const MemProfile = mem.MemProfile;
 

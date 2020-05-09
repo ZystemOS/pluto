@@ -695,24 +695,24 @@ fn rt_init() void {
             irq_exists = true;
         },
         error.InvalidIrq => {
-            panic(@errorReturnTrace(), "IRQ for RTC, IRQ number: {} is invalid", .{pic.IRQ_REAL_TIME_CLOCK});
+            panic(@errorReturnTrace(), "FAILURE: IRQ for RTC, IRQ number: {} is invalid\n", .{pic.IRQ_REAL_TIME_CLOCK});
         },
     };
 
     if (!irq_exists) {
-        panic(@errorReturnTrace(), "IRQ for RTC doesn't exists\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: IRQ for RTC doesn't exists\n", .{});
     }
 
     // Check the rate
     const status_a = cmos.readStatusRegister(cmos.StatusRegister.A, false);
     if (status_a & @as(u8, 0x0F) != 7) {
-        panic(@errorReturnTrace(), "Rate not set properly, got: {}\n", .{status_a & @as(u8, 0x0F)});
+        panic(@errorReturnTrace(), "FAILURE: Rate not set properly, got: {}\n", .{status_a & @as(u8, 0x0F)});
     }
 
     // Check if interrupts are enabled
     const status_b = cmos.readStatusRegister(cmos.StatusRegister.B, true);
     if (status_b & ~@as(u8, 0x40) == 0) {
-        panic(@errorReturnTrace(), "Interrupts not enabled\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: Interrupts not enabled\n", .{});
     }
 
     log.logInfo("RTC: Tested init\n", .{});
@@ -727,7 +727,7 @@ fn rt_interrupts() void {
     pit.waitTicks(100);
 
     if (prev_ticks == ticks) {
-        panic(@errorReturnTrace(), "No interrupt happened\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: No interrupt happened\n", .{});
     }
 
     log.logInfo("RTC: Tested interrupts\n", .{});

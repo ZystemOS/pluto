@@ -4,7 +4,7 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
-
+const panic = @import("../../panic.zig").panic;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const gdt = if (is_test) @import(mock_path ++ "gdt_mock.zig") else @import("gdt.zig");
@@ -325,8 +325,12 @@ test "init" {
 ///
 fn rt_loadedIDTSuccess() void {
     const loaded_idt = arch.sidt();
-    expect(idt_ptr.limit == loaded_idt.limit);
-    expect(idt_ptr.base == loaded_idt.base);
+    if (idt_ptr.limit != loaded_idt.limit) {
+        panic(@errorReturnTrace(), "FAILURE: IDT not loaded properly: 0x{X} != 0x{X}\n", .{ idt_ptr.limit, loaded_idt.limit });
+    }
+    if (idt_ptr.base != loaded_idt.base) {
+        panic(@errorReturnTrace(), "FAILURE: IDT not loaded properly: 0x{X} != {X}\n", .{ idt_ptr.base, loaded_idt.base });
+    }
     log.logInfo("IDT: Tested loading IDT\n", .{});
 }
 

@@ -551,7 +551,7 @@ fn rt_waitTicks() void {
     const difference = getTicks() - waiting;
 
     if (previous_count + epsilon < difference or previous_count > difference + epsilon) {
-        panic(@errorReturnTrace(), "Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
+        panic(@errorReturnTrace(), "FAILURE: Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
     }
 
     log.logInfo("PIT: Tested wait ticks\n", .{});
@@ -575,13 +575,13 @@ fn rt_waitTicks2() void {
     const difference = getTicks() + 15 - waiting;
 
     if (previous_count + epsilon < difference or previous_count > difference + epsilon) {
-        panic(@errorReturnTrace(), "Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
+        panic(@errorReturnTrace(), "FAILURE: Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
     }
-
-    log.logInfo("PIT: Tested wait ticks 2\n", .{});
 
     // Reset ticks
     ticks = 0;
+
+    log.logInfo("PIT: Tested wait ticks 2\n", .{});
 }
 
 ///
@@ -593,7 +593,7 @@ fn rt_initCounter_0() void {
     const expected_hz: u32 = 10027;
 
     if (time_ns != expected_ns or time_under_1_ns != expected_ps or getFrequency() != expected_hz) {
-        panic(@errorReturnTrace(), "Frequency not set properly. Hz: {}!={}, ns: {}!={}, ps: {}!= {}\n", .{
+        panic(@errorReturnTrace(), "FAILURE: Frequency not set properly. Hz: {}!={}, ns: {}!={}, ps: {}!= {}\n", .{
             getFrequency(),
             expected_hz,
             time_ns,
@@ -611,19 +611,19 @@ fn rt_initCounter_0() void {
             irq_exists = true;
         },
         error.InvalidIrq => {
-            panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} is invalid", .{pic.IRQ_PIT});
+            panic(@errorReturnTrace(), "FAILURE: IRQ for PIT, IRQ number: {} is invalid", .{pic.IRQ_PIT});
         },
     };
 
     if (!irq_exists) {
-        panic(@errorReturnTrace(), "IRQ for PIT doesn't exists\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: IRQ for PIT doesn't exists\n", .{});
     }
 
     const expected_mode = OCW_READ_LOAD_DATA | OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_SELECT_COUNTER_0 | OCW_BINARY_COUNT_BINARY;
     const actual_mode = readBackCommand(CounterSelect.Counter0);
 
     if (expected_mode != actual_mode) {
-        panic(@errorReturnTrace(), "Operating mode don't not set properly. Found: {}, expecting: {}\n", .{ actual_mode, expected_mode });
+        panic(@errorReturnTrace(), "FAILURE: Operating mode don't not set properly. Found: {}, expecting: {}\n", .{ actual_mode, expected_mode });
     }
 
     log.logInfo("PIT: Tested init\n", .{});

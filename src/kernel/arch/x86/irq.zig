@@ -233,7 +233,7 @@ fn rt_unregisteredHandlers() void {
     // Ensure all ISR are not registered yet
     for (irq_handlers) |h, i| {
         if (h) |_| {
-            panic(@errorReturnTrace(), "Handler found for IRQ: {}-{}\n", .{ i, h });
+            panic(@errorReturnTrace(), "FAILURE: Handler found for IRQ: {}-{}\n", .{ i, h });
         }
     }
 
@@ -250,7 +250,7 @@ fn rt_openedIdtEntries() void {
     for (idt_entries) |entry, i| {
         if (i >= IRQ_OFFSET and isValidIrq(i - IRQ_OFFSET)) {
             if (!idt.isIdtOpen(entry)) {
-                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", .{i});
+                panic(@errorReturnTrace(), "FAILURE: IDT entry for {} is not open\n", .{i});
             }
         }
     }

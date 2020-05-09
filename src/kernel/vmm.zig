@@ -309,12 +309,12 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                 for (physical.items) |block, i| {
                     // Clear the address space entry, unmap the virtual memory and free the physical memory
                     try self.bmp.clearEntry(entry + i);
-                    pmm.free(block) catch |e| panic(@errorReturnTrace(), "Failed to free PMM reserved memory at {x}: {}\n", .{ block * BLOCK_SIZE, e });
+                    pmm.free(block) catch |e| panic(@errorReturnTrace(), "Failed to free PMM reserved memory at 0x{X}: {}\n", .{ block * BLOCK_SIZE, e });
                 }
                 // Unmap the entire range
                 const region_start = entry * BLOCK_SIZE;
                 const region_end = (entry + num_physical_allocations) * BLOCK_SIZE;
-                self.mapper.unmapFn(region_start, region_end, self.payload) catch |e| panic(@errorReturnTrace(), "Failed to unmap VMM reserved memory from {x} to {x}: {}\n", .{ region_start, region_end, e });
+                self.mapper.unmapFn(region_start, region_end, self.payload) catch |e| panic(@errorReturnTrace(), "Failed to unmap VMM reserved memory from 0x{X} to 0x{X}: {}\n", .{ region_start, region_end, e });
                 // The allocation is freed so remove from the map
                 self.allocations.removeAssertDiscard(vaddr);
             } else {
@@ -581,41 +581,41 @@ fn runtimeTests(comptime Payload: type, vmm: VirtualMemoryManager(Payload), mem_
     // Make sure all blocks before the mb info are not set
     var vaddr = vmm.start;
     while (vaddr < mb_info_addr) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if mb_info address {x} is set: {x}", .{ vaddr, e });
-        if (set) panic(null, "Address before mb_info was set: {x}", .{vaddr});
+        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to check if mb_info address 0x{X} is set: 0x{X}\n", .{ vaddr, e });
+        if (set) panic(null, "FAILURE: Address before mb_info was set: 0x{X}\n", .{vaddr});
     }
     // Make sure all blocks associated with the mb info are set
     while (vaddr < mb_info_end) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if mb_info address {x} is set: {x}", .{ vaddr, e });
-        if (!set) panic(null, "Address for mb_info was not set: {x}", .{vaddr});
+        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to check if mb_info address {x} is set: 0x{X}\n", .{ vaddr, e });
+        if (!set) panic(null, "FAILURE: Address for mb_info was not set: 0x{X}\n", .{vaddr});
     }
 
     // Make sure all blocks before the kernel code are not set
     while (vaddr < tty_addr) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if tty address {x} is set: {x}", .{ vaddr, e });
-        if (set) panic(null, "Address before tty was set: {x}", .{vaddr});
+        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to check if tty address 0x{X} is set: 0x{X}\n", .{ vaddr, e });
+        if (set) panic(null, "FAILURE: Address before tty was set: 0x{X}\n", .{vaddr});
     }
     // Make sure all blocks associated with the kernel code are set
     while (vaddr < tty_addr + tty_buff_size) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if tty address {x} is set: {x}", .{ vaddr, e });
-        if (!set) panic(null, "Address for tty was not set: {x}", .{vaddr});
+        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to check if tty address 0x{X} is set: 0x{X}\n", .{ vaddr, e });
+        if (!set) panic(null, "FAILURE: Address for tty was not set: 0x{X}\n", .{vaddr});
     }
 
     // Make sure all blocks before the kernel code are not set
     while (vaddr < v_start) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if kernel code address {x} is set: {x}", .{ vaddr, e });
-        if (set) panic(null, "Address before kernel code was set: {x}", .{vaddr});
+        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to check if kernel code address 0x{X} is set: 0x{X}\n", .{ vaddr, e });
+        if (set) panic(null, "FAILURE: Address before kernel code was set: 0x{X}\n", .{vaddr});
     }
     // Make sure all blocks associated with the kernel code are set
     while (vaddr < v_end) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if kernel code address {x} is set: {x}", .{ vaddr, e });
-        if (!set) panic(null, "Address for kernel code was not set: {x}", .{vaddr});
+        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to check if kernel code address 0x{X} is set: 0x{X}\n", .{ vaddr, e });
+        if (!set) panic(null, "FAILURE: Address for kernel code was not set: 0x{X}\n", .{vaddr});
     }
 
     // Make sure all blocks after the kernel code are not set
     while (vaddr < vmm.end - BLOCK_SIZE) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if address after {x} is set: {x}", .{ vaddr, e });
-        if (set) panic(null, "Address after kernel code was set: {x}", .{vaddr});
+        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if address after 0x{X} is set: 0x{X}", .{ vaddr, e });
+        if (set) panic(null, "Address after kernel code was set: 0x{X}", .{vaddr});
     }
 
     log.logInfo("VMM: Tested allocations\n", .{});

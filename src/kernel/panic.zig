@@ -443,7 +443,12 @@ test "SymbolMap" {
     testing.expectEqual(map.search(2345), "jkl");
 }
 
+///
+/// Runtime test for panic. This will trigger a integer overflow.
+///
 pub fn runtimeTests() void {
     var x: u8 = 255;
     x += 1;
+    // If we get here, then a panic was not triggered so fail
+    panic(@errorReturnTrace(), "FAILURE: No integer overflow\n", .{});
 }

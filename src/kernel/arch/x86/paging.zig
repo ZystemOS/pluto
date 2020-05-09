@@ -138,7 +138,7 @@ inline fn virtToTableEntryIdx(virt: usize) usize {
 ///
 /// Arguments:
 ///     val: *align(1) u32 - The entry to modify
-///     attr: u32 - The bits corresponding to the atttribute to set
+///     attr: u32 - The bits corresponding to the attribute to set
 ///
 inline fn setAttribute(val: *align(1) u32, attr: u32) void {
     val.* |= attr;
@@ -149,7 +149,7 @@ inline fn setAttribute(val: *align(1) u32, attr: u32) void {
 ///
 /// Arguments:
 ///     val: *align(1) u32 - The entry to modify
-///     attr: u32 - The bits corresponding to the atttribute to clear
+///     attr: u32 - The bits corresponding to the attribute to clear
 ///
 inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
     val.* &= ~attr;
@@ -565,21 +565,25 @@ fn rt_accessUnmappedMem(v_end: u32) void {
         \\.global rt_fault_callback
         \\rt_fault_callback:
     );
-    testing.expect(faulted);
+    if (!faulted) {
+        panic(@errorReturnTrace(), "FAILURE: Paging should have faulted\n", .{});
+    }
     log.logInfo("Paging: Tested accessing unmapped memory\n", .{});
 }
 
 fn rt_accessMappedMem(v_end: u32) void {
     use_callback2 = true;
     faulted = false;
-    // Accessing mapped memory does't cause a page fault
+    // Accessing mapped memory doesn't cause a page fault
     var ptr = @intToPtr(*u8, v_end - PAGE_SIZE_4KB);
     var value = ptr.*;
     asm volatile (
         \\.global rt_fault_callback2
         \\rt_fault_callback2:
     );
-    testing.expect(!faulted);
+    if (faulted) {
+        panic(@errorReturnTrace(), "FAILURE: Paging shouldn't have faulted\n", .{});
+    }
     log.logInfo("Paging: Tested accessing mapped memory\n", .{});
 }
 
