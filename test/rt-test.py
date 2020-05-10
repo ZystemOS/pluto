@@ -3,72 +3,58 @@ import queue
 import threading
 import subprocess
 import signal
-import re
 import sys
-import datetime
 import os
 import importlib.util
 
 msg_queue = queue.Queue(-1)
 proc = None
 
-class TestCase:
-    def __init__(self, name, expected, prefix=r"\[INFO\] "):
-        self.name = name
-        self.expected = expected
-        self.prefix = prefix
-
 def failure(msg):
     print("FAILURE: %s" %(msg))
     sys.exit(1)
 
-def test_failure(case, exp, expected_idx, found):
-    failure("%s #%d, expected '%s', found '%s'" %(case.name, expected_idx + 1, exp, found))
-
-def test_pass(case, exp, expected_idx, found):
-    print("PASS: %s #%d, expected '%s', found '%s'" %(case.name, expected_idx + 1, exp, found))
-
 def get_pre_archinit_cases():
     return [
-            TestCase("Serial tests", [r"c", r"123"], ""),
+            "c", "123",
 
-            TestCase("Log info tests", [r"Test INFO level", r"Test INFO level with args a, 1", r"Test INFO function", r"Test INFO function with args a, 1"], r"\[INFO\] "),
-            TestCase("Log debug tests", [r"Test DEBUG level", r"Test DEBUG level with args a, 1", r"Test DEBUG function", r"Test DEBUG function with args a, 1"], r"\[DEBUG\] "),
-            TestCase("Log warning tests", [r"Test WARNING level", r"Test WARNING level with args a, 1", r"Test WARNING function", r"Test WARNING function with args a, 1"], r"\[WARNING\] "),
-            TestCase("Log error tests", [r"Test ERROR level", r"Test ERROR level with args a, 1", r"Test ERROR function", r"Test ERROR function with args a, 1"], r"\[ERROR\] "),
+            "Test INFO level", "Test INFO level with args a, 1", "Test INFO function", "Test INFO function with args a, 1",
+            "Test DEBUG level", "Test DEBUG level with args a, 1", "Test DEBUG function", "Test DEBUG function with args a, 1",
+            "Test WARNING level", "Test WARNING level with args a, 1", "Test WARNING function", "Test WARNING function with args a, 1",
+            "Test ERROR level", "Test ERROR level with args a, 1", "Test ERROR function", "Test ERROR function with args a, 1",
 
-            TestCase("Mem init", [r"Init mem"]),
-            TestCase("Mem done", [r"Done mem"]),
+            "Init mem",
+            "Done mem",
 
-            TestCase("Panic init", [r"Init panic"]),
-            TestCase("Panic done", [r"Done panic"]),
+            "Init panic",
+            "Done panic",
 
-            TestCase("PMM init", [r"Init pmm"]),
-            TestCase("PMM tests", [r"PMM: Tested allocation"]),
-            TestCase("PMM done", [r"Done pmm"]),
+            "Init pmm",
+            "PMM: Tested allocation",
+            "Done pmm",
 
-            TestCase("VMM init", [r"Init vmm"]),
-            TestCase("VMM tests", [r"VMM: Tested allocations"]),
-            TestCase("VMM done", [r"Done vmm"]),
-            TestCase("Arch init starts", [r"Init arch \w+"])
+            "Init vmm",
+            "VMM: Tested allocations",
+            "Done vmm",
+            "Init arch",
         ]
 
 def get_post_archinit_cases():
     return [
-            TestCase("Arch init finishes", [r"Arch init done"]),
-            TestCase("VGA init", [r"Init vga"]),
-            TestCase("VGA tests", [r"VGA: Tested max scan line", r"VGA: Tested cursor shape", r"VGA: Tested updating cursor"]),
-            TestCase("VGA done", [r"Done vga"]),
+            "Arch init done",
+            "Init vga",
+            "VGA: Tested max scan line", "VGA: Tested cursor shape", "VGA: Tested updating cursor",
+            "Done vga",
 
-            TestCase("TTY init", [r"Init tty"]),
-            TestCase("TTY tests", [r"TTY: Tested globals", r"TTY: Tested printing"]),
-            TestCase("TTY done", [r"Done tty"]),
+            "Init tty",
+            "TTY: Tested globals", "TTY: Tested printing",
+            "Done tty",
 
-            TestCase("Heap", [r"Init heap", r"Done heap"]),
+            "Init heap", "Done heap",
 
-            TestCase("Init finishes", [r"Init done"]),
+            "Init done",
 
-            TestCase("Panic tests", [r"Kernel panic: integer overflow", r"c[a-z\d]+: panic", r"c[a-z\d]+: panic.runtimeTests", r"c[a-z\d]+: kmain", r"c[a-z\d]+: start_higher_half"], r"\[ERROR\] ")
+            "Kernel panic: integer overflow", ": panic", ": panic.runtimeTests", ": kmain", ": start_higher_half",
         ]
 
 def read_messages(proc):
@@ -90,33 +76,38 @@ if __name__ == "__main__":
     # The list of log statements to look for before arch init is called +
     # All log statements to look for, including the arch-specific ones +
     # The list of log statements to look for after arch init is called
-    cases = get_pre_archinit_cases() + arch_module.get_test_cases(TestCase) + get_post_archinit_cases()
+    cases = get_pre_archinit_cases() + arch_module.get_test_cases() + get_post_archinit_cases()
 
-    if len(cases) > 0:
-        proc = subprocess.Popen(zig_path + " build run -Drt-test=true", stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
-        atexit.register(cleanup)
-        case_idx = 0
-        read_thread = threading.Thread(target=read_messages, args=(proc,))
-        read_thread.daemon = True
-        read_thread.start()
-        # Go through the cases
-        while case_idx < len(cases):
-            case = cases[case_idx]
-            expected_idx = 0
-            # Go through the expected log messages
-            while expected_idx < len(case.expected):
-                e = case.prefix + case.expected[expected_idx]
-                try:
-                    line = msg_queue.get(block=True, timeout=5)
-                except queue.Empty:
-                    failure("Timed out waiting for '%s'" %(e))
-                line = line.strip()
-                pattern = re.compile(e)
-                # Pass if the line matches the expected pattern, else fail
-                if pattern.fullmatch(line):
-                    test_pass(case, e, expected_idx, line)
-                else:
-                    test_failure(case, e, expected_idx, line)
-                expected_idx += 1
-            case_idx += 1
+    proc = subprocess.Popen(zig_path + " build run -Drt-test=true", stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
+    atexit.register(cleanup)
+    
+    read_thread = threading.Thread(target=read_messages, args=(proc,))
+    read_thread.daemon = True
+    read_thread.start()
+
+    while cases:
+        try:
+            line = msg_queue.get(block=True, timeout=5)
+        except queue.Empty:
+            print("Missing cases: " + cases)
+            failure("Timed out")
+        
+        line = line.strip()
+
+        # Print the line so can see what is going on
+        print(line)
+
+        # If there is a FAILURE message in the log, then fail the testing
+        if "FAILURE" in line:
+            failure("Test failed")
+        
+        if not cases:
+            # Empty cases, so expecting something, fail
+            failure("Empty cases")
+
+        # Remove the line from the cases, this is slow for now
+        cases = [item for item in cases if item not in line]
+
+    print("Test complete")
+
     sys.exit(0)

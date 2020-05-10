@@ -322,5 +322,5 @@ fn runtimeTests() void {
         panic(@errorReturnTrace(), "FAILURE\n", .{});
     }
 
-    log.logInfo("Syscall tests\n", .{});
+    log.logInfo("Syscall: Tested all args\n", .{});
 }
