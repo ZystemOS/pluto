@@ -25,7 +25,7 @@ cp -r grub $BOOT_DIR
 cp $PLUTO_ELF $BOOT_DIR/"pluto.elf"
 
 # Read the symbols from the binary, remove all the unnecessary columns with awk and emit to a map file
-readelf -s $PLUTO_ELF | grep -F "FUNC" | awk '{$1=$3=$4=$5=$6=$7=""; print $0}' | sort -k 1 > $MAP_FILE
+readelf -s --wide $PLUTO_ELF | grep -F "FUNC" | awk '{$1=$3=$4=$5=$6=$7=""; print $0}' | sort -k 1 > $MAP_FILE
 echo "" >> $MAP_FILE
 
 grub-mkrescue -o $OUTPUT_FILE $ISO_DIR
