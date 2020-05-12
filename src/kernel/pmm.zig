@@ -19,7 +19,7 @@ const PmmError = error{
 };
 
 /// The size of memory associated with each bitmap entry
-pub const BLOCK_SIZE = arch.MEMORY_BLOCK_SIZE;
+pub const BLOCK_SIZE: usize = arch.MEMORY_BLOCK_SIZE;
 
 var bitmap: PmmBitmap = undefined;
 
@@ -85,10 +85,10 @@ pub fn free(addr: usize) (PmmBitmap.BitmapError || PmmError)!void {
 ///
 /// Get the number of unallocated blocks of memory.
 ///
-/// Return: u32.
+/// Return: usize.
 ///     The number of unallocated blocks of memory
 ///
-pub fn blocksFree() u32 {
+pub fn blocksFree() usize {
     return bitmap.num_free_entries;
 }
 

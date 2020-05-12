@@ -31,7 +31,7 @@ const Allocation = struct {
 };
 
 /// The size of each allocatable block, the same as the physical memory manager's block size
-pub const BLOCK_SIZE: u32 = pmm.BLOCK_SIZE;
+pub const BLOCK_SIZE: usize = pmm.BLOCK_SIZE;
 
 pub const MapperError = error{
     InvalidVirtualAddress,
@@ -121,7 +121,7 @@ pub const VmmError = error{
 pub fn VirtualMemoryManager(comptime Payload: type) type {
     return struct {
         /// The bitmap that keeps track of allocated and free regions
-        bmp: bitmap.Bitmap(u32),
+        bmp: bitmap.Bitmap(usize),
 
         /// The start of the memory to be tracked
         start: usize,
@@ -161,7 +161,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///
         pub fn init(start: usize, end: usize, allocator: *std.mem.Allocator, mapper: Mapper(Payload), payload: Payload) std.mem.Allocator.Error!Self {
             const size = end - start;
-            var bmp = try bitmap.Bitmap(u32).init(@floatToInt(u32, @ceil(@intToFloat(f32, size) / @intToFloat(f32, pmm.BLOCK_SIZE))), allocator);
+            var bmp = try bitmap.Bitmap(usize).init(std.mem.alignForward(size, pmm.BLOCK_SIZE) / pmm.BLOCK_SIZE, allocator);
             return Self{
                 .bmp = bmp,
                 .start = start,
@@ -250,7 +250,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///
         /// Arguments:
         ///     INOUT self: *Self - The manager to allocate for
-        ///     IN num: u32 - The number of blocks to allocate
+        ///     IN num: usize - The number of blocks to allocate
         ///     IN attrs: Attributes - The attributes to apply to the mapped memory
         ///
         /// Return: ?usize
@@ -259,7 +259,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         /// Error: std.mem.Allocator.Error
         ///     std.mem.AllocatorError.OutOfMemory: The required amount of memory couldn't be allocated
         ///
-        pub fn alloc(self: *Self, num: u32, attrs: Attributes) std.mem.Allocator.Error!?usize {
+        pub fn alloc(self: *Self, num: usize, attrs: Attributes) std.mem.Allocator.Error!?usize {
             if (num == 0)
                 return null;
             // Ensure that there is both enough physical and virtual address space free
@@ -269,7 +269,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                     var block_list = std.ArrayList(usize).init(self.allocator);
                     try block_list.ensureCapacity(num);
 
-                    var i: u32 = 0;
+                    var i: usize = 0;
                     const vaddr_start = self.start + entry * BLOCK_SIZE;
                     var vaddr = vaddr_start;
                     // Map the blocks to physical memory

@@ -283,11 +283,11 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     // Exit if we haven't loaded all debug modules
     if (mem_profile.boot_modules.len < 1)
         return;
-    var kmap_start: u32 = 0;
-    var kmap_end: u32 = 0;
+    var kmap_start: usize = 0;
+    var kmap_end: usize = 0;
     for (mem_profile.boot_modules) |module| {
-        const mod_start = mem.physToVirt(module.mod_start);
-        const mod_end = mem.physToVirt(module.mod_end) - 1;
+        const mod_start = mem.physToVirt(@intCast(usize, module.mod_start));
+        const mod_end = mem.physToVirt(@intCast(usize, module.mod_end) - 1);
         const mod_str_ptr = mem.physToVirt(@intToPtr([*:0]u8, module.cmdline));
         if (std.mem.eql(u8, std.mem.span(mod_str_ptr), "kernel.map")) {
             kmap_start = mod_start;
