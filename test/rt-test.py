@@ -66,6 +66,16 @@ def cleanup():
     global proc
     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
 
+def check_cases(cases):
+    for case_1 in cases:
+        for case_2 in cases:
+            if case_1 != case_2:
+                if case_1 in case_2 or case_2 in case_1:
+                    print("Conflicting cases: {}, {}\n".format(case_1, case_2))
+                    return True
+    
+    return False
+
 if __name__ == "__main__":
     arch = sys.argv[1]
     zig_path = sys.argv[2]
@@ -78,6 +88,9 @@ if __name__ == "__main__":
     # The list of log statements to look for after arch init is called
     cases = get_pre_archinit_cases() + arch_module.get_test_cases() + get_post_archinit_cases()
 
+    if check_cases(cases):
+        sys.exit(1)
+
     proc = subprocess.Popen(zig_path + " build run -Drt-test=true", stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
     atexit.register(cleanup)
     
@@ -89,7 +102,8 @@ if __name__ == "__main__":
         try:
             line = msg_queue.get(block=True, timeout=5)
         except queue.Empty:
-            print("Missing cases: " + cases)
+            if cases:
+                print("Missing cases: " + cases)
             failure("Timed out")
         
         line = line.strip()
@@ -101,10 +115,6 @@ if __name__ == "__main__":
         if "FAILURE" in line:
             failure("Test failed")
         
-        if not cases:
-            # Empty cases, so expecting something, fail
-            failure("Empty cases")
-
         # Remove the line from the cases, this is slow for now
         cases = [item for item in cases if item not in line]
 
