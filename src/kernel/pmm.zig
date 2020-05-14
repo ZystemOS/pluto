@@ -7,7 +7,6 @@ const MemProfile = (if (is_test) @import(mock_path ++ "mem_mock.zig") else @impo
 const testing = std.testing;
 const panic = @import("panic.zig").panic;
 const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
-const MEMORY_AVAILABLE = @import("multiboot.zig").MULTIBOOT_MEMORY_AVAILABLE;
 const Bitmap = @import("bitmap.zig").Bitmap;
 
 const PmmBitmap = Bitmap(u32);
@@ -105,20 +104,19 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
     bitmap = PmmBitmap.init(mem.mem_kb * 1024 / BLOCK_SIZE, allocator) catch @panic("Bitmap allocation failed");
 
     // Occupy the regions of memory that the memory map describes as reserved
-    for (mem.mem_map) |entry| {
-        if (entry.@"type" != MEMORY_AVAILABLE) {
-            var addr = std.mem.alignBackward(@intCast(usize, entry.addr), BLOCK_SIZE);
-            var end = @intCast(usize, entry.addr + (entry.len - 1));
-            // If the end address can be aligned without overflowing then align it
-            if (end <= std.math.maxInt(usize) - BLOCK_SIZE)
-                end = std.mem.alignForward(end, BLOCK_SIZE);
-            while (addr < end) : (addr += BLOCK_SIZE) {
-                setAddr(addr) catch |e| switch (e) {
-                    // We can ignore out of bounds errors as the memory won't be available anyway
-                    PmmBitmap.BitmapError.OutOfBounds => break,
-                    else => panic(@errorReturnTrace(), "Failed setting address 0x{x} from memory map as occupied: {}", .{ addr, e }),
-                };
-            }
+    for (mem.physical_reserved) |entry| {
+        var addr = std.mem.alignBackward(entry.start, BLOCK_SIZE);
+        var end = entry.end - 1;
+        // If the end address can be aligned without overflowing then align it
+        if (end <= std.math.maxInt(usize) - BLOCK_SIZE) {
+            end = std.mem.alignForward(end, BLOCK_SIZE);
+        }
+        while (addr < end) : (addr += BLOCK_SIZE) {
+            setAddr(addr) catch |e| switch (e) {
+                // We can ignore out of bounds errors as the memory won't be available anyway
+                PmmBitmap.BitmapError.OutOfBounds => break,
+                else => panic(@errorReturnTrace(), "Failed setting address 0x{x} from memory map as occupied: {}", .{ addr, e }),
+            };
         }
     }
 
@@ -144,12 +142,10 @@ fn runtimeTests(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
             panic(null, "PMM allocated the same address twice: 0x{x}", .{alloced});
         }
         prev_alloc = alloced;
-        for (mem.mem_map) |entry| {
-            if (entry.@"type" != MEMORY_AVAILABLE) {
-                var addr = std.mem.alignBackward(@intCast(usize, entry.addr), BLOCK_SIZE);
-                if (addr == alloced) {
-                    panic(null, "PMM allocated an address that should be reserved by the memory map: 0x{x}", .{addr});
-                }
+        for (mem.physical_reserved) |entry| {
+            var addr = std.mem.alignBackward(entry.start, BLOCK_SIZE);
+            if (addr == alloced) {
+                panic(null, "PMM allocated an address that should be reserved by the memory map: 0x{x}", .{addr});
             }
         }
         alloc_list.append(alloced) catch |e| panic(@errorReturnTrace(), "Failed to add PMM allocation to list: {}", .{e});

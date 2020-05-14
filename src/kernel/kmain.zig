@@ -4,7 +4,6 @@ const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
-const multiboot = @import("multiboot.zig");
 const tty = @import("tty.zig");
 const vga = @import("vga.zig");
 const log = @import("log.zig");
@@ -38,46 +37,42 @@ pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn
     panic_root.panic(error_return_trace, "{}", .{msg});
 }
 
-export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
-    if (mb_magic == multiboot.MULTIBOOT_BOOTLOADER_MAGIC) {
-        // Booted with compatible bootloader
-        serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
-            panic_root.panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
-        };
+export fn kmain(boot_payload: arch.BootPayload) void {
+    serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
+    };
 
-        if (build_options.rt_test) log.runtimeTests();
+    if (build_options.rt_test) log.runtimeTests();
 
-        const mem_profile = mem.init(mb_info);
-        var buffer = mem_profile.vaddr_end[0..mem_profile.fixed_alloc_size];
-        var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer);
+    const mem_profile = arch.initMem(boot_payload) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise memory profile: {}", .{e});
+    var fixed_allocator = mem_profile.fixed_allocator;
 
-        panic_root.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
-            panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}", .{e});
-        };
+    panic_root.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}", .{e});
+    };
 
-        pmm.init(&mem_profile, &fixed_allocator.allocator);
-        kernel_vmm = vmm.init(&mem_profile, mb_info, &fixed_allocator.allocator) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
+    pmm.init(&mem_profile, &fixed_allocator.allocator);
+    kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
 
-        log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
-        arch.init(mb_info, &mem_profile, &fixed_allocator.allocator);
-        log.logInfo("Arch init done\n", .{});
+    log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+    arch.init(boot_payload, &mem_profile, &fixed_allocator.allocator);
+    log.logInfo("Arch init done\n", .{});
 
-        vga.init();
-        tty.init();
-        // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
-        var heap_size = mem_profile.mem_kb / 10 * 1024;
-        // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
-        if (!std.math.isPowerOfTwo(heap_size)) {
-            heap_size = std.math.floorPowerOfTwo(usize, heap_size);
-        }
-        var kernel_heap = heap.init(arch.VmmPayload, &kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size, &fixed_allocator.allocator) catch |e| {
-            panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
-        };
-        log.logInfo("Init done\n", .{});
-
-        tty.print("Hello Pluto from kernel :)\n", .{});
-
-        // The panic runtime tests must run last as they never return
-        if (options.rt_test) panic_root.runtimeTests();
+    vga.init();
+    tty.init();
+    // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
+    var heap_size = mem_profile.mem_kb / 10 * 1024;
+    // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
+    if (!std.math.isPowerOfTwo(heap_size)) {
+        heap_size = std.math.floorPowerOfTwo(usize, heap_size);
     }
+    var kernel_heap = heap.init(arch.VmmPayload, &kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size, &fixed_allocator.allocator) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
+    };
+    log.logInfo("Init done\n", .{});
+
+    tty.print("Hello Pluto from kernel :)\n", .{});
+
+    // The panic runtime tests must run last as they never return
+    if (options.rt_test) panic_root.runtimeTests();
 }

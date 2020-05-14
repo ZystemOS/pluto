@@ -10,7 +10,7 @@ const tty = @import("../../tty.zig");
 const log = @import("../../log.zig");
 const mem = @import("../../mem.zig");
 const vmm = @import("../../vmm.zig");
-const multiboot = @import("../../multiboot.zig");
+const multiboot = @import("multiboot.zig");
 const options = @import("build_options");
 const testing = std.testing;
 
@@ -404,7 +404,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
         :
         : [addr] "{eax}" (dir_physaddr)
     );
-    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
+    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem.FIXED_ALLOC_SIZE, PAGE_SIZE_4KB);
     if (options.rt_test) runtimeTests(v_end);
 }
 

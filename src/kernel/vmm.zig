@@ -7,7 +7,6 @@ const bitmap = @import("bitmap.zig");
 const pmm = @import("pmm.zig");
 const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
 const tty = @import("tty.zig");
-const multiboot = @import("multiboot.zig");
 const log = @import("log.zig");
 const panic = @import("panic.zig").panic;
 const arch = @import("arch.zig").internals;
@@ -195,10 +194,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///
         /// Arguments:
         ///     INOUT self: *Self - The manager to modify
-        ///     IN virtual_start: usize - The start of the virtual region
-        ///     IN virtual_end: usize - The end of the virtual region
-        ///     IN physical_start: usize - The start of the physical region
-        ///     IN physical_end: usize - The end of the physical region
+        ///     IN virtual: mem.Range - The virtual region to set
+        ///     IN physical: ?mem.Range - The physical region to map to or null if only the virtual region is to be set
         ///     IN attrs: Attributes - The attributes to apply to the memory regions
         ///
         /// Error: VmmError || Bitmap(u32).BitmapError || std.mem.Allocator.Error || MapperError
@@ -211,36 +208,46 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     std.mem.Allocator.Error.OutOfMemory - Allocating the required memory failed
         ///     MapperError.* - The causes depend on the mapper used
         ///
-        pub fn set(self: *Self, virtual_start: usize, virtual_end: usize, physical_start: usize, physical_end: usize, attrs: Attributes) (VmmError || bitmap.Bitmap(u32).BitmapError || std.mem.Allocator.Error || MapperError)!void {
-            var virt = virtual_start;
-            while (virt < virtual_end) : (virt += BLOCK_SIZE) {
+        pub fn set(self: *Self, virtual: mem.Range, physical: ?mem.Range, attrs: Attributes) (VmmError || bitmap.Bitmap(u32).BitmapError || std.mem.Allocator.Error || MapperError)!void {
+            var virt = virtual.start;
+            while (virt < virtual.end) : (virt += BLOCK_SIZE) {
                 if (try self.isSet(virt))
                     return VmmError.AlreadyAllocated;
             }
-            var phys = physical_start;
-            while (phys < physical_end) : (phys += BLOCK_SIZE) {
-                if (try pmm.isSet(phys))
-                    return VmmError.PhysicalAlreadyAllocated;
-            }
-            if (virtual_end - virtual_start != physical_end - physical_start)
-                return VmmError.PhysicalVirtualMismatch;
-            if (physical_start > physical_end)
-                return VmmError.InvalidPhysAddresses;
-            if (virtual_start > virtual_end)
+            if (virtual.start > virtual.end) {
                 return VmmError.InvalidVirtAddresses;
+            }
 
-            virt = virtual_start;
-            while (virt < virtual_end) : (virt += BLOCK_SIZE) {
+            if (physical) |p| {
+                if (virtual.end - virtual.start != p.end - p.start) {
+                    return VmmError.PhysicalVirtualMismatch;
+                }
+                if (p.start > p.end) {
+                    return VmmError.InvalidPhysAddresses;
+                }
+                var phys = p.start;
+                while (phys < p.end) : (phys += BLOCK_SIZE) {
+                    if (try pmm.isSet(phys)) {
+                        return VmmError.PhysicalAlreadyAllocated;
+                    }
+                }
+            }
+
+            var phys_list = std.ArrayList(usize).init(self.allocator);
+
+            virt = virtual.start;
+            while (virt < virtual.end) : (virt += BLOCK_SIZE) {
                 try self.bmp.setEntry(virt / BLOCK_SIZE);
             }
 
-            try self.mapper.mapFn(virtual_start, virtual_end, physical_start, physical_end, attrs, self.allocator, self.payload);
+            if (physical) |p| {
+                try self.mapper.mapFn(virtual.start, virtual.end, p.start, p.end, attrs, self.allocator, self.payload);
 
-            var phys_list = std.ArrayList(usize).init(self.allocator);
-            phys = physical_start;
-            while (phys < physical_end) : (phys += BLOCK_SIZE) {
-                try pmm.setAddr(phys);
-                try phys_list.append(phys);
+                var phys = p.start;
+                while (phys < p.end) : (phys += BLOCK_SIZE) {
+                    try pmm.setAddr(phys);
+                    try phys_list.append(phys);
+                }
             }
             _ = try self.allocations.put(virt, Allocation{ .physical = phys_list });
         }
@@ -325,23 +332,19 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
 }
 
 ///
-/// Initialise the main system virtual memory manager covering 4GB. Maps in the kernel code, TTY, multiboot info and boot modules
+/// Initialise the main system virtual memory manager covering 4GB. Maps in the kernel code and reserved virtual memory
 ///
 /// Arguments:
 ///     IN mem_profile: *const mem.MemProfile - The system's memory profile. This is used to find the kernel code region and boot modules
-///     IN mb_info: *multiboot.multiboot_info_t - The multiboot info
 ///     INOUT allocator: *std.mem.Allocator - The allocator to use when needing to allocate memory
-///     IN comptime Payload: type - The type of the data to pass as a payload to the virtual memory manager
-///     IN mapper: Mapper - The memory mapper to call when allocating and free virtual memory
-///     IN payload: Paylaod - The payload data to pass to the virtual memory manager
 ///
 /// Return: VirtualMemoryManager
-///     The virtual memory manager created with all stated regions allocated
+///     The virtual memory manager created with all reserved virtual regions allocated
 ///
 /// Error: std.mem.Allocator.Error
 ///     std.mem.Allocator.Error.OutOfMemory - The allocator cannot allocate the memory required
 ///
-pub fn init(mem_profile: *const mem.MemProfile, mb_info: *multiboot.multiboot_info_t, allocator: *std.mem.Allocator) std.mem.Allocator.Error!VirtualMemoryManager(arch.VmmPayload) {
+pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) std.mem.Allocator.Error!VirtualMemoryManager(arch.VmmPayload) {
     log.logInfo("Init vmm\n", .{});
     defer log.logInfo("Done vmm\n", .{});
 
@@ -350,37 +353,21 @@ pub fn init(mem_profile: *const mem.MemProfile, mb_info: *multiboot.multiboot_in
     // Map in kernel
     // Calculate start and end of mapping
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), BLOCK_SIZE);
-    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, BLOCK_SIZE);
+    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem.FIXED_ALLOC_SIZE, BLOCK_SIZE);
     const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), BLOCK_SIZE);
-    const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, BLOCK_SIZE);
-    vmm.set(v_start, v_end, p_start, p_end, .{ .kernel = true, .writable = false, .cachable = true }) catch |e| panic(@errorReturnTrace(), "Failed mapping kernel code in VMM: {}", .{e});
+    const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem.FIXED_ALLOC_SIZE, BLOCK_SIZE);
+    vmm.set(.{ .start = v_start, .end = v_end }, mem.Range{ .start = p_start, .end = p_end }, .{ .kernel = true, .writable = false, .cachable = true }) catch |e| panic(@errorReturnTrace(), "Failed mapping kernel code in VMM: {}", .{e});
 
-    // Map in tty
-    const tty_addr = tty.getVideoBufferAddress();
-    const tty_phys = mem.virtToPhys(tty_addr);
-    const tty_buff_size = 32 * 1024;
-    vmm.set(tty_addr, tty_addr + tty_buff_size, tty_phys, tty_phys + tty_buff_size, .{ .kernel = true, .writable = true, .cachable = true }) catch |e| panic(@errorReturnTrace(), "Failed mapping TTY in VMM: {}", .{e});
-
-    // Map in the multiboot info struct
-    const mb_info_addr = std.mem.alignBackward(@ptrToInt(mb_info), BLOCK_SIZE);
-    const mb_info_end = std.mem.alignForward(mb_info_addr + @sizeOf(multiboot.multiboot_info_t), BLOCK_SIZE);
-    vmm.set(mb_info_addr, mb_info_end, mem.virtToPhys(mb_info_addr), mem.virtToPhys(mb_info_end), .{ .kernel = true, .writable = false, .cachable = true }) catch |e| panic(@errorReturnTrace(), "Failed mapping multiboot info in VMM: {}", .{e});
-
-    // Map in each boot module
-    for (mem_profile.boot_modules) |*module| {
-        const mod_v_struct_start = std.mem.alignBackward(@ptrToInt(module), BLOCK_SIZE);
-        const mod_v_struct_end = std.mem.alignForward(mod_v_struct_start + @sizeOf(multiboot.multiboot_module_t), BLOCK_SIZE);
-        vmm.set(mod_v_struct_start, mod_v_struct_end, mem.virtToPhys(mod_v_struct_start), mem.virtToPhys(mod_v_struct_end), .{ .kernel = true, .writable = true, .cachable = true }) catch |e| switch (e) {
-            // A previous allocation could cover this region so the AlreadyAllocated error can be ignored
-            VmmError.AlreadyAllocated => break,
-            else => panic(@errorReturnTrace(), "Failed mapping boot module struct in VMM: {}", .{e}),
+    for (mem_profile.virtual_reserved) |entry| {
+        const virtual = mem.Range{ .start = std.mem.alignBackward(entry.virtual.start, BLOCK_SIZE), .end = std.mem.alignForward(entry.virtual.end, BLOCK_SIZE) };
+        const physical: ?mem.Range = if (entry.physical) |phys| mem.Range{ .start = std.mem.alignBackward(phys.start, BLOCK_SIZE), .end = std.mem.alignForward(phys.end, BLOCK_SIZE) } else null;
+        vmm.set(virtual, physical, .{ .kernel = true, .writable = true, .cachable = true }) catch |e| switch (e) {
+            VmmError.AlreadyAllocated => {},
+            else => panic(@errorReturnTrace(), "Failed mapping region in VMM {}: {}\n", .{ entry, e }),
         };
-        const mod_p_start = std.mem.alignBackward(module.mod_start, BLOCK_SIZE);
-        const mod_p_end = std.mem.alignForward(module.mod_end, BLOCK_SIZE);
-        vmm.set(mem.physToVirt(mod_p_start), mem.physToVirt(mod_p_end), mod_p_start, mod_p_end, .{ .kernel = true, .writable = true, .cachable = true }) catch |e| panic(@errorReturnTrace(), "Failed mapping boot module in VMM: {}", .{e});
     }
 
-    if (build_options.rt_test) runtimeTests(arch.VmmPayload, vmm, mem_profile, mb_info);
+    if (build_options.rt_test) runtimeTests(arch.VmmPayload, vmm, mem_profile);
     return vmm;
 }
 
@@ -474,7 +461,7 @@ test "set" {
     const pstart = vstart + 123;
     const pend = vend + 123;
     const attrs = Attributes{ .kernel = true, .writable = true, .cachable = true };
-    try vmm.set(vstart, vend, pstart, pend, attrs);
+    try vmm.set(.{ .start = vstart, .end = vend }, mem.Range{ .start = pstart, .end = pend }, attrs);
 
     var allocations = test_allocations orelse unreachable;
     // The entries before the virtual start shouldn't be set
@@ -517,7 +504,17 @@ fn testInit(num_entries: u32) std.mem.Allocator.Error!VirtualMemoryManager(u8) {
         }
     }
     var allocations = test_allocations orelse unreachable;
-    const mem_profile = mem.MemProfile{ .vaddr_end = undefined, .vaddr_start = undefined, .physaddr_start = undefined, .physaddr_end = undefined, .mem_kb = num_entries * BLOCK_SIZE / 1024, .fixed_alloc_size = undefined, .mem_map = &[_]multiboot.multiboot_memory_map_t{}, .boot_modules = &[_]multiboot.multiboot_module_t{} };
+    const mem_profile = mem.MemProfile{
+        .vaddr_end = undefined,
+        .vaddr_start = undefined,
+        .physaddr_start = undefined,
+        .physaddr_end = undefined,
+        .mem_kb = num_entries * BLOCK_SIZE / 1024,
+        .fixed_allocator = undefined,
+        .virtual_reserved = &[_]mem.Map{},
+        .physical_reserved = &[_]mem.Range{},
+        .modules = &[_]mem.Module{},
+    };
     pmm.init(&mem_profile, std.heap.page_allocator);
     return try VirtualMemoryManager(u8).init(0, num_entries * BLOCK_SIZE, std.heap.page_allocator, test_mapper, 39);
 }
@@ -567,55 +564,29 @@ fn testUnmap(vstart: usize, vend: usize, payload: u8) (std.mem.Allocator.Error |
 ///     IN mem_profile: *const mem.MemProfile - The mem profile with details about all the memory regions that should be reserved
 ///     IN mb_info: *multiboot.multiboot_info_t - The multiboot info struct that should also be reserved
 ///
-fn runtimeTests(comptime Payload: type, vmm: VirtualMemoryManager(Payload), mem_profile: *const mem.MemProfile, mb_info: *multiboot.multiboot_info_t) void {
+fn runtimeTests(comptime Payload: type, vmm: VirtualMemoryManager(Payload), mem_profile: *const mem.MemProfile) void {
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), BLOCK_SIZE);
-    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, BLOCK_SIZE);
-    const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), BLOCK_SIZE);
-    const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem_profile.fixed_alloc_size, BLOCK_SIZE);
-    const tty_addr = tty.getVideoBufferAddress();
-    const tty_phys = mem.virtToPhys(tty_addr);
-    const tty_buff_size = 32 * 1024;
-    const mb_info_addr = std.mem.alignBackward(@ptrToInt(mb_info), BLOCK_SIZE);
-    const mb_info_end = std.mem.alignForward(mb_info_addr + @sizeOf(multiboot.multiboot_info_t), BLOCK_SIZE);
+    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem.FIXED_ALLOC_SIZE, BLOCK_SIZE);
 
-    // Make sure all blocks before the mb info are not set
     var vaddr = vmm.start;
-    while (vaddr < mb_info_addr) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if mb_info address {x} is set: {x}", .{ vaddr, e });
-        if (set) panic(null, "Address before mb_info was set: {x}", .{vaddr});
-    }
-    // Make sure all blocks associated with the mb info are set
-    while (vaddr < mb_info_end) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if mb_info address {x} is set: {x}", .{ vaddr, e });
-        if (!set) panic(null, "Address for mb_info was not set: {x}", .{vaddr});
-    }
-
-    // Make sure all blocks before the kernel code are not set
-    while (vaddr < tty_addr) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if tty address {x} is set: {x}", .{ vaddr, e });
-        if (set) panic(null, "Address before tty was set: {x}", .{vaddr});
-    }
-    // Make sure all blocks associated with the kernel code are set
-    while (vaddr < tty_addr + tty_buff_size) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if tty address {x} is set: {x}", .{ vaddr, e });
-        if (!set) panic(null, "Address for tty was not set: {x}", .{vaddr});
-    }
-
-    // Make sure all blocks before the kernel code are not set
-    while (vaddr < v_start) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if kernel code address {x} is set: {x}", .{ vaddr, e });
-        if (set) panic(null, "Address before kernel code was set: {x}", .{vaddr});
-    }
-    // Make sure all blocks associated with the kernel code are set
-    while (vaddr < v_end) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if kernel code address {x} is set: {x}", .{ vaddr, e });
-        if (!set) panic(null, "Address for kernel code was not set: {x}", .{vaddr});
-    }
-
-    // Make sure all blocks after the kernel code are not set
     while (vaddr < vmm.end - BLOCK_SIZE) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to check if address after {x} is set: {x}", .{ vaddr, e });
-        if (set) panic(null, "Address after kernel code was set: {x}", .{vaddr});
+        const set = vmm.isSet(vaddr) catch unreachable;
+        var should_be_set = false;
+        if (vaddr < v_end and vaddr >= v_start) {
+            should_be_set = true;
+        } else {
+            for (mem_profile.virtual_reserved) |entry| {
+                if (vaddr >= std.mem.alignBackward(entry.virtual.start, BLOCK_SIZE) and vaddr < std.mem.alignForward(entry.virtual.end, BLOCK_SIZE)) {
+                    should_be_set = true;
+                    break;
+                }
+            }
+        }
+        if (set and !should_be_set) {
+            panic(@errorReturnTrace(), "An address was set in the VMM when it shouldn't have been: 0x{x}\n", .{vaddr});
+        } else if (!set and should_be_set) {
+            panic(@errorReturnTrace(), "An address was not set in the VMM when it should have been: 0x{x}\n", .{vaddr});
+        }
     }
 
     log.logInfo("VMM: Tested allocations\n", .{});

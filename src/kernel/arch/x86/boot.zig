@@ -102,10 +102,9 @@ export fn start_higher_half() callconv(.Naked) noreturn {
         \\xor %%ebp, %%ebp
     );
 
-    // Push the bootloader magic number and multiboot header address with virtual offset
+    // Push the multiboot header address with virtual offset
     asm volatile (
         \\.extern KERNEL_ADDR_OFFSET
-        \\push %%eax
         \\add $KERNEL_ADDR_OFFSET, %%ebx
         \\push %%ebx
     );
