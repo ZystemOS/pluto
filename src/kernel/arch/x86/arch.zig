@@ -62,7 +62,7 @@ pub const KERNEL_VMM_PAYLOAD = &paging.kernel_directory;
 pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = vmm.Mapper(VmmPayload){ .mapFn = paging.map, .unmapFn = paging.unmap };
 
 /// The size of each allocatable block of memory, normally set to the page size.
-pub const MEMORY_BLOCK_SIZE = paging.PAGE_SIZE_4KB;
+pub const MEMORY_BLOCK_SIZE: usize = paging.PAGE_SIZE_4KB;
 
 ///
 /// Assembly to write to a given port with a byte of data.

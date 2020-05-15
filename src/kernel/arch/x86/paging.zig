@@ -99,10 +99,10 @@ const TENTRY_AVAILABLE: u32 = 0xE00;
 const TENTRY_PAGE_ADDR: u32 = 0xFFFFF000;
 
 /// The number of bytes in 4MB
-pub const PAGE_SIZE_4MB: u32 = 0x400000;
+pub const PAGE_SIZE_4MB: usize = 0x400000;
 
 /// The number of bytes in 4KB
-pub const PAGE_SIZE_4KB: u32 = PAGE_SIZE_4MB / 1024;
+pub const PAGE_SIZE_4KB: usize = PAGE_SIZE_4MB / 1024;
 
 /// The kernel's page directory. Should only be used to map kernel-owned code and data
 pub var kernel_directory: Directory align(@truncate(u29, PAGE_SIZE_4KB)) = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };

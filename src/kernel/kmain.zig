@@ -68,7 +68,7 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
         var heap_size = mem_profile.mem_kb / 10 * 1024;
         // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
         if (!std.math.isPowerOfTwo(heap_size)) {
-            heap_size = std.math.floorPowerOfTwo(u32, heap_size);
+            heap_size = std.math.floorPowerOfTwo(usize, heap_size);
         }
         var kernel_heap = heap.init(arch.VmmPayload, &kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size, &fixed_allocator.allocator) catch |e| {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});

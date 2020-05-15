@@ -22,7 +22,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         const Self = @This();
 
         /// The number of entries that one bitmap type can hold. Evaluates to the number of bits the type has
-        pub const ENTRIES_PER_BITMAP: u32 = std.meta.bitCount(BitmapType);
+        pub const ENTRIES_PER_BITMAP: usize = std.meta.bitCount(BitmapType);
 
         /// The value that a full bitmap will have
         pub const BITMAP_FULL = std.math.maxInt(BitmapType);
@@ -30,16 +30,16 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// The type of an index into a bitmap entry. The smallest integer needed to represent all bit positions in the bitmap entry type
         pub const IndexType = @Type(builtin.TypeInfo{ .Int = builtin.TypeInfo.Int{ .is_signed = false, .bits = std.math.log2(std.meta.bitCount(BitmapType)) } });
 
-        num_bitmaps: u32,
-        num_entries: u32,
+        num_bitmaps: usize,
+        num_entries: usize,
         bitmaps: []BitmapType,
-        num_free_entries: u32,
+        num_free_entries: usize,
 
         ///
         /// Create an instance of this bitmap type.
         ///
         /// Arguments:
-        ///     IN num_entries: u32 - The number of entries that the bitmap created will have.
+        ///     IN num_entries: usize - The number of entries that the bitmap created will have.
         ///         The number of BitmapType required to store this many entries will be allocated and each will be zeroed.
         ///     IN allocator: *std.mem.Allocator - The allocator to use when allocating the BitmapTypes required.
         ///
@@ -49,8 +49,8 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Error: std.mem.Allocator.Error
         ///     OutOfMemory: There isn't enough memory available to allocate the required number of BitmapType.
         ///
-        pub fn init(num_entries: u32, allocator: *std.mem.Allocator) !Self {
-            const num = @floatToInt(u32, @ceil(@intToFloat(f32, num_entries) / @intToFloat(f32, ENTRIES_PER_BITMAP)));
+        pub fn init(num_entries: usize, allocator: *std.mem.Allocator) !Self {
+            const num = std.mem.alignForward(num_entries, ENTRIES_PER_BITMAP) / ENTRIES_PER_BITMAP;
             const self = Self{
                 .num_bitmaps = num,
                 .num_entries = num_entries,
@@ -68,12 +68,12 @@ pub fn Bitmap(comptime BitmapType: type) type {
         ///
         /// Arguments:
         ///     INOUT self: *Self - The bitmap to modify.
-        ///     IN idx: BitmapIndex - The index within the bitmap to set.
+        ///     IN idx: usize - The index within the bitmap to set.
         ///
         /// Error: BitmapError.
         ///     OutOfBounds: The index given is out of bounds.
         ///
-        pub fn setEntry(self: *Self, idx: u32) BitmapError!void {
+        pub fn setEntry(self: *Self, idx: usize) BitmapError!void {
             if (idx >= self.num_entries) return BitmapError.OutOfBounds;
             if (!try self.isSet(idx)) {
                 const bit = self.indexToBit(idx);
@@ -87,12 +87,12 @@ pub fn Bitmap(comptime BitmapType: type) type {
         ///
         /// Arguments:
         ///     INOUT self: *Self - The bitmap to modify.
-        ///     IN idx: BitmapIndex - The index within the bitmap to clear.
+        ///     IN idx: usize - The index within the bitmap to clear.
         ///
         /// Error: BitmapError.
         ///     OutOfBounds: The index given is out of bounds.
         ///
-        pub fn clearEntry(self: *Self, idx: u32) BitmapError!void {
+        pub fn clearEntry(self: *Self, idx: usize) BitmapError!void {
             if (idx >= self.num_entries) return BitmapError.OutOfBounds;
             if (try self.isSet(idx)) {
                 const bit = self.indexToBit(idx);
@@ -106,12 +106,12 @@ pub fn Bitmap(comptime BitmapType: type) type {
         ///
         /// Arguments:
         ///     IN self: *const Self - The bitmap to use.
-        ///     IN idx: u32 - The index into all of the bitmap's entries.
+        ///     IN idx: usize - The index into all of the bitmap's entries.
         ///
         /// Return: BitmapType.
         ///     The bit corresponding to that index but within a single BitmapType.
         ///
-        fn indexToBit(self: *const Self, idx: u32) BitmapType {
+        fn indexToBit(self: *const Self, idx: usize) BitmapType {
             return @as(BitmapType, 1) << @intCast(IndexType, idx % ENTRIES_PER_BITMAP);
         }
 
@@ -120,26 +120,26 @@ pub fn Bitmap(comptime BitmapType: type) type {
         ///
         /// Arguments:
         ///     INOUT self: *Self - The bitmap to modify.
-        ///     IN num: u32 - The number of entries to set.
+        ///     IN num: usize - The number of entries to set.
         ///
-        /// Return: ?u32
+        /// Return: ?usize
         ///     The first entry set or null if there weren't enough contiguous entries.
         ///
-        pub fn setContiguous(self: *Self, num: u32) ?u32 {
+        pub fn setContiguous(self: *Self, num: usize) ?usize {
             if (num > self.num_free_entries) {
                 return null;
             }
 
-            var count: u32 = 0;
-            var start: ?u32 = null;
+            var count: usize = 0;
+            var start: ?usize = null;
             for (self.bitmaps) |bmp, i| {
                 var bit: IndexType = 0;
                 while (true) {
-                    const entry = bit + @intCast(u32, i * ENTRIES_PER_BITMAP);
+                    const entry = bit + i * ENTRIES_PER_BITMAP;
                     if (entry >= self.num_entries) {
                         return null;
                     }
-                    if ((bmp & @as(u32, 1) << bit) != 0) {
+                    if ((bmp & @as(BitmapType, 1) << bit) != 0) {
                         // This is a one so clear the progress
                         count = 0;
                         start = null;
@@ -170,7 +170,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
 
             if (count == num) {
                 if (start) |start_entry| {
-                    var i: u32 = 0;
+                    var i: usize = 0;
                     while (i < num) : (i += 1) {
                         // Can't fail as the entry was found to be free
                         self.setEntry(start_entry + i) catch unreachable;
@@ -184,17 +184,17 @@ pub fn Bitmap(comptime BitmapType: type) type {
         ///
         /// Set the first free entry within the bitmaps as occupied.
         ///
-        /// Return: ?u32.
+        /// Return: ?usize.
         ///     The index within all bitmaps that was set or null if there wasn't one free.
         ///     0 .. ENTRIES_PER_BITMAP - 1 if in the first bitmap, ENTRIES_PER_BITMAP .. ENTRIES_PER_BITMAP * 2 - 1 if in the second etc.
         ///
-        pub fn setFirstFree(self: *Self) ?u32 {
+        pub fn setFirstFree(self: *Self) ?usize {
             if (self.num_free_entries == 0) return null;
             for (self.bitmaps) |*bmp, i| {
                 if (bmp.* == BITMAP_FULL)
                     continue;
                 const bit = @truncate(IndexType, @ctz(BitmapType, ~bmp.*));
-                const idx = bit + @intCast(u32, i) * ENTRIES_PER_BITMAP;
+                const idx = bit + i * ENTRIES_PER_BITMAP;
                 // Failing here means that the index is outside of the bitmap, so there are no free entries
                 self.setEntry(idx) catch return null;
                 return idx;
@@ -207,7 +207,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         ///
         /// Arguments:
         ///     IN self: *const Self - The bitmap to check.
-        ///     IN idx: u32 - The entry to check.
+        ///     IN idx: usize - The entry to check.
         ///
         /// Return: bool.
         ///     True if the entry is set, else false.
@@ -215,7 +215,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Error: BitmapError.
         ///     OutOfBounds: The index given is out of bounds.
         ///
-        pub fn isSet(self: *const Self, idx: u32) BitmapError!bool {
+        pub fn isSet(self: *const Self, idx: usize) BitmapError!bool {
             if (idx >= self.num_entries) return BitmapError.OutOfBounds;
             return (self.bitmaps[idx / ENTRIES_PER_BITMAP] & self.indexToBit(idx)) != 0;
         }
