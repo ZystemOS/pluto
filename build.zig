@@ -27,16 +27,28 @@ pub fn build(b: *Builder) !void {
     });
     b.default_step.dependOn(&fmt_step.step);
 
+    const test_enum = enum {
+        UNIT,
+        ALL_RUNTIME,
+        NORMAL,
+        PANIC,
+    };
+
+    comptime var available_tests: []const u8 = "";
+    inline for (@typeInfo(test_enum).Enum.fields) |field| {
+        available_tests = available_tests ++ field.name ++ ", ";
+    }
+
     const main_src = "src/kernel/kmain.zig";
     const constants_path = try fs.path.join(b.allocator, &[_][]const u8{ "src/kernel/arch", target_str, "constants.zig" });
 
     const build_mode = b.standardReleaseOptions();
-    const rt_test = b.option(bool, "rt-test", "enable/disable runtime testing") orelse false;
+    const test_type = b.option(test_enum, "test-type", "Run a specific runtime test. Available options are: " ++ available_tests) orelse test_enum.UNIT;
 
     const exec = b.addExecutable("pluto", main_src);
     exec.addPackagePath("constants", constants_path);
     exec.setOutputDir(b.cache_root);
-    exec.addBuildOption(bool, "rt_test", rt_test);
+    exec.addBuildOption(test_enum, "test_type", test_type); // Or test_mode?
     exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath("link.ld");
     exec.setTarget(target);
@@ -46,14 +58,14 @@ pub fn build(b: *Builder) !void {
     const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
     const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
 
-    const make_iso = b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso });
+    const make_iso = b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso, "FALSE" });
 
     make_iso.step.dependOn(&exec.step);
     b.default_step.dependOn(&make_iso.step);
 
     const test_step = b.step("test", "Run tests");
-    if (rt_test) {
-        const script = b.addSystemCommand(&[_][]const u8{ "python3", "test/rt-test.py", "x86", b.zig_exe });
+    if (test_type != .UNIT) {
+        const script = b.addSystemCommand(&[_][]const u8{ "python3", "test/rt-test.py", b.zig_exe, target_str, @tagName(test_type) });
         test_step.dependOn(&script.step);
     } else {
         const mock_path = "\"../../test/mock/kernel/\"";
@@ -62,7 +74,7 @@ pub fn build(b: *Builder) !void {
         unit_tests.setBuildMode(build_mode);
         unit_tests.setMainPkgPath(".");
         unit_tests.addPackagePath("constants", constants_path);
-        unit_tests.addBuildOption(bool, "rt_test", rt_test);
+        unit_tests.addBuildOption(test_enum, "test_type", test_type); // Or test_mode?
         unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
         unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
 
@@ -93,7 +105,7 @@ pub fn build(b: *Builder) !void {
     const qemu_debug_cmd = b.addSystemCommand(qemu_args);
     qemu_debug_cmd.addArgs(&[_][]const u8{ "-s", "-S" });
 
-    if (rt_test) {
+    if (test_type != .UNIT) {
         const qemu_rt_test_args = &[_][]const u8{ "-display", "none" };
         qemu_cmd.addArgs(qemu_rt_test_args);
         qemu_debug_cmd.addArgs(qemu_rt_test_args);

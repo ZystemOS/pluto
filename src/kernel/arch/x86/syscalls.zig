@@ -3,7 +3,7 @@ const testing = @import("std").testing;
 const assert = @import("std").debug.assert;
 const isr = @import("isr.zig");
 const log = @import("../../log.zig");
-const options = @import("build_options");
+const build_options = @import("build_options");
 const panic = @import("../../panic.zig").panic;
 
 /// The isr number associated with syscalls
@@ -242,7 +242,11 @@ pub fn init() void {
     defer log.logInfo("Done syscalls\n", .{});
 
     isr.registerIsr(INTERRUPT, handle) catch unreachable;
-    if (options.rt_test) runtimeTests();
+
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 /// Tests

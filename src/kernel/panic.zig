@@ -5,6 +5,7 @@ const arch = @import("arch.zig").internals;
 const log = @import("log.zig");
 const multiboot = @import("multiboot.zig");
 const mem = @import("mem.zig");
+const build_options = @import("build_options");
 const ArrayList = std.ArrayList;
 const testing = std.testing;
 
@@ -166,7 +167,9 @@ fn parseAddr(ptr: *[*]const u8, end: *const u8) !usize {
 ///     PanicError.InvalidSymbolFile: The address given is greater than or equal to the end address.
 ///
 fn parseChar(ptr: [*]const u8, end: *const u8) PanicError!u8 {
-    if (@ptrToInt(ptr) >= @ptrToInt(end)) return PanicError.InvalidSymbolFile;
+    if (@ptrToInt(ptr) >= @ptrToInt(end)) {
+        return PanicError.InvalidSymbolFile;
+    }
     return ptr[0];
 }
 
@@ -281,10 +284,11 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     defer log.logInfo("Done panic\n", .{});
 
     // Exit if we haven't loaded all debug modules
-    if (mem_profile.boot_modules.len < 1)
+    if (mem_profile.boot_modules.len < 1) {
         return;
-    var kmap_start: usize = 0;
-    var kmap_end: usize = 0;
+    }
+    var kmap_start: u32 = 0;
+    var kmap_end: u32 = 0;
     for (mem_profile.boot_modules) |module| {
         const mod_start = mem.physToVirt(@intCast(usize, module.mod_start));
         const mod_end = mem.physToVirt(@intCast(usize, module.mod_end) - 1);
@@ -297,8 +301,9 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     }
     // Don't try to load the symbols if there was no symbol map file. This is a valid state so just
     // exit early
-    if (kmap_start == 0 or kmap_end == 0)
+    if (kmap_start == 0 or kmap_end == 0) {
         return;
+    }
 
     var syms = SymbolMap.init(allocator);
     errdefer syms.deinit();
@@ -309,6 +314,11 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
         try syms.addEntry(entry);
     }
     symbol_map = syms;
+
+    switch (build_options.test_type) {
+        .PANIC => runtimeTests(),
+        else => {},
+    }
 }
 
 test "parseChar" {

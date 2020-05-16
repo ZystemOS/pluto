@@ -244,7 +244,10 @@ pub fn init() void {
 
     openIsr(syscalls.INTERRUPT, interrupts.getInterruptStub(syscalls.INTERRUPT));
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 fn testFunction0() callconv(.Naked) void {}

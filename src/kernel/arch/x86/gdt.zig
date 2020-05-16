@@ -438,7 +438,10 @@ pub fn init() void {
     // Load the TSS
     arch.ltr(TSS_OFFSET);
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 fn mock_lgdt(ptr: *const GdtPtr) void {

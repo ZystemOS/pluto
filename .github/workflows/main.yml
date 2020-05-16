@@ -32,6 +32,6 @@ jobs:
     - name: Run unit tests
       run: zig*/zig build test ${{ matrix.build_mode }}
     - name: Run runtime tests
-      run: zig*/zig build test -Drt-test=true ${{ matrix.build_mode }}
+      run: zig*/zig build test -Dtest_type=ALL_RUNTIME ${{ matrix.build_mode }}
     - name: Check formatting
       run: zig*/zig fmt --check src

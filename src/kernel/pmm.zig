@@ -122,8 +122,9 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
         }
     }
 
-    if (build_options.rt_test) {
-        runtimeTests(mem, allocator);
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(mem, allocator),
+        else => {},
     }
 }
 

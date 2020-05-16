@@ -153,7 +153,10 @@ pub fn init(baud: u32, port: Port) SerialError!void {
     // Stop initialisation
     arch.outb(port_int + 1, 0);
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 test "lcrValue computes the correct value" {

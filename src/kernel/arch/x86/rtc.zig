@@ -283,7 +283,10 @@ pub fn init() void {
     // Read status register C to clear any interrupts that may have happened during set up
     const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 test "isBuzzy not buzzy" {

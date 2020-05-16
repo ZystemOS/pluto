@@ -636,7 +636,10 @@ pub fn init() void {
     displayPageNumber();
     updateCursor();
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 const test_colour: u8 = vga.orig_entryColour(vga.COLOUR_LIGHT_GREY, vga.COLOUR_BLACK);

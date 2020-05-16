@@ -186,7 +186,10 @@ pub fn init() void {
 
     arch.lidt(&idt_ptr);
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 fn testHandler0() callconv(.Naked) void {}

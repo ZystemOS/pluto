@@ -11,7 +11,7 @@ const log = @import("../../log.zig");
 const mem = @import("../../mem.zig");
 const vmm = @import("../../vmm.zig");
 const multiboot = @import("../../multiboot.zig");
-const options = @import("build_options");
+const build_options = @import("build_options");
 const testing = std.testing;
 
 /// An array of directory entries and page tables. Forms the first level of paging and covers the entire 4GB memory space.
@@ -396,7 +396,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     log.logInfo("Init paging\n", .{});
     defer log.logInfo("Done paging\n", .{});
 
-    isr.registerIsr(isr.PAGE_FAULT, if (options.rt_test) rt_pageFault else pageFault) catch |e| {
+    isr.registerIsr(isr.PAGE_FAULT, if (build_options.test_type == .NORMAL) rt_pageFault else pageFault) catch |e| {
         panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", .{e});
     };
     const dir_physaddr = @ptrToInt(mem.virtToPhys(&kernel_directory));
@@ -405,7 +405,10 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
         : [addr] "{eax}" (dir_physaddr)
     );
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
-    if (options.rt_test) runtimeTests(v_end);
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(v_end),
+        else => {},
+    }
 }
 
 fn checkDirEntry(entry: DirectoryEntry, virt_start: usize, virt_end: usize, phys_start: usize, attrs: vmm.Attributes, table: *Table, present: bool) void {

@@ -136,7 +136,10 @@ pub fn init() void {
         openIrq(i, interrupts.getInterruptStub(i));
     }
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 fn testFunction0() callconv(.Naked) void {}

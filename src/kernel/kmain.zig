@@ -13,7 +13,6 @@ const pmm = @import("pmm.zig");
 const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
 const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
 const panic_root = if (is_test) @import(mock_path ++ "panic_mock.zig") else @import("panic.zig");
-const options = @import("build_options");
 const heap = @import("heap.zig");
 
 comptime {
@@ -45,7 +44,10 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
         };
 
-        if (build_options.rt_test) log.runtimeTests();
+        switch (build_options.test_type) {
+            .NORMAL => log.runtimeTests(),
+            else => {},
+        }
 
         const mem_profile = mem.init(mb_info);
         var buffer = mem_profile.vaddr_end[0..mem_profile.fixed_alloc_size];
@@ -64,6 +66,7 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
 
         vga.init();
         tty.init();
+
         // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
         var heap_size = mem_profile.mem_kb / 10 * 1024;
         // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
@@ -77,7 +80,13 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
 
         tty.print("Hello Pluto from kernel :)\n", .{});
 
-        // The panic runtime tests must run last as they never return
-        if (options.rt_test) panic_root.runtimeTests();
+        switch (build_options.test_type) {
+            .NORMAL => {
+                log.logInfo("SUCCESS\n", .{});
+            },
+            else => {},
+        }
+
+        arch.spinWait();
     }
 }

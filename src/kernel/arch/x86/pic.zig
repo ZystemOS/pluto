@@ -468,7 +468,10 @@ pub fn init() void {
     // Clear the IRQ for the slave
     clearMask(IRQ_CASCADE_FOR_SLAVE);
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_type) {
+        .NORMAL => runtimeTests(),
+        else => {},
+    }
 }
 
 test "sendCommandMaster" {
