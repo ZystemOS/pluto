@@ -98,19 +98,6 @@ pub fn logError(comptime format: []const u8, args: var) void {
 }
 
 ///
-/// Write a message to the log output stream with the TESTING level. This must only be used when
-/// running the runtime tests.
-///
-/// Arguments:
-///     IN comptime format: []const u8 - The message format. Uses the standard format specification
-///                                      options.
-///     IN args: var - A struct of the parameters for the format string.
-///
-pub fn logTest(comptime format: []const u8, args: var) void {
-    log(Level.TESTING, format, args);
-}
-
-///
 /// The logging runtime tests that will test all logging levels.
 ///
 pub fn runtimeTests() void {
