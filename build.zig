@@ -78,7 +78,9 @@ pub fn build(b: *Builder) !void {
         unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
         unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
 
-        if (builtin.os.tag != .windows) unit_tests.enable_qemu = true;
+        if (builtin.os.tag != .windows) {
+            unit_tests.enable_qemu = true;
+        }
 
         unit_tests.setTarget(.{ .cpu_arch = .i386 });
 

@@ -110,8 +110,9 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
             var addr = std.mem.alignBackward(@intCast(usize, entry.addr), BLOCK_SIZE);
             var end = @intCast(usize, entry.addr + (entry.len - 1));
             // If the end address can be aligned without overflowing then align it
-            if (end <= std.math.maxInt(usize) - BLOCK_SIZE)
+            if (end <= std.math.maxInt(usize) - BLOCK_SIZE) {
                 end = std.mem.alignForward(end, BLOCK_SIZE);
+            }
             while (addr < end) : (addr += BLOCK_SIZE) {
                 setAddr(addr) catch |e| switch (e) {
                     // We can ignore out of bounds errors as the memory won't be available anyway
