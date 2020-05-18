@@ -101,7 +101,7 @@ var idt_ptr: IdtPtr = IdtPtr{
     .base = 0,
 };
 
-/// The IDT entry table of NUMBER_OF_ENTRIES entries. Initially all zero'ed.
+/// The IDT entry table of NUMBER_OF_ENTRIES entries. Initially all zeroed.
 var idt_entries: [NUMBER_OF_ENTRIES]IdtEntry = [_]IdtEntry{IdtEntry{
     .base_low = 0,
     .selector = 0,

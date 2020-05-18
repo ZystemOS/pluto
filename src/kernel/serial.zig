@@ -66,7 +66,7 @@ fn lcrValue(char_len: u8, stop_bit: bool, parity_bit: bool, msb: u1) SerialError
 }
 
 ///
-/// The serial controller accepts a divisor rather than a raw badrate, as that is more space efficient.
+/// The serial controller accepts a divisor rather than a raw baudrate, as that is more space efficient.
 /// This function computes the divisor for a desired baudrate. Note that multiple baudrates can have the same divisor.
 ///
 /// Arguments:
