@@ -250,35 +250,35 @@ pub fn init() void {
 }
 
 /// Tests
-var testInt: u32 = 0;
+var test_int: u32 = 0;
 
 fn testHandler0(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
-    testInt += 1;
+    test_int += 1;
     return 0;
 }
 
 fn testHandler1(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
-    testInt += arg1;
+    test_int += arg1;
     return 1;
 }
 
 fn testHandler2(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
-    testInt += arg1 + arg2;
+    test_int += arg1 + arg2;
     return 2;
 }
 
 fn testHandler3(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
-    testInt += arg1 + arg2 + arg3;
+    test_int += arg1 + arg2 + arg3;
     return 3;
 }
 
 fn testHandler4(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
-    testInt += arg1 + arg2 + arg3 + arg4;
+    test_int += arg1 + arg2 + arg3 + arg4;
     return 4;
 }
 
 fn testHandler5(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
-    testInt += arg1 + arg2 + arg3 + arg4 + arg5;
+    test_int += arg1 + arg2 + arg3 + arg4 + arg5;
     return 5;
 }
 
@@ -291,39 +291,39 @@ test "registerSyscall returns SyscallExists" {
 }
 
 fn runtimeTests() void {
-    registerSyscall(123, testHandler0) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
-    registerSyscall(124, testHandler1) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
-    registerSyscall(125, testHandler2) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
-    registerSyscall(126, testHandler3) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
-    registerSyscall(127, testHandler4) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
-    registerSyscall(128, testHandler5) catch panic(@errorReturnTrace(), "FAILURE\n", .{});
+    registerSyscall(123, testHandler0) catch panic(@errorReturnTrace(), "FAILURE registering hander 0\n", .{});
+    registerSyscall(124, testHandler1) catch panic(@errorReturnTrace(), "FAILURE registering hander 1\n", .{});
+    registerSyscall(125, testHandler2) catch panic(@errorReturnTrace(), "FAILURE registering hander 2\n", .{});
+    registerSyscall(126, testHandler3) catch panic(@errorReturnTrace(), "FAILURE registering hander 3\n", .{});
+    registerSyscall(127, testHandler4) catch panic(@errorReturnTrace(), "FAILURE registering hander 4\n", .{});
+    registerSyscall(128, testHandler5) catch panic(@errorReturnTrace(), "FAILURE registering hander 5\n", .{});
 
-    if (testInt != 0) {
-        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    if (test_int != 0) {
+        panic(@errorReturnTrace(), "FAILURE initial test_int not 0: {}\n", .{test_int});
     }
 
-    if (syscall0(123) != 0 or testInt != 1) {
-        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    if (syscall0(123) != 0 or test_int != 1) {
+        panic(@errorReturnTrace(), "FAILURE syscall0\n", .{});
     }
 
-    if (syscall1(124, 2) != 1 or testInt != 3) {
-        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    if (syscall1(124, 2) != 1 or test_int != 3) {
+        panic(@errorReturnTrace(), "FAILURE syscall2\n", .{});
     }
 
-    if (syscall2(125, 2, 3) != 2 or testInt != 8) {
-        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    if (syscall2(125, 2, 3) != 2 or test_int != 8) {
+        panic(@errorReturnTrace(), "FAILURE syscall2\n", .{});
     }
 
-    if (syscall3(126, 2, 3, 4) != 3 or testInt != 17) {
-        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    if (syscall3(126, 2, 3, 4) != 3 or test_int != 17) {
+        panic(@errorReturnTrace(), "FAILURE syscall3\n", .{});
     }
 
-    if (syscall4(127, 2, 3, 4, 5) != 4 or testInt != 31) {
-        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    if (syscall4(127, 2, 3, 4, 5) != 4 or test_int != 31) {
+        panic(@errorReturnTrace(), "FAILURE syscall4\n", .{});
     }
 
-    if (syscall5(128, 2, 3, 4, 5, 6) != 5 or testInt != 51) {
-        panic(@errorReturnTrace(), "FAILURE\n", .{});
+    if (syscall5(128, 2, 3, 4, 5, 6) != 5 or test_int != 51) {
+        panic(@errorReturnTrace(), "FAILURE syscall5\n", .{});
     }
 
     log.logInfo("Syscall: Tested all args\n", .{});
