@@ -25,7 +25,7 @@ pub const MemProfile = struct {
     /// The boot modules provided by the bootloader.
     boot_modules: []multiboot.multiboot_module_t,
 
-    /// The memory map provided by the bootloader. Desribes which areas of memory are available and
+    /// The memory map provided by the bootloader. Describes which areas of memory are available and
     /// which are reserved.
     mem_map: []multiboot.multiboot_memory_map_t,
 };

@@ -16,7 +16,7 @@ const PanicError = error{
     InvalidSymbolFile,
 };
 
-/// An entry within a symbol map. Corresponds to one entry in a symbole file
+/// An entry within a symbol map. Corresponds to one entry in a symbol file
 const MapEntry = struct {
     /// The address that the entry corresponds to
     addr: usize,
@@ -60,7 +60,7 @@ const SymbolMap = struct {
     /// Error: std.mem.Allocator.Error
     ///      * - See ArrayList.append
     ///
-    pub fn add(self: *SymbolMap, name: []const u8, addr: u32) !void {
+    pub fn add(self: *SymbolMap, name: []const u8, addr: usize) !void {
         try self.addEntry(MapEntry{ .addr = addr, .func_name = name });
     }
 
@@ -131,7 +131,7 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var
 /// whitespace character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated after all
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
 ///         characters have been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -222,7 +222,7 @@ fn parseNonWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
 /// character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated after all
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
 ///         characters have been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -245,7 +245,7 @@ fn parseName(ptr: *[*]const u8, end: *const u8) PanicError![]const u8 {
 /// in the format of '\d+\w+[a-zA-Z0-9]+'. Must be terminated by a whitespace character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated once after the
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated once after the
 ///         address has been consumed and once again after the name has been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -287,8 +287,8 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     if (mem_profile.boot_modules.len < 1) {
         return;
     }
-    var kmap_start: u32 = 0;
-    var kmap_end: u32 = 0;
+    var kmap_start: usize = 0;
+    var kmap_end: usize = 0;
     for (mem_profile.boot_modules) |module| {
         const mod_start = mem.physToVirt(@intCast(usize, module.mod_start));
         const mod_end = mem.physToVirt(@intCast(usize, module.mod_end) - 1);

@@ -67,7 +67,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Set an entry within a bitmap as occupied.
         ///
         /// Arguments:
-        ///     INOUT self: *Self - The bitmap to modify.
+        ///     IN/OUT self: *Self - The bitmap to modify.
         ///     IN idx: usize - The index within the bitmap to set.
         ///
         /// Error: BitmapError.
@@ -86,7 +86,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Set an entry within a bitmap as unoccupied.
         ///
         /// Arguments:
-        ///     INOUT self: *Self - The bitmap to modify.
+        ///     IN/OUT self: *Self - The bitmap to modify.
         ///     IN idx: usize - The index within the bitmap to clear.
         ///
         /// Error: BitmapError.
@@ -119,7 +119,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Find a number of contiguous free entries and set them.
         ///
         /// Arguments:
-        ///     INOUT self: *Self - The bitmap to modify.
+        ///     IN/OUT self: *Self - The bitmap to modify.
         ///     IN num: usize - The number of entries to set.
         ///
         /// Return: ?usize

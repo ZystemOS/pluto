@@ -157,7 +157,7 @@ inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
 
 ///
 /// Map a page directory entry, setting the present, size, writable, write-through and physical address bits.
-/// Clears the user and cache disabled bits. Entry should be zero'ed.
+/// Clears the user and cache disabled bits. Entry should be zeroed.
 ///
 /// Arguments:
 ///     IN virt_addr: usize - The start of the virtual space to map
@@ -297,11 +297,11 @@ fn mapTableEntry(entry: *align(1) TableEntry, phys_addr: usize, attrs: vmm.Attri
 /// Arguments:
 ///     IN virtual_start: usize - The start of the virtual region to map
 ///     IN virtual_end: usize - The end (exclusive) of the virtual region to map
-///     IN physical_start: usize - The start of the physical region to mape to
+///     IN physical_start: usize - The start of the physical region to map to
 ///     IN physical_end: usize - The end (exclusive) of the physical region to map to
 ///     IN attrs: vmm.Attributes - The attributes to apply to this mapping
-///     INOUT allocator: *std.mem.Allocator - The allocator to use to allocate any intermediate data structures required to map this region
-///     INOUT dir: *Directory - The page directory to map within
+///     IN/OUT allocator: *std.mem.Allocator - The allocator to use to allocate any intermediate data structures required to map this region
+///     IN/OUT dir: *Directory - The page directory to map within
 ///
 /// Error: vmm.MapperError || std.mem.Allocator.Error
 ///     * - See mapDirEntry
@@ -326,7 +326,7 @@ pub fn map(virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usiz
 /// Arguments:
 ///     IN virtual_start: usize - The start of the virtual region to unmap
 ///     IN virtual_end: usize - The end (exclusive) of the virtual region to unmap
-///     INOUT dir: *Directory - The page directory to unmap within
+///     IN/OUT dir: *Directory - The page directory to unmap within
 ///
 /// Error: std.mem.Allocator.Error || vmm.MapperError
 ///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
@@ -544,7 +544,7 @@ test "map and unmap" {
 }
 
 // The labels to jump to after attempting to cause a page fault. This is needed as we don't want to cause an
-// infinite loop by jummping to the same instruction that caused the fault.
+// infinite loop by jumping to the same instruction that caused the fault.
 extern var rt_fault_callback: *u32;
 extern var rt_fault_callback2: *u32;
 
