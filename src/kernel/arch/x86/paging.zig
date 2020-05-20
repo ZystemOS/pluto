@@ -396,7 +396,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     log.logInfo("Init paging\n", .{});
     defer log.logInfo("Done paging\n", .{});
 
-    isr.registerIsr(isr.PAGE_FAULT, if (build_options.test_type == .NORMAL) rt_pageFault else pageFault) catch |e| {
+    isr.registerIsr(isr.PAGE_FAULT, if (build_options.test_mode == .INITIALISATION) rt_pageFault else pageFault) catch |e| {
         panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", .{e});
     };
     const dir_physaddr = @ptrToInt(mem.virtToPhys(&kernel_directory));
@@ -405,8 +405,8 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
         : [addr] "{eax}" (dir_physaddr)
     );
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem_profile.fixed_alloc_size, PAGE_SIZE_4KB);
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(v_end),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(v_end),
         else => {},
     }
 }

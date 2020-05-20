@@ -244,8 +244,8 @@ pub fn init() void {
 
     openIsr(syscalls.INTERRUPT, interrupts.getInterruptStub(syscalls.INTERRUPT));
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

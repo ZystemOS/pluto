@@ -315,7 +315,7 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     }
     symbol_map = syms;
 
-    switch (build_options.test_type) {
+    switch (build_options.test_mode) {
         .PANIC => runtimeTests(),
         else => {},
     }

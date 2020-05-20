@@ -44,8 +44,8 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
         };
 
-        switch (build_options.test_type) {
-            .NORMAL => log.runtimeTests(),
+        switch (build_options.test_mode) {
+            .INITIALISATION => log.runtimeTests(),
             else => {},
         }
 
@@ -80,8 +80,8 @@ export fn kmain(mb_info: *multiboot.multiboot_info_t, mb_magic: u32) void {
 
         tty.print("Hello Pluto from kernel :)\n", .{});
 
-        switch (build_options.test_type) {
-            .NORMAL => {
+        switch (build_options.test_mode) {
+            .INITIALISATION => {
                 log.logInfo("SUCCESS\n", .{});
             },
             else => {},

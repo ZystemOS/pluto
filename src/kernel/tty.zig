@@ -636,8 +636,8 @@ pub fn init() void {
     displayPageNumber();
     updateCursor();
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

@@ -380,8 +380,8 @@ pub fn init(mem_profile: *const mem.MemProfile, mb_info: *multiboot.multiboot_in
         vmm.set(mem.physToVirt(mod_p_start), mem.physToVirt(mod_p_end), mod_p_start, mod_p_end, .{ .kernel = true, .writable = true, .cachable = true }) catch |e| panic(@errorReturnTrace(), "Failed mapping boot module in VMM: {}", .{e});
     }
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(arch.VmmPayload, vmm, mem_profile, mb_info),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(arch.VmmPayload, vmm, mem_profile, mb_info),
         else => {},
     }
     return vmm;
@@ -584,7 +584,7 @@ fn runtimeTests(comptime Payload: type, vmm: VirtualMemoryManager(Payload), mem_
     // Make sure all blocks before the mb info are not set
     var vaddr = vmm.start;
     while (vaddr < mb_info_addr) : (vaddr += BLOCK_SIZE) {
-        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to check if mb_info address 0x{X} is set: {}}n", .{ vaddr, e });
+        const set = vmm.isSet(vaddr) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to check if mb_info address 0x{X} is set: {}n", .{ vaddr, e });
         if (set) panic(null, "FAILURE: Address before mb_info was set: 0x{X}\n", .{vaddr});
     }
     // Make sure all blocks associated with the mb info are set

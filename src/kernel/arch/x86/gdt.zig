@@ -438,8 +438,8 @@ pub fn init() void {
     // Load the TSS
     arch.ltr(TSS_OFFSET);
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

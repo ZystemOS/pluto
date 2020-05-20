@@ -283,8 +283,8 @@ pub fn init() void {
     // Read status register C to clear any interrupts that may have happened during set up
     const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

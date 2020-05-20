@@ -294,8 +294,8 @@ pub fn init() void {
     // Set by default the underline cursor
     setCursorShape(CursorShape.UNDERLINE);
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

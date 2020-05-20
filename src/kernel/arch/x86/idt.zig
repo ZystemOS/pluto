@@ -186,8 +186,8 @@ pub fn init() void {
 
     arch.lidt(&idt_ptr);
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

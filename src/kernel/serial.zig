@@ -153,8 +153,8 @@ pub fn init(baud: u32, port: Port) SerialError!void {
     // Stop initialisation
     arch.outb(port_int + 1, 0);
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

@@ -136,8 +136,8 @@ pub fn init() void {
         openIrq(i, interrupts.getInterruptStub(i));
     }
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

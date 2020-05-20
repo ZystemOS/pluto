@@ -16,7 +16,7 @@ class TestBase:
 
     def __init__(self, zig_path: str, **kwargs):
         self.msg_queue = queue.Queue(-1)
-        self.program_str = zig_path + " build run -Dtest-type=" + kwargs["test_type"]
+        self.program_str = zig_path + " build run -Dtest-type=" + kwargs["test_mode"]
         
     def start(self):
         self.os_process = subprocess.Popen(self.program_str, stdout=subprocess.PIPE, shell=True, start_new_session=True)
@@ -28,6 +28,8 @@ class TestBase:
     def get_log_msg(self) -> str:
         try:
             line = self.msg_queue.get(block=True, timeout=5)
+            if line == '':
+                return None
             line = line.strip()
             return line
         except queue.Empty:
@@ -43,12 +45,14 @@ class TestBase:
         while True:
             line = self.os_process.stdout.readline().decode("utf-8")
             self.msg_queue.put(line)
+            if line == '':
+                break
 
 
-class NormalTest(TestBase):
+class InitialisationTest(TestBase):
 
     def __init__(self, zig_path):
-        super().__init__(zig_path, test_type="NORMAL")
+        super().__init__(zig_path, test_mode="INITIALISATION")
     
     def run_test(self) -> bool:
         self.start()
@@ -75,7 +79,7 @@ class NormalTest(TestBase):
 class PanicTest(TestBase):
 
     def __init__(self, zig_path):
-        super().__init__(zig_path, test_type="PANIC")
+        super().__init__(zig_path, test_mode="PANIC")
     
     def run_test(self) -> bool:
         self.start()
@@ -98,34 +102,35 @@ class PanicTest(TestBase):
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: python <zig_path> <arch> <test_type>\n")
+        print("Usage: python <zig_path> <arch> <test_mode>\n")
         sys.exit(1)
     
     colorama.init(autoreset=True)
     
     zig_path = sys.argv[1]
     arch = sys.argv[2]
-    test_type = sys.argv[3]
+    test_mode = sys.argv[3]
 
     # All tests
     all_tests = {
-        "NORMAL": NormalTest(zig_path),
+        "INITIALISATION": InitialisationTest(zig_path),
         "PANIC": PanicTest(zig_path),
     }
 
-    if test_type == "ALL_RUNTIME":
+    if test_mode == "ALL_RUNTIME":
         # Make multithreaded + add option for this
-        for test_type, test in all_tests.items():
-            print(Fore.CYAN + "\nRunning test for: {}\n".format(test_type))
+        for test_mode, test in all_tests.items():
+            print(Fore.CYAN + "\nRunning test for: {}\n".format(test_mode))
             if test.run_test():
-                print(Fore.LIGHTGREEN_EX + "\nTest {} passed\n".format(test_type))
+                print(Fore.LIGHTGREEN_EX + "\nTest {} passed\n".format(test_mode))
             else:
-                print(Fore.RED + "\nTest {} failed\n".format(test_type))
-                break
+                print(Fore.RED + "\nTest {} failed\n".format(test_mode))
+                sys.exit(1)
         print(Fore.LIGHTGREEN_EX + "\nAll tests passed\n")
     else:
-        print(Fore.CYAN + "\nRunning test for: {}\n".format(test_type))
-        if all_tests[test_type].run_test():
-            print(Fore.LIGHTGREEN_EX + "\nTest {} passed\n".format(test_type))
+        print(Fore.CYAN + "\nRunning test for: {}\n".format(test_mode))
+        if all_tests[test_mode].run_test():
+            print(Fore.LIGHTGREEN_EX + "\nTest {} passed\n".format(test_mode))
         else:
-            print(Fore.RED + "\nTest {} failed\n".format(test_type))
+            print(Fore.RED + "\nTest {} failed\n".format(test_mode))
+            sys.exit(1)

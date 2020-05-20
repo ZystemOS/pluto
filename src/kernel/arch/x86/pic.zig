@@ -468,8 +468,8 @@ pub fn init() void {
     // Clear the IRQ for the slave
     clearMask(IRQ_CASCADE_FOR_SLAVE);
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }

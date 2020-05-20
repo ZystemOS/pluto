@@ -243,8 +243,8 @@ pub fn init() void {
 
     isr.registerIsr(INTERRUPT, handle) catch unreachable;
 
-    switch (build_options.test_type) {
-        .NORMAL => runtimeTests(),
+    switch (build_options.test_mode) {
+        .INITIALISATION => runtimeTests(),
         else => {},
     }
 }
