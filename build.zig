@@ -8,6 +8,40 @@ const CrossTarget = std.zig.CrossTarget;
 const fs = std.fs;
 const Mode = builtin.Mode;
 
+/// The enumeration of tests with the unit test and all the runtime tests.
+const TestMode = enum {
+    /// This is the default test. This will run the unit tests.
+    UNIT,
+
+    /// This will run all the runtime tests below. The ALL_RUNTIME literal shouldn't be passed to
+    /// the OS code.
+    ALL_RUNTIME,
+
+    /// Run the OS's initialisation runtime tests to ensure the OS is properly set up.
+    INITIALISATION,
+
+    /// Run the panic runtime test.
+    PANIC,
+
+    ///
+    /// Return a string description for the test mode provided.
+    ///
+    /// Argument:
+    ///     IN mode: TestMode - The test mode.
+    ///
+    /// Return: []const u8
+    ///     The string description for the test mode.
+    ///
+    pub fn getDescription(mode: TestMode) []const u8 {
+        return switch (mode) {
+            .UNIT => "Run the unit tests",
+            .ALL_RUNTIME => "Run all the runtime tests",
+            .INITIALISATION => "Ensure the OS is initialised correctly: Runtime test",
+            .PANIC => "Ensure panic behaviour correctly: Runtime test",
+        };
+    }
+};
+
 pub fn build(b: *Builder) !void {
     const target = CrossTarget{
         .cpu_arch = .i386,
@@ -27,15 +61,8 @@ pub fn build(b: *Builder) !void {
     });
     b.default_step.dependOn(&fmt_step.step);
 
-    const test_enum = enum {
-        UNIT,
-        ALL_RUNTIME,
-        NORMAL,
-        PANIC,
-    };
-
     comptime var available_tests: []const u8 = "";
-    inline for (@typeInfo(test_enum).Enum.fields) |field| {
+    inline for (@typeInfo(TestMode).Enum.fields) |field| {
         available_tests = available_tests ++ field.name ++ ", ";
     }
 
@@ -43,12 +70,18 @@ pub fn build(b: *Builder) !void {
     const constants_path = try fs.path.join(b.allocator, &[_][]const u8{ "src/kernel/arch", target_str, "constants.zig" });
 
     const build_mode = b.standardReleaseOptions();
-    const test_type = b.option(test_enum, "test-type", "Run a specific runtime test. Available options are: " ++ available_tests) orelse test_enum.UNIT;
+    comptime var test_mode_desc: []const u8 = "\n                         ";
+    inline for (@typeInfo(TestMode).Enum.fields) |field| {
+        const tm = @field(TestMode, field.name);
+        test_mode_desc = test_mode_desc ++ field.name ++ " (" ++ TestMode.getDescription(tm) ++ ")";
+        test_mode_desc = test_mode_desc ++ "\n                         ";
+    }
+    const test_mode = b.option(TestMode, "test-type", "Run a specific runtime test. Available options are: " ++ test_mode_desc) orelse TestMode.UNIT;
 
     const exec = b.addExecutable("pluto", main_src);
     exec.addPackagePath("constants", constants_path);
     exec.setOutputDir(b.cache_root);
-    exec.addBuildOption(test_enum, "test_type", test_type); // Or test_mode?
+    exec.addBuildOption(TestMode, "test_mode", test_mode);
     exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath("link.ld");
     exec.setTarget(target);
@@ -58,14 +91,13 @@ pub fn build(b: *Builder) !void {
     const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
     const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
 
-    const make_iso = b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso, "FALSE" });
-
+    const make_iso = b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso });
     make_iso.step.dependOn(&exec.step);
-    b.default_step.dependOn(&make_iso.step);
 
     const test_step = b.step("test", "Run tests");
-    if (test_type != .UNIT) {
-        const script = b.addSystemCommand(&[_][]const u8{ "python3", "test/rt-test.py", b.zig_exe, target_str, @tagName(test_type) });
+    if (test_mode != .UNIT) {
+        test_step.dependOn(&make_iso.step);
+        const script = b.addSystemCommand(&[_][]const u8{ "python3", "test/rt-test.py", b.zig_exe, target_str, @tagName(test_mode) });
         test_step.dependOn(&script.step);
     } else {
         const mock_path = "\"../../test/mock/kernel/\"";
@@ -74,7 +106,7 @@ pub fn build(b: *Builder) !void {
         unit_tests.setBuildMode(build_mode);
         unit_tests.setMainPkgPath(".");
         unit_tests.addPackagePath("constants", constants_path);
-        unit_tests.addBuildOption(test_enum, "test_type", test_type); // Or test_mode?
+        unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
         unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
         unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
 
@@ -107,7 +139,7 @@ pub fn build(b: *Builder) !void {
     const qemu_debug_cmd = b.addSystemCommand(qemu_args);
     qemu_debug_cmd.addArgs(&[_][]const u8{ "-s", "-S" });
 
-    if (test_type != .UNIT) {
+    if (test_mode != .UNIT) {
         const qemu_rt_test_args = &[_][]const u8{ "-display", "none" };
         qemu_cmd.addArgs(qemu_rt_test_args);
         qemu_debug_cmd.addArgs(qemu_rt_test_args);
