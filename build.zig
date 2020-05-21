@@ -34,10 +34,10 @@ const TestMode = enum {
     ///
     pub fn getDescription(mode: TestMode) []const u8 {
         return switch (mode) {
-            .UNIT => "Run the unit tests",
-            .ALL_RUNTIME => "Run all the runtime tests",
-            .INITIALISATION => "Ensure the OS is initialised correctly: Runtime test",
-            .PANIC => "Ensure panic behaviour correctly: Runtime test",
+            .UNIT => "Unit tests",
+            .ALL_RUNTIME => "All runtime tests",
+            .INITIALISATION => "Initialisation runtime tests",
+            .PANIC => "Panic runtime tests",
         };
     }
 };
@@ -76,7 +76,7 @@ pub fn build(b: *Builder) !void {
         test_mode_desc = test_mode_desc ++ field.name ++ " (" ++ TestMode.getDescription(tm) ++ ")";
         test_mode_desc = test_mode_desc ++ "\n                         ";
     }
-    const test_mode = b.option(TestMode, "test-type", "Run a specific runtime test. Available options are: " ++ test_mode_desc) orelse TestMode.UNIT;
+    const test_mode = b.option(TestMode, "test-type", "Run all or a specific runtime test or unit test. (Default UNIT) Available options: " ++ test_mode_desc) orelse TestMode.UNIT;
 
     const exec = b.addExecutable("pluto", main_src);
     exec.addPackagePath("constants", constants_path);
