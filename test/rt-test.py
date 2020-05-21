@@ -8,6 +8,7 @@ import os
 import importlib.util
 import colorama
 from colorama import Fore, Style
+from time import sleep
 
 msg_queue = queue.Queue(-1)
 proc = None
@@ -20,7 +21,8 @@ class TestBase:
         
     def start(self):
         self.os_process = subprocess.Popen(self.program_str, stdout=subprocess.PIPE, shell=True, start_new_session=True)
-        
+        # Wait for the build to finish
+        sleep(2)
         self.read_thread = threading.Thread(target=self.__read_messages)
         self.read_thread.daemon = True
         self.read_thread.start()

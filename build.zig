@@ -96,7 +96,6 @@ pub fn build(b: *Builder) !void {
 
     const test_step = b.step("test", "Run tests");
     if (test_mode != .UNIT) {
-        test_step.dependOn(&make_iso.step);
         const script = b.addSystemCommand(&[_][]const u8{ "python3", "test/rt-test.py", b.zig_exe, target_str, @tagName(test_mode) });
         test_step.dependOn(&script.step);
     } else {
