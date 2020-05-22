@@ -15,9 +15,9 @@ proc = None
 
 class TestBase:
 
-    def __init__(self, zig_path: str, **kwargs):
+    def __init__(self, zig_path: str, build_mode: str, **kwargs):
         self.msg_queue = queue.Queue(-1)
-        self.program_str = zig_path + " build run -Dtest-type=" + kwargs["test_mode"]
+        self.program_str = zig_path + " build run " + build_mode + " -Dtest-mode=" + kwargs["test_mode"]
         
     def start(self):
         self.os_process = subprocess.Popen(self.program_str, stdout=subprocess.PIPE, shell=True, start_new_session=True)
@@ -53,8 +53,8 @@ class TestBase:
 
 class InitialisationTest(TestBase):
 
-    def __init__(self, zig_path):
-        super().__init__(zig_path, test_mode="INITIALISATION")
+    def __init__(self, zig_path: str, build_mode: str):
+        super().__init__(zig_path, build_mode, test_mode="INITIALISATION")
     
     def run_test(self) -> bool:
         self.start()
@@ -80,8 +80,8 @@ class InitialisationTest(TestBase):
 
 class PanicTest(TestBase):
 
-    def __init__(self, zig_path):
-        super().__init__(zig_path, test_mode="PANIC")
+    def __init__(self, zig_path: str, build_mode: str):
+        super().__init__(zig_path, build_mode, test_mode="PANIC")
     
     def run_test(self) -> bool:
         self.start()
@@ -103,7 +103,7 @@ class PanicTest(TestBase):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
+    if len(sys.argv) != 5:
         print("Usage: python <zig_path> <arch> <test_mode>\n")
         sys.exit(1)
     
@@ -111,12 +111,13 @@ if __name__ == "__main__":
     
     zig_path = sys.argv[1]
     arch = sys.argv[2]
-    test_mode = sys.argv[3]
+    build_mode = sys.argv[3]
+    test_mode = sys.argv[4]
 
     # All tests
     all_tests = {
-        "INITIALISATION": InitialisationTest(zig_path),
-        "PANIC": PanicTest(zig_path),
+        "INITIALISATION": InitialisationTest(zig_path, build_mode),
+        "PANIC": PanicTest(zig_path, build_mode),
     }
 
     if test_mode == "ALL_RUNTIME":

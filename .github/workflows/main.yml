@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        build_mode: ["", -Drelease-fast=true, -Drelease-safe=true, -Drelease-small=true]
+        build_mode: ["", -Drelease-fast, -Drelease-safe, -Drelease-small]
 
     steps:
     - uses: actions/checkout@v1
@@ -32,6 +32,6 @@ jobs:
     - name: Run unit tests
       run: zig*/zig build test ${{ matrix.build_mode }}
     - name: Run runtime tests
-      run: zig*/zig build test -Dtest-type=ALL_RUNTIME ${{ matrix.build_mode }}
+      run: zig*/zig build test -Dtest-mode=ALL_RUNTIME ${{ matrix.build_mode }}
     - name: Check formatting
       run: zig*/zig fmt --check src
