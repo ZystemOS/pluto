@@ -4,7 +4,6 @@ const mem = @import("mem_mock.zig");
 const MemProfile = mem.MemProfile;
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
-const multiboot = @import("../../../src/kernel/multiboot.zig");
 const vmm = @import("vmm_mock.zig");
 const paging = @import("paging_mock.zig");
 
@@ -41,6 +40,14 @@ pub const VmmPayload = u8;
 pub const KERNEL_VMM_PAYLOAD: usize = 0;
 pub const MEMORY_BLOCK_SIZE: u32 = paging.PAGE_SIZE_4KB;
 pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = undefined;
+pub const BootPayload = u8;
+
+// The virtual/physical start/end of the kernel code
+var KERNEL_PHYSADDR_START: u32 = 0x00100000;
+var KERNEL_PHYSADDR_END: u32 = 0x01000000;
+var KERNEL_VADDR_START: u32 = 0xC0100000;
+var KERNEL_VADDR_END: u32 = 0xC1100000;
+var KERNEL_ADDR_OFFSET: u32 = 0xC0000000;
 
 pub fn outb(port: u16, data: u8) void {
     return mock_framework.performAction("outb", void, .{ port, data });
@@ -94,7 +101,22 @@ pub fn haltNoInterrupts() noreturn {
     while (true) {}
 }
 
-pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *Allocator) void {
+pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
+    return MemProfile{
+        .vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END),
+        .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
+        .physaddr_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END),
+        .physaddr_start = @ptrCast([*]u8, &KERNEL_PHYSADDR_START),
+        // Total memory available including the initial 1MiB that grub doesn't include
+        .mem_kb = 0,
+        .fixed_allocator = undefined,
+        .virtual_reserved = undefined,
+        .physical_reserved = undefined,
+        .modules = undefined,
+    };
+}
+
+pub fn init(payload: BootPayload, mem_profile: *const MemProfile, allocator: *Allocator) void {
     // I'll get back to this as this doesn't effect the GDT testing.
     // When I come on to the mem.zig testing, I'll fix :)
     //return mock_framework.performAction("init", void, mem_profile, allocator);

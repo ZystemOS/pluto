@@ -281,15 +281,14 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     defer log.logInfo("Done panic\n", .{});
 
     // Exit if we haven't loaded all debug modules
-    if (mem_profile.boot_modules.len < 1)
+    if (mem_profile.modules.len < 1)
         return;
     var kmap_start: usize = 0;
     var kmap_end: usize = 0;
-    for (mem_profile.boot_modules) |module| {
-        const mod_start = mem.physToVirt(@intCast(usize, module.mod_start));
-        const mod_end = mem.physToVirt(@intCast(usize, module.mod_end) - 1);
-        const mod_str_ptr = mem.physToVirt(@intToPtr([*:0]u8, module.cmdline));
-        if (std.mem.eql(u8, std.mem.span(mod_str_ptr), "kernel.map")) {
+    for (mem_profile.modules) |module| {
+        const mod_start = module.region.start;
+        const mod_end = module.region.end - 1;
+        if (std.mem.eql(u8, module.name, "kernel.map")) {
             kmap_start = mod_start;
             kmap_end = mod_end;
             break;
@@ -302,7 +301,6 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
 
     var syms = SymbolMap.init(allocator);
     errdefer syms.deinit();
-    var file_index = kmap_start;
     var kmap_ptr = @intToPtr([*]u8, kmap_start);
     while (@ptrToInt(kmap_ptr) < kmap_end - 1) {
         const entry = try parseMapEntry(&kmap_ptr, @intToPtr(*const u8, kmap_end));
