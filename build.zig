@@ -8,16 +8,19 @@ const CrossTarget = std.zig.CrossTarget;
 const fs = std.fs;
 const Mode = builtin.Mode;
 
-pub fn build(b: *Builder) !void {
-    const target = CrossTarget{
-        .cpu_arch = .i386,
-        .os_tag = .freestanding,
-        .cpu_model = .{ .explicit = &Target.x86.cpu._i686 },
-    };
+const x86_i686 = CrossTarget{
+    .cpu_arch = .i386,
+    .os_tag = .freestanding,
+    .cpu_model = .{ .explicit = &Target.x86.cpu._i686 },
+};
 
-    const target_str = switch (target.getCpuArch()) {
-        .i386 => "x86",
-        else => unreachable,
+pub fn build(b: *Builder) !void {
+    const arch = b.option([]const u8, "arch", "Architecture to build for: x86") orelse "x86";
+    const target: CrossTarget = if (std.mem.eql(u8, "x86", arch))
+        x86_i686
+    else {
+        std.debug.warn("Unsupported or unknown architecture '{}'\n", .{arch});
+        unreachable;
     };
 
     const fmt_step = b.addFmt(&[_][]const u8{
@@ -28,12 +31,12 @@ pub fn build(b: *Builder) !void {
     b.default_step.dependOn(&fmt_step.step);
 
     const main_src = "src/kernel/kmain.zig";
-    const constants_path = try fs.path.join(b.allocator, &[_][]const u8{ "src/kernel/arch", target_str, "constants.zig" });
+    const constants_path = try fs.path.join(b.allocator, &[_][]const u8{ "src/kernel/arch", arch, "constants.zig" });
 
     const build_mode = b.standardReleaseOptions();
     const rt_test = b.option(bool, "rt-test", "enable/disable runtime testing") orelse false;
 
-    const exec = b.addExecutable("pluto", main_src);
+    const exec = b.addExecutable("pluto.elf", main_src);
     exec.addPackagePath("constants", constants_path);
     exec.setOutputDir(b.cache_root);
     exec.addBuildOption(bool, "rt_test", rt_test);
@@ -46,14 +49,17 @@ pub fn build(b: *Builder) !void {
     const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
     const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
 
-    const make_iso = b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso });
+    const make_iso = switch (target.getCpuArch()) {
+        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso }),
+        else => unreachable,
+    };
 
     make_iso.step.dependOn(&exec.step);
     b.default_step.dependOn(&make_iso.step);
 
     const test_step = b.step("test", "Run tests");
     if (rt_test) {
-        const script = b.addSystemCommand(&[_][]const u8{ "python3", "test/rt-test.py", "x86", b.zig_exe });
+        const script = b.addSystemCommand(&[_][]const u8{ "python3", "test/rt-test.py", arch, b.zig_exe });
         test_step.dependOn(&script.step);
     } else {
         const mock_path = "\"../../test/mock/kernel/\"";
@@ -68,7 +74,7 @@ pub fn build(b: *Builder) !void {
 
         if (builtin.os.tag != .windows) unit_tests.enable_qemu = true;
 
-        unit_tests.setTarget(.{ .cpu_arch = .i386 });
+        unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
 
         test_step.dependOn(&unit_tests.step);
     }
@@ -82,16 +88,25 @@ pub fn build(b: *Builder) !void {
     };
     const qemu_args = &[_][]const u8{
         qemu_bin,
-        "-cdrom",
-        output_iso,
-        "-boot",
-        "d",
         "-serial",
         "stdio",
+    };
+    const qemu_machine_args = switch (target.getCpuArch()) {
+        .i386 => &[_][]const u8{
+            "-boot",
+            "d",
+            "-cdrom",
+            output_iso,
+        },
+        else => null,
     };
     const qemu_cmd = b.addSystemCommand(qemu_args);
     const qemu_debug_cmd = b.addSystemCommand(qemu_args);
     qemu_debug_cmd.addArgs(&[_][]const u8{ "-s", "-S" });
+    if (qemu_machine_args) |machine_args| {
+        qemu_cmd.addArgs(machine_args);
+        qemu_debug_cmd.addArgs(machine_args);
+    }
 
     if (rt_test) {
         const qemu_rt_test_args = &[_][]const u8{ "-display", "none" };
@@ -108,9 +123,11 @@ pub fn build(b: *Builder) !void {
     const debug_step = b.step("debug", "Debug with gdb and connect to a running qemu instance");
     const symbol_file_arg = try std.mem.join(b.allocator, " ", &[_][]const u8{ "symbol-file", exec.getOutputPath() });
     const debug_cmd = b.addSystemCommand(&[_][]const u8{
-        "gdb",
+        "gdb-multiarch",
         "-ex",
         symbol_file_arg,
+        "-ex",
+        "set architecture auto",
     });
     debug_cmd.addArgs(&[_][]const u8{
         "-ex",
