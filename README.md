@@ -35,7 +35,7 @@ zig build debug-run
 
 ## Debug
 
-Launch a gdb instance and connect to qemu.
+Launch a gdb-multiarch instance and connect to qemu.
 
 ```Shell
 zig build debug
@@ -53,10 +53,13 @@ zig build test
 
 * `-Drt-test=`: Boolean (default `false`).
   * **build**: Build with runtime testing enabled. Makes the kernel bigger and slower but tests important functionality.
-  * **test**: Run the runtime testing script instead of the unittests. Checks for the expected log statements and fails if any are missing.
+  * **test**: Run the runtime testing script instead of the unit tests. Checks for the expected log statements and fails if any are missing.
 * `-D[build-mode]=`: Boolean (default `false`).
   * **build**: Build a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
   * **test**: Test a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
+* `-Darch=`: String (default `x86`). Currently the only supported value is `x86`.
+  * **build**: Build for a certain architecture.
+  * **test**: Test a certain architecture.
 
 ## Contribution
 
