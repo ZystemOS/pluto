@@ -19,10 +19,17 @@ const x86_i686 = CrossTarget{
     .cpu_model = .{ .explicit = &Target.x86.cpu._i686 },
 };
 
+const aarch64_cortexa53 = CrossTarget{
+    .cpu_arch = .aarch64,
+    .os_tag = .freestanding,
+    .cpu_model = .{ .explicit = &Target.aarch64.cpu.cortex_a53 },
+};
+
 pub fn build(b: *Builder) !void {
-    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{x86_i686}, .default_target = x86_i686 });
+    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{ x86_i686, aarch64_cortexa53 }, .default_target = x86_i686 });
     const arch = switch (target.getCpuArch()) {
         .i386 => "x86",
+        .aarch64 => "aarch64",
         else => unreachable,
     };
 
@@ -64,6 +71,7 @@ pub fn build(b: *Builder) !void {
 
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
+        .aarch64 => b.addSystemCommand(&[_][]const u8{ "aarch64-linux-gnu-objcopy", exec.getOutputPath(), "-O", "binary", try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "kernel8.img" }) }),
         else => unreachable,
     };
     make_iso.step.dependOn(&exec.step);
@@ -113,6 +121,7 @@ pub fn build(b: *Builder) !void {
 
     switch (target.getCpuArch()) {
         .i386 => try qemu_args_al.append("qemu-system-i386"),
+        .aarch64 => try qemu_args_al.append("qemu-system-aarch64"),
         else => unreachable,
     }
     try qemu_args_al.append("-serial");
@@ -124,6 +133,7 @@ pub fn build(b: *Builder) !void {
             try qemu_args_al.append("-cdrom");
             try qemu_args_al.append(output_iso);
         },
+        .aarch64 => try qemu_args_al.appendSlice(&[_][]const u8{ "-kernel", exec.getOutputPath(), "-machine", "-raspi3" }),
         else => unreachable,
     }
     if (disable_display) {
