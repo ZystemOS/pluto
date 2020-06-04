@@ -8,6 +8,7 @@ const irq = @import("irq.zig");
 const isr = @import("isr.zig");
 const pit = @import("pit.zig");
 const rtc = @import("rtc.zig");
+const serial = @import("serial.zig");
 const paging = @import("paging.zig");
 const syscalls = @import("syscalls.zig");
 const mem = @import("../../mem.zig");
@@ -16,6 +17,8 @@ const pmm = @import("pmm.zig");
 const vmm = @import("../../vmm.zig");
 const log = @import("../../log.zig");
 const tty = @import("../../tty.zig");
+const Serial = @import("../../serial.zig").Serial;
+const panic = @import("../../panic.zig").panic;
 const MemProfile = mem.MemProfile;
 
 /// The virtual end of the kernel code
@@ -249,6 +252,31 @@ pub fn haltNoInterrupts() noreturn {
         disableInterrupts();
         halt();
     }
+}
+
+///
+/// Write a byte to serial port com1. Used by the serial initialiser
+///
+/// Arguments:
+///     IN byte: u8 - The byte to write
+///
+fn writeSerialCom1(byte: u8) void {
+    serial.write(byte, serial.Port.COM1);
+}
+
+///
+/// Initialise serial communication using port COM1 and construct a Serial instance
+///
+/// Return: serial.Serial
+///     The Serial instance constructed with the function used to write bytes
+///
+pub fn initSerial() Serial {
+    serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
+        panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
+    };
+    return Serial{
+        .write = writeSerialCom1,
+    };
 }
 
 ///
