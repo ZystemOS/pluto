@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/SamTebbs33/pluto/workflows/CI/badge.svg)](https://github.com/SamTebbs33/pluto/actions)
 
-Pluto is a kernel written almost entirely in [Zig](https://github.com/ziglang/zig) and supports x86, with aarch64 and x64 backends being planned.
+Pluto is a kernel written almost entirely in [Zig](https://github.com/ziglang/zig) and supports x86 and aarch64, with an x86_64 backend being planned.
 
 ![Hello image](hello.jpg)
 
@@ -17,7 +17,7 @@ All of these goals will benefit from the features of Zig.
 
 ## Build
 
-Requires a master build of Zig ([downloaded](https://ziglang.org/download) or [built from source](https://github.com/ziglang/zig#building-from-source)) *xorriso* and the grub tools (such as *grub-mkrescue*). A *qemu-system* binary compatible with your chosen target is required to run the kernel (e.g. *qemu-system-i386*).
+Requires a master build of Zig ([downloaded](https://ziglang.org/download) or [built from source](https://github.com/ziglang/zig#building-from-source)). Building for x86 requires *xorriso* and the grub tools (such as *grub-mkrescue*) and aarch64 requires *aarch64-linux-gnu-objcopy* (part of *aarch64-linux-gnu-binutils*). A *qemu-system* binary compatible with your chosen target is required to run the kernel (e.g. *qemu-system-i386*).
 
 ```Shell
 zig build
@@ -72,6 +72,7 @@ Available test modes:
   * **test**: Test a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
 * `-Dtarget=`: String (default `i386-freestanding`). The standard target options for building with zig. Currently supported targets:
   * `i386-freestanding`
+  * `cortex_a53-freestanding`
 * `-Ddisable-display`: Boolean (default `false`)
   * This disables the display output of QEMU.
 

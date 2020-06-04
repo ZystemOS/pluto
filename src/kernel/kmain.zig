@@ -18,6 +18,7 @@ comptime {
     if (!is_test) {
         switch (builtin.arch) {
             .i386 => _ = @import("arch/x86/boot.zig"),
+            .aarch64 => _ = @import("arch/aarch64/boot.zig"),
             else => {},
         }
     }
