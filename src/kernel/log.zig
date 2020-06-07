@@ -1,5 +1,6 @@
-const serial = @import("serial.zig");
+const build_options = @import("build_options");
 const std = @import("std");
+const Serial = @import("serial.zig").Serial;
 const fmt = std.fmt;
 
 /// The errors that can occur when logging
@@ -15,8 +16,10 @@ pub const Level = enum {
     ERROR,
 };
 
+var serial: Serial = undefined;
+
 fn logCallback(context: void, str: []const u8) LoggingError!usize {
-    serial.writeBytes(str, serial.Port.COM1);
+    serial.writeBytes(str);
     return str.len;
 }
 
@@ -74,6 +77,18 @@ pub fn logWarning(comptime format: []const u8, args: var) void {
 ///
 pub fn logError(comptime format: []const u8, args: var) void {
     log(Level.ERROR, format, args);
+}
+
+///
+/// Initialise the logging stream using the given Serial instance.
+///
+/// Arguments:
+///     IN ser: Serial - The serial instance to use when logging
+///
+pub fn init(ser: Serial) void {
+    serial = ser;
+
+    if (build_options.rt_test) runtimeTests();
 }
 
 pub fn runtimeTests() void {

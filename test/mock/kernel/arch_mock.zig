@@ -6,6 +6,7 @@ const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
 const vmm = @import("vmm_mock.zig");
 const paging = @import("paging_mock.zig");
+const Serial = @import("../../../src/kernel/serial.zig").Serial;
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
@@ -99,6 +100,10 @@ pub fn spinWait() noreturn {
 
 pub fn haltNoInterrupts() noreturn {
     while (true) {}
+}
+
+pub fn initSerial() Serial {
+    return .{ .write = undefined };
 }
 
 pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {

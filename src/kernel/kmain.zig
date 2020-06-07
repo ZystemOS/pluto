@@ -7,12 +7,11 @@ const arch = @import("arch.zig").internals;
 const tty = @import("tty.zig");
 const vga = @import("vga.zig");
 const log = @import("log.zig");
-const serial = @import("serial.zig");
 const pmm = @import("pmm.zig");
+const serial = @import("serial.zig");
 const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
 const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
 const panic_root = if (is_test) @import(mock_path ++ "panic_mock.zig") else @import("panic.zig");
-const options = @import("build_options");
 const heap = @import("heap.zig");
 
 comptime {
@@ -38,11 +37,9 @@ pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn
 }
 
 export fn kmain(boot_payload: arch.BootPayload) void {
-    serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
-    };
+    const serial_stream = serial.init();
 
-    if (build_options.rt_test) log.runtimeTests();
+    log.init(serial_stream);
 
     const mem_profile = arch.initMem(boot_payload) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise memory profile: {}", .{e});
     var fixed_allocator = mem_profile.fixed_allocator;
@@ -74,5 +71,5 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     tty.print("Hello Pluto from kernel :)\n", .{});
 
     // The panic runtime tests must run last as they never return
-    if (options.rt_test) panic_root.runtimeTests();
+    if (build_options.rt_test) panic_root.runtimeTests();
 }
