@@ -2,6 +2,7 @@ const std = @import("std");
 const vmm = @import("../../vmm.zig");
 const mem = @import("../../mem.zig");
 const Serial = @import("../../serial.zig").Serial;
+const log = @import("../../log.zig");
 const rpi = @import("rpi.zig");
 const mmio = @import("mmio.zig");
 /// The type of the payload passed to a virtual memory mapper.
@@ -73,6 +74,8 @@ fn uartWriteByte(byte: u8) void {
 }
 
 pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
+    log.logInfo("Init mem\n", .{});
+    defer log.logInfo("Done mem\n", .{});
     // TODO: implement
     mem.ADDR_OFFSET = 0;
     return mem.MemProfile{ .vaddr_end = @intToPtr([*]u8, 0x12345678), .vaddr_start = @intToPtr([*]u8, 0x12345678), .physaddr_start = @intToPtr([*]u8, 0x12345678), .physaddr_end = @intToPtr([*]u8, 0x12345678), .mem_kb = 0, .modules = &[_]mem.Module{}, .virtual_reserved = &[_]mem.Map{}, .physical_reserved = &[_]mem.Range{}, .fixed_allocator = undefined };
