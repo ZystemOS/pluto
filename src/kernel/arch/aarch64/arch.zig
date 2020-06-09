@@ -1,11 +1,11 @@
 const std = @import("std");
 const vmm = @import("../../vmm.zig");
 const mem = @import("../../mem.zig");
+const rpi = @import("rpi.zig");
 /// The type of the payload passed to a virtual memory mapper.
 // TODO: implement
 pub const VmmPayload = usize;
-// TODO: implement
-pub const BootPayload = usize;
+pub const BootPayload = *const rpi.RaspberryPiBoard;
 
 // TODO: implement
 pub const MEMORY_BLOCK_SIZE: usize = 4 * 1024;
