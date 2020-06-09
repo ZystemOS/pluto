@@ -102,7 +102,7 @@ pub fn haltNoInterrupts() noreturn {
     while (true) {}
 }
 
-pub fn initSerial() Serial {
+pub fn initSerial(boot_payload: BootPayload) Serial {
     return .{ .write = undefined };
 }
 

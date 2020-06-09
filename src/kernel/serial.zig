@@ -23,11 +23,14 @@ pub const Serial = struct {
 ///
 /// Initialise the serial interface. The details of how this is done depends on the architecture.
 ///
+/// Arguments:
+///     IN boot_payload: arch.BootPayload - The payload passed to the kernel at boot. How this is used depends on the architecture
+///
 /// Return: Serial
 ///     The serial interface constructed by the architecture
 ///
-pub fn init() Serial {
-    const serial = arch.initSerial();
+pub fn init(boot_payload: arch.BootPayload) Serial {
+    const serial = arch.initSerial(boot_payload);
     if (build_options.rt_test) runtimeTests(serial);
     return serial;
 }
