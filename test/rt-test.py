@@ -93,7 +93,7 @@ if __name__ == "__main__":
     cases = get_pre_archinit_cases() + arch_module.get_test_cases(TestCase) + get_post_archinit_cases()
 
     if len(cases) > 0:
-        proc = subprocess.Popen(zig_path + " build run -Drt-test=true", stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
+        proc = subprocess.Popen(zig_path + " build run -Drt-test=true -Darch=" + arch, stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
         atexit.register(cleanup)
         case_idx = 0
         read_thread = threading.Thread(target=read_messages, args=(proc,))
