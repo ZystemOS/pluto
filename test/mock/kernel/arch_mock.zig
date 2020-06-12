@@ -7,6 +7,7 @@ const idt = @import("idt_mock.zig");
 const vmm = @import("vmm_mock.zig");
 const paging = @import("paging_mock.zig");
 const Serial = @import("../../../src/kernel/serial.zig").Serial;
+const TTY = @import("../../../src/kernel/tty.zig").TTY;
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
@@ -104,6 +105,16 @@ pub fn haltNoInterrupts() noreturn {
 
 pub fn initSerial(boot_payload: BootPayload) Serial {
     return .{ .write = undefined };
+}
+
+pub fn initTTY(boot_payload: BootPayload) TTY {
+    return .{
+        .print = undefined,
+        .setCursor = undefined,
+        .cols = undefined,
+        .rows = undefined,
+        .clear = null,
+    };
 }
 
 pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {

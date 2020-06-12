@@ -56,15 +56,11 @@ def get_pre_archinit_cases():
 def get_post_archinit_cases():
     return [
             TestCase("Arch init finishes", [r"Arch init done"]),
-            TestCase("VGA init", [r"Init vga"]),
-            TestCase("VGA tests", [r"VGA: Tested max scan line", r"VGA: Tested cursor shape", r"VGA: Tested updating cursor"]),
-            TestCase("VGA done", [r"Done vga"]),
-
-            TestCase("TTY init", [r"Init tty"]),
-            TestCase("TTY tests", [r"TTY: Tested globals", r"TTY: Tested printing"]),
-            TestCase("TTY done", [r"Done tty"]),
 
             TestCase("Heap", [r"Init heap", r"Done heap"]),
+
+            TestCase("TTY init", [r"Init tty"]),
+            TestCase("TTY done", [r"Done tty"]),
 
             TestCase("Init finishes", [r"Init done"]),
 
