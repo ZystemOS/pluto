@@ -37,7 +37,7 @@ pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn
 }
 
 export fn kmain(boot_payload: arch.BootPayload) void {
-    const serial_stream = serial.init();
+    const serial_stream = serial.init(boot_payload);
 
     log.init(serial_stream);
 

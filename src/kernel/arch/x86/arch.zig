@@ -267,10 +267,13 @@ fn writeSerialCom1(byte: u8) void {
 ///
 /// Initialise serial communication using port COM1 and construct a Serial instance
 ///
+/// Arguments:
+///     IN boot_payload: arch.BootPayload - The payload passed at boot. Not currently used by x86
+///
 /// Return: serial.Serial
 ///     The Serial instance constructed with the function used to write bytes
 ///
-pub fn initSerial() Serial {
+pub fn initSerial(boot_payload: BootPayload) Serial {
     serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
         panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
     };
