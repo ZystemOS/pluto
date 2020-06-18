@@ -36,4 +36,9 @@ def get_test_cases(TestCase):
             TestCase("Syscalls init", [r"Init syscalls"]),
             TestCase("Syscalls tests", [r"Syscalls: Tested no args", r"Syscalls: Tested 1 arg", r"Syscalls: Tested 2 args", r"Syscalls: Tested 3 args", r"Syscalls: Tested 4 args", r"Syscalls: Tested 5 args"]),
             TestCase("Syscalls done", [r"Done syscalls"]),
+            TestCase("VGA init", [r"Init vga"]),
+            TestCase("VGA tests", [r"VGA: Tested max scan line", r"VGA: Tested cursor shape", r"VGA: Tested updating cursor"]),
+            TestCase("VGA done", [r"Done vga"]),
+            TestCase("TTY tests", [r"TTY: Tested globals", r"TTY: Tested printing"]),
+
         ]

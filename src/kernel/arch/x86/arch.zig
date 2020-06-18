@@ -16,9 +16,11 @@ const multiboot = @import("multiboot.zig");
 const pmm = @import("pmm.zig");
 const vmm = @import("../../vmm.zig");
 const log = @import("../../log.zig");
-const tty = @import("../../tty.zig");
+const tty = @import("tty.zig");
+const vga = @import("vga.zig");
 const Serial = @import("../../serial.zig").Serial;
 const panic = @import("../../panic.zig").panic;
+const TTY = @import("../../tty.zig").TTY;
 const MemProfile = mem.MemProfile;
 
 /// The virtual end of the kernel code
@@ -283,6 +285,25 @@ pub fn initSerial(boot_payload: BootPayload) Serial {
 }
 
 ///
+/// Initialise the TTY and construct a TTY instance
+///
+/// Arguments:
+///     IN boot_payload: BootPayload - The payload passed to the kernel on boot
+///
+/// Return: tty.TTY
+///     The TTY instance constructed with the information required by the rest of the kernel
+///
+pub fn initTTY(boot_payload: BootPayload) TTY {
+    return .{
+        .print = tty.writeString,
+        .setCursor = tty.setCursor,
+        .cols = vga.WIDTH,
+        .rows = vga.HEIGHT,
+        .clear = tty.clearScreen,
+    };
+}
+
+///
 /// Initialise the system's memory. Populates a memory profile with boot modules from grub, the amount of available memory, the reserved regions of virtual and physical memory as well as the start and end of the kernel code
 ///
 /// Arguments:
@@ -391,6 +412,11 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     syscalls.init();
 
     enableInterrupts();
+
+    // Initialise the VGA and TTY here since their tests belong the architecture and so should be a part of the
+    // arch init test messages
+    vga.init();
+    tty.init();
 }
 
 test "" {
@@ -404,4 +430,7 @@ test "" {
     _ = @import("rtc.zig");
     _ = @import("syscalls.zig");
     _ = @import("paging.zig");
+    _ = @import("serial.zig");
+    _ = @import("tty.zig");
+    _ = @import("vga.zig");
 }

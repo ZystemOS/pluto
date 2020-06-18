@@ -3,10 +3,9 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
-const arch = @import("arch.zig").internals;
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
-const panic = @import("panic.zig").panic;
+const arch = if (is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const log = if (is_test) @import(build_options.arch_mock_path ++ "log_mock.zig") else @import("../../log.zig");
+const panic = @import("../../panic.zig").panic;
 
 /// The port address for the VGA register selection.
 const PORT_ADDRESS: u16 = 0x03D4;

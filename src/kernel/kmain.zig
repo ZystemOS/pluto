@@ -55,8 +55,6 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     arch.init(boot_payload, &mem_profile, &fixed_allocator.allocator);
     log.logInfo("Arch init done\n", .{});
 
-    vga.init();
-    tty.init();
     // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
     var heap_size = mem_profile.mem_kb / 10 * 1024;
     // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
@@ -66,7 +64,20 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     var kernel_heap = heap.init(arch.VmmPayload, &kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size, &fixed_allocator.allocator) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
     };
+    tty.init(&kernel_heap.allocator, boot_payload);
+
     log.logInfo("Init done\n", .{});
+
+    tty.clear();
+    const logo =
+        \\                  _____    _        _    _   _______    ____
+        \\                 |  __ \  | |      | |  | | |__   __|  / __ \
+        \\                 | |__) | | |      | |  | |    | |    | |  | |
+        \\                 |  ___/  | |      | |  | |    | |    | |  | |
+        \\                 | |      | |____  | |__| |    | |    | |__| |
+        \\                 |_|      |______|  \____/     |_|     \____/
+    ;
+    tty.print("{}\n\n", .{logo});
 
     tty.print("Hello Pluto from kernel :)\n", .{});
 
