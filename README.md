@@ -28,7 +28,9 @@ zig build
 ```Shell
 zig build run
 ```
+
 or if you want to wait for a gdb connection:
+
 ```Shell
 zig build debug-run
 ```
@@ -68,9 +70,8 @@ Available test modes:
 * `-D[build-mode]=`: Boolean (default `false`).
   * **build**: Build a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
   * **test**: Test a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
-* `-Darch=`: String (default `x86`). Currently the only supported value is `x86`.
-  * **build**: Build for a certain architecture.
-  * **test**: Test a certain architecture.
+* `-Dtarget=`: String (default `i386-freestanding`). The standard target options for building with zig. Currently supported targets:
+  * `i386-freestanding`
 * `-Ddisable-display`: Boolean (default `false`)
   * This disables the display output of QEMU.
 
