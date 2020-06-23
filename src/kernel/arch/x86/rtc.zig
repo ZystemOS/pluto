@@ -49,9 +49,9 @@ var ticks: u32 = 0;
 /// registers so don't get inconsistent values.
 ///
 /// Return: bool
-///     Whether the CMOS chip is buzzy and a update is in progress.
+///     Whether the CMOS chip is busy and a update is in progress.
 ///
-fn isBuzzy() bool {
+fn isBusy() bool {
     return (cmos.readStatusRegister(cmos.StatusRegister.A, false) & 0x80) != 0;
 }
 
@@ -122,7 +122,7 @@ fn bcdToBinary(bcd: u32) u32 {
 ///
 fn readRtcRegisters() DateTime {
     // Make sure there isn't a update in progress
-    while (isBuzzy()) {}
+    while (isBusy()) {}
 
     var date_time = DateTime{
         .second = cmos.readRtcRegister(cmos.RtcRegister.SECOND),
@@ -283,10 +283,13 @@ pub fn init() void {
     // Read status register C to clear any interrupts that may have happened during set up
     const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
-test "isBuzzy not buzzy" {
+test "isBusy not busy" {
     cmos.initTest();
     defer cmos.freeTest();
 
@@ -295,10 +298,10 @@ test "isBuzzy not buzzy" {
         .{ cmos.StatusRegister.A, false, @as(u8, 0x60) },
     );
 
-    expect(!isBuzzy());
+    expect(!isBusy());
 }
 
-test "isBuzzy buzzy" {
+test "isBusy busy" {
     cmos.initTest();
     defer cmos.freeTest();
 
@@ -307,7 +310,7 @@ test "isBuzzy buzzy" {
         .{ cmos.StatusRegister.A, false, @as(u8, 0x80) },
     );
 
-    expect(isBuzzy());
+    expect(isBusy());
 }
 
 test "calcDayOfWeek" {
@@ -446,7 +449,7 @@ test "readRtcRegisters" {
     cmos.initTest();
     defer cmos.freeTest();
 
-    // Have 2 buzzy loops
+    // Have 2 busy loops
     cmos.addTestParams(
         "readStatusRegister",
         .{ cmos.StatusRegister.A, false, @as(u8, 0x80), cmos.StatusRegister.A, false, @as(u8, 0x80), cmos.StatusRegister.A, false, @as(u8, 0x00) },
@@ -481,7 +484,7 @@ test "readRtc unstable read" {
     cmos.initTest();
     defer cmos.freeTest();
 
-    // No buzzy loop
+    // No busy loop
     cmos.addTestParams(
         "readStatusRegister",
         .{ cmos.StatusRegister.A, false, @as(u8, 0x00), cmos.StatusRegister.A, false, @as(u8, 0x00) },
@@ -504,7 +507,7 @@ test "readRtc unstable read" {
     });
 
     // Will try again, and now stable
-    // No buzzy loop
+    // No busy loop
     cmos.addTestParams(
         "readStatusRegister",
         .{ cmos.StatusRegister.A, false, @as(u8, 0x00), cmos.StatusRegister.A, false, @as(u8, 0x00) },
@@ -555,7 +558,7 @@ test "readRtc is BCD" {
     cmos.initTest();
     defer cmos.freeTest();
 
-    // No buzzy loop
+    // No busy loop
     cmos.addTestParams(
         "readStatusRegister",
         .{ cmos.StatusRegister.A, false, @as(u8, 0x00), cmos.StatusRegister.A, false, @as(u8, 0x00) },
@@ -608,7 +611,7 @@ test "readRtc is 12 hours" {
     cmos.initTest();
     defer cmos.freeTest();
 
-    // No buzzy loop
+    // No busy loop
     cmos.addTestParams(
         "readStatusRegister",
         .{ cmos.StatusRegister.A, false, @as(u8, 0x00), cmos.StatusRegister.A, false, @as(u8, 0x00) },
@@ -695,24 +698,24 @@ fn rt_init() void {
             irq_exists = true;
         },
         error.InvalidIrq => {
-            panic(@errorReturnTrace(), "IRQ for RTC, IRQ number: {} is invalid", .{pic.IRQ_REAL_TIME_CLOCK});
+            panic(@errorReturnTrace(), "FAILURE: IRQ for RTC, IRQ number: {} is invalid\n", .{pic.IRQ_REAL_TIME_CLOCK});
         },
     };
 
     if (!irq_exists) {
-        panic(@errorReturnTrace(), "IRQ for RTC doesn't exists\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: IRQ for RTC doesn't exists\n", .{});
     }
 
     // Check the rate
     const status_a = cmos.readStatusRegister(cmos.StatusRegister.A, false);
     if (status_a & @as(u8, 0x0F) != 7) {
-        panic(@errorReturnTrace(), "Rate not set properly, got: {}\n", .{status_a & @as(u8, 0x0F)});
+        panic(@errorReturnTrace(), "FAILURE: Rate not set properly, got: {}\n", .{status_a & @as(u8, 0x0F)});
     }
 
     // Check if interrupts are enabled
     const status_b = cmos.readStatusRegister(cmos.StatusRegister.B, true);
     if (status_b & ~@as(u8, 0x40) == 0) {
-        panic(@errorReturnTrace(), "Interrupts not enabled\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: Interrupts not enabled\n", .{});
     }
 
     log.logInfo("RTC: Tested init\n", .{});
@@ -727,7 +730,7 @@ fn rt_interrupts() void {
     pit.waitTicks(100);
 
     if (prev_ticks == ticks) {
-        panic(@errorReturnTrace(), "No interrupt happened\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: No interrupt happened\n", .{});
     }
 
     log.logInfo("RTC: Tested interrupts\n", .{});
