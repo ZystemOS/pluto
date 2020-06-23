@@ -9,6 +9,7 @@ const LoggingError = error{};
 /// The OutStream for the format function
 const OutStream = std.io.OutStream(void, LoggingError, logCallback);
 
+/// The different levels of logging that can be outputted.
 pub const Level = enum {
     INFO,
     DEBUG,
@@ -18,6 +19,20 @@ pub const Level = enum {
 
 var serial: Serial = undefined;
 
+///
+/// The call back function for the std library format function.
+///
+/// Arguments:
+///     context: void   - The context of the printing. There isn't a need for a context for this
+///                       so is void.
+///     str: []const u8 - The string to print to the serial terminal.
+///
+/// Return: usize
+///     The number of bytes written. This will always be the length of the string to print.
+///
+/// Error: LoggingError
+///     {} - No error as LoggingError is empty.
+///
 fn logCallback(context: void, str: []const u8) LoggingError!usize {
     serial.writeBytes(str);
     return str.len;
@@ -27,8 +42,10 @@ fn logCallback(context: void, str: []const u8) LoggingError!usize {
 /// Write a message to the log output stream with a certain logging level.
 ///
 /// Arguments:
-///     IN comptime level: Level - The logging level to use. Determines the message prefix and whether it is filtered.
-///     IN comptime format: []const u8 - The message format. Uses the standard format specification options.
+///     IN comptime level: Level - The logging level to use. Determines the message prefix and
+///                                whether it is filtered.
+///     IN comptime format: []const u8 - The message format. Uses the standard format specification
+///                                      options.
 ///     IN args: var - A struct of the parameters for the format string.
 ///
 pub fn log(comptime level: Level, comptime format: []const u8, args: var) void {
@@ -39,7 +56,8 @@ pub fn log(comptime level: Level, comptime format: []const u8, args: var) void {
 /// Write a message to the log output stream with the INFO level.
 ///
 /// Arguments:
-///     IN comptime format: []const u8 - The message format. Uses the standard format specification options.
+///     IN comptime format: []const u8 - The message format. Uses the standard format specification
+///                                      options.
 ///     IN args: var - A struct of the parameters for the format string.
 ///
 pub fn logInfo(comptime format: []const u8, args: var) void {
@@ -50,7 +68,8 @@ pub fn logInfo(comptime format: []const u8, args: var) void {
 /// Write a message to the log output stream with the DEBUG level.
 ///
 /// Arguments:
-///     IN comptime format: []const u8 - The message format. Uses the standard format specification options.
+///     IN comptime format: []const u8 - The message format. Uses the standard format specification
+///                                      options.
 ///     IN args: var - A struct of the parameters for the format string.
 ///
 pub fn logDebug(comptime format: []const u8, args: var) void {
@@ -61,7 +80,8 @@ pub fn logDebug(comptime format: []const u8, args: var) void {
 /// Write a message to the log output stream with the WARNING level.
 ///
 /// Arguments:
-///     IN comptime format: []const u8 - The message format. Uses the standard format specification options.
+///     IN comptime format: []const u8 - The message format. Uses the standard format specification
+///                                      options.
 ///     IN args: var - A struct of the parameters for the format string.
 ///
 pub fn logWarning(comptime format: []const u8, args: var) void {
@@ -72,7 +92,8 @@ pub fn logWarning(comptime format: []const u8, args: var) void {
 /// Write a message to the log output stream with the ERROR level.
 ///
 /// Arguments:
-///     IN comptime format: []const u8 - The message format. Uses the standard format specification options.
+///     IN comptime format: []const u8 - The message format. Uses the standard format specification
+///                                      options.
 ///     IN args: var - A struct of the parameters for the format string.
 ///
 pub fn logError(comptime format: []const u8, args: var) void {
@@ -88,9 +109,15 @@ pub fn logError(comptime format: []const u8, args: var) void {
 pub fn init(ser: Serial) void {
     serial = ser;
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
+///
+/// The logging runtime tests that will test all logging levels.
+///
 pub fn runtimeTests() void {
     inline for (@typeInfo(Level).Enum.fields) |field| {
         const level = @field(Level, field.name);

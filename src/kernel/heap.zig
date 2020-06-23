@@ -158,7 +158,7 @@ const Heap = struct {
     /// Attempt to allocate a portion of memory within a heap. It is recommended to not call this directly and instead use the Allocator interface.
     ///
     /// Arguments:
-    ///     INOUT self: *Heap - The heap to allocate within
+    ///     IN/OUT self: *Heap - The heap to allocate within
     ///     IN size: usize - The size of the allocation
     ///     IN alignment: ?u29 - The alignment that the returned address should have, else null if no alignment is required
     ///
@@ -187,7 +187,7 @@ const Heap = struct {
     /// Free previously allocated memory. It is recommended to not call this directly and instead use the Allocator interface.
     ///
     /// Arguments:
-    ///     INOUT self: *Heap - The heap to free within
+    ///     IN/OUT self: *Heap - The heap to free within
     ///     IN ptr: usize - The address of the allocation to free. Should have been returned from a prior call to alloc.
     ///     IN len: usize - The size of the allocated region.
     ///

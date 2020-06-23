@@ -639,7 +639,7 @@ pub fn freeTest() void {
 ///     IN/OUT self: *Self      - Self. This is the mocking object to be modified to add
 ///                               the test parameters.
 ///     IN fun_name: []const u8 - The function name to add the test parameters to.
-///     IN params: arglist      - The parameters to add.
+///     IN params: var          - The parameters to add.
 ///
 pub fn addTestParams(comptime fun_name: []const u8, params: var) void {
     var mock_obj = getMockObject();

@@ -31,7 +31,10 @@ pub const Serial = struct {
 ///
 pub fn init(boot_payload: arch.BootPayload) Serial {
     const serial = arch.initSerial(boot_payload);
-    if (build_options.rt_test) runtimeTests(serial);
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(serial),
+        else => {},
+    }
     return serial;
 }
 

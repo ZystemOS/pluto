@@ -293,7 +293,10 @@ pub fn init() void {
     // Set by default the underline cursor
     setCursorShape(CursorShape.UNDERLINE);
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
 test "entryColour" {
@@ -531,7 +534,7 @@ fn rt_correctMaxScanLine() void {
     const max_scan_line = getPortData(REG_MAXIMUM_SCAN_LINE);
 
     if (max_scan_line != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Max scan line not {}, found {}\n", .{ CURSOR_SCANLINE_END, max_scan_line });
+        panic(@errorReturnTrace(), "FAILURE: Max scan line not {}, found {}\n", .{ CURSOR_SCANLINE_END, max_scan_line });
     }
 
     log.logInfo("VGA: Tested max scan line\n", .{});
@@ -543,14 +546,14 @@ fn rt_correctMaxScanLine() void {
 fn rt_correctCursorShape() void {
     // Check the global variables are correct
     if (cursor_scanline_start != CURSOR_SCANLINE_MIDDLE or cursor_scanline_end != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Global cursor scanline incorrect. Start: {}, end: {}\n", .{ cursor_scanline_start, cursor_scanline_end });
+        panic(@errorReturnTrace(), "FAILURE: Global cursor scanline incorrect. Start: {}, end: {}\n", .{ cursor_scanline_start, cursor_scanline_end });
     }
 
     const cursor_start = getPortData(REG_CURSOR_START);
     const cursor_end = getPortData(REG_CURSOR_END);
 
     if (cursor_start != CURSOR_SCANLINE_MIDDLE or cursor_end != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Cursor scanline are incorrect. Start: {}, end: {}\n", .{ cursor_start, cursor_end });
+        panic(@errorReturnTrace(), "FAILURE: Cursor scanline are incorrect. Start: {}, end: {}\n", .{ cursor_start, cursor_end });
     }
 
     log.logInfo("VGA: Tested cursor shape\n", .{});
@@ -579,7 +582,7 @@ fn rt_setCursorGetCursor() void {
     const actual_y_loc = @truncate(u8, actual_linear_loc / WIDTH);
 
     if (x != actual_x_loc or y != actual_y_loc) {
-        panic(@errorReturnTrace(), "VGA cursor not the same: a_x: {}, a_y: {}, e_x: {}, e_y: {}\n", .{ x, y, actual_x_loc, actual_y_loc });
+        panic(@errorReturnTrace(), "FAILURE: VGA cursor not the same: a_x: {}, a_y: {}, e_x: {}, e_y: {}\n", .{ x, y, actual_x_loc, actual_y_loc });
     }
 
     // Restore the previous x and y

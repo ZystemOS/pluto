@@ -5,6 +5,7 @@ const arch = @import("arch.zig").internals;
 const log = @import("log.zig");
 const multiboot = @import("multiboot.zig");
 const mem = @import("mem.zig");
+const build_options = @import("build_options");
 const ArrayList = std.ArrayList;
 const testing = std.testing;
 
@@ -15,7 +16,7 @@ const PanicError = error{
     InvalidSymbolFile,
 };
 
-/// An entry within a symbol map. Corresponds to one entry in a symbole file
+/// An entry within a symbol map. Corresponds to one entry in a symbol file
 const MapEntry = struct {
     /// The address that the entry corresponds to
     addr: usize,
@@ -59,7 +60,7 @@ const SymbolMap = struct {
     /// Error: std.mem.Allocator.Error
     ///      * - See ArrayList.append
     ///
-    pub fn add(self: *SymbolMap, name: []const u8, addr: u32) !void {
+    pub fn add(self: *SymbolMap, name: []const u8, addr: usize) !void {
         try self.addEntry(MapEntry{ .addr = addr, .func_name = name });
     }
 
@@ -130,7 +131,7 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var
 /// whitespace character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated after all
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
 ///         characters have been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -166,7 +167,9 @@ fn parseAddr(ptr: *[*]const u8, end: *const u8) !usize {
 ///     PanicError.InvalidSymbolFile: The address given is greater than or equal to the end address.
 ///
 fn parseChar(ptr: [*]const u8, end: *const u8) PanicError!u8 {
-    if (@ptrToInt(ptr) >= @ptrToInt(end)) return PanicError.InvalidSymbolFile;
+    if (@ptrToInt(ptr) >= @ptrToInt(end)) {
+        return PanicError.InvalidSymbolFile;
+    }
     return ptr[0];
 }
 
@@ -219,7 +222,7 @@ fn parseNonWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
 /// character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated after all
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
 ///         characters have been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -242,7 +245,7 @@ fn parseName(ptr: *[*]const u8, end: *const u8) PanicError![]const u8 {
 /// in the format of '\d+\w+[a-zA-Z0-9]+'. Must be terminated by a whitespace character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated once after the
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated once after the
 ///         address has been consumed and once again after the name has been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -281,8 +284,9 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     defer log.logInfo("Done panic\n", .{});
 
     // Exit if we haven't loaded all debug modules
-    if (mem_profile.modules.len < 1)
+    if (mem_profile.modules.len < 1) {
         return;
+    }
     var kmap_start: usize = 0;
     var kmap_end: usize = 0;
     for (mem_profile.modules) |module| {
@@ -296,8 +300,9 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     }
     // Don't try to load the symbols if there was no symbol map file. This is a valid state so just
     // exit early
-    if (kmap_start == 0 or kmap_end == 0)
+    if (kmap_start == 0 or kmap_end == 0) {
         return;
+    }
 
     var syms = SymbolMap.init(allocator);
     errdefer syms.deinit();
@@ -307,6 +312,11 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
         try syms.addEntry(entry);
     }
     symbol_map = syms;
+
+    switch (build_options.test_mode) {
+        .Panic => runtimeTests(),
+        else => {},
+    }
 }
 
 test "parseChar" {
@@ -441,7 +451,13 @@ test "SymbolMap" {
     testing.expectEqual(map.search(2345), "jkl");
 }
 
+///
+/// Runtime test for panic. This will trigger a integer overflow.
+///
 pub fn runtimeTests() void {
+    @setRuntimeSafety(true);
     var x: u8 = 255;
     x += 1;
+    // If we get here, then a panic was not triggered so fail
+    panic(@errorReturnTrace(), "FAILURE: No integer overflow\n", .{});
 }

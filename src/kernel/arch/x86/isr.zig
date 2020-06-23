@@ -130,7 +130,7 @@ pub const SECURITY: u8 = 30;
 /// The of exception handlers initialised to null. Need to open a ISR for these to be valid.
 var isr_handlers: [NUMBER_OF_ENTRIES]?IsrHandler = [_]?IsrHandler{null} ** NUMBER_OF_ENTRIES;
 
-/// The syscall hander.
+/// The syscall handler.
 var syscall_handler: ?IsrHandler = null;
 
 ///
@@ -188,7 +188,7 @@ fn openIsr(index: u8, handler: idt.InterruptHandler) void {
 ///     IN isr_num: u16 - The isr number to check
 ///
 /// Return: bool
-///     Whether a ISR hander index if valid.
+///     Whether a ISR handler index is valid.
 ///
 pub fn isValidIsr(isr_num: u32) bool {
     return isr_num < NUMBER_OF_ENTRIES or isr_num == syscalls.INTERRUPT;
@@ -244,7 +244,10 @@ pub fn init() void {
 
     openIsr(syscalls.INTERRUPT, interrupts.getInterruptStub(syscalls.INTERRUPT));
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
 fn testFunction0() callconv(.Naked) void {}
@@ -356,18 +359,18 @@ test "registerIsr invalid isr index" {
 }
 
 ///
-/// Test that all handers are null at initialisation.
+/// Test that all handlers are null at initialisation.
 ///
 fn rt_unregisteredHandlers() void {
     // Ensure all ISR are not registered yet
     for (isr_handlers) |h, i| {
         if (h) |_| {
-            panic(@errorReturnTrace(), "Handler found for ISR: {}-{}\n", .{ i, h });
+            panic(@errorReturnTrace(), "FAILURE: Handler found for ISR: {}-{}\n", .{ i, h });
         }
     }
 
     if (syscall_handler) |h| {
-        panic(@errorReturnTrace(), "Pre-testing failed for syscall: {}\n", .{h});
+        panic(@errorReturnTrace(), "FAILURE: Pre-testing failed for syscall: {}\n", .{h});
     }
 
     log.logInfo("ISR: Tested registered handlers\n", .{});
@@ -383,7 +386,7 @@ fn rt_openedIdtEntries() void {
     for (idt_entries) |entry, i| {
         if (isValidIsr(i)) {
             if (!idt.isIdtOpen(entry)) {
-                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", .{i});
+                panic(@errorReturnTrace(), "FAILURE: IDT entry for {} is not open\n", .{i});
             }
         }
     }

@@ -46,7 +46,7 @@ pub const MemProfile = struct {
     /// The virtual regions of reserved memory. Should not include what is tracked by the vaddr_* fields but should include the regions occupied by the modules. These are reserved and mapped by the VMM
     virtual_reserved: []Map,
 
-    /// The phsyical regions of reserved memory. Should not include what is tracked by the physaddr_* fields but should include the regions occupied by the modules. These are reserved by the PMM
+    /// The physical regions of reserved memory. Should not include what is tracked by the physaddr_* fields but should include the regions occupied by the modules. These are reserved by the PMM
     physical_reserved: []Range,
 
     /// The allocator to use before a heap can be set up.

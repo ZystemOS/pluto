@@ -81,6 +81,12 @@ export fn kmain(boot_payload: arch.BootPayload) void {
 
     tty.print("Hello Pluto from kernel :)\n", .{});
 
-    // The panic runtime tests must run last as they never return
-    if (build_options.rt_test) panic_root.runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => {
+            log.logInfo("SUCCESS\n", .{});
+        },
+        else => {},
+    }
+
+    arch.spinWait();
 }

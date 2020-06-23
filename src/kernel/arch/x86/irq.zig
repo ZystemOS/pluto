@@ -88,7 +88,7 @@ fn openIrq(index: u8, handler: idt.InterruptHandler) void {
 ///     IN irq_num: u8 - The IRQ index to test.
 ///
 /// Return: bool
-///     Whether the IRQ index if valid.
+///     Whether the IRQ index is valid.
 ///
 pub fn isValidIrq(irq_num: u32) bool {
     return irq_num < NUMBER_OF_ENTRIES;
@@ -136,7 +136,10 @@ pub fn init() void {
         openIrq(i, interrupts.getInterruptStub(i));
     }
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
 fn testFunction0() callconv(.Naked) void {}
@@ -227,13 +230,13 @@ test "registerIrq invalid irq index" {
 }
 
 ///
-/// Test that all handers are null at initialisation.
+/// Test that all handlers are null at initialisation.
 ///
 fn rt_unregisteredHandlers() void {
     // Ensure all ISR are not registered yet
     for (irq_handlers) |h, i| {
         if (h) |_| {
-            panic(@errorReturnTrace(), "Handler found for IRQ: {}-{}\n", .{ i, h });
+            panic(@errorReturnTrace(), "FAILURE: Handler found for IRQ: {}-{}\n", .{ i, h });
         }
     }
 
@@ -250,7 +253,7 @@ fn rt_openedIdtEntries() void {
     for (idt_entries) |entry, i| {
         if (i >= IRQ_OFFSET and isValidIrq(i - IRQ_OFFSET)) {
             if (!idt.isIdtOpen(entry)) {
-                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", .{i});
+                panic(@errorReturnTrace(), "FAILURE: IDT entry for {} is not open\n", .{i});
             }
         }
     }

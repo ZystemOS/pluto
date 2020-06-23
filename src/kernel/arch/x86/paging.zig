@@ -11,7 +11,7 @@ const log = @import("../../log.zig");
 const mem = @import("../../mem.zig");
 const vmm = @import("../../vmm.zig");
 const multiboot = @import("multiboot.zig");
-const options = @import("build_options");
+const build_options = @import("build_options");
 const testing = std.testing;
 
 /// An array of directory entries and page tables. Forms the first level of paging and covers the entire 4GB memory space.
@@ -138,7 +138,7 @@ inline fn virtToTableEntryIdx(virt: usize) usize {
 ///
 /// Arguments:
 ///     val: *align(1) u32 - The entry to modify
-///     attr: u32 - The bits corresponding to the atttribute to set
+///     attr: u32 - The bits corresponding to the attribute to set
 ///
 inline fn setAttribute(val: *align(1) u32, attr: u32) void {
     val.* |= attr;
@@ -149,7 +149,7 @@ inline fn setAttribute(val: *align(1) u32, attr: u32) void {
 ///
 /// Arguments:
 ///     val: *align(1) u32 - The entry to modify
-///     attr: u32 - The bits corresponding to the atttribute to clear
+///     attr: u32 - The bits corresponding to the attribute to clear
 ///
 inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
     val.* &= ~attr;
@@ -157,7 +157,7 @@ inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
 
 ///
 /// Map a page directory entry, setting the present, size, writable, write-through and physical address bits.
-/// Clears the user and cache disabled bits. Entry should be zero'ed.
+/// Clears the user and cache disabled bits. Entry should be zeroed.
 ///
 /// Arguments:
 ///     IN virt_addr: usize - The start of the virtual space to map
@@ -297,11 +297,11 @@ fn mapTableEntry(entry: *align(1) TableEntry, phys_addr: usize, attrs: vmm.Attri
 /// Arguments:
 ///     IN virtual_start: usize - The start of the virtual region to map
 ///     IN virtual_end: usize - The end (exclusive) of the virtual region to map
-///     IN physical_start: usize - The start of the physical region to mape to
+///     IN physical_start: usize - The start of the physical region to map to
 ///     IN physical_end: usize - The end (exclusive) of the physical region to map to
 ///     IN attrs: vmm.Attributes - The attributes to apply to this mapping
-///     INOUT allocator: *std.mem.Allocator - The allocator to use to allocate any intermediate data structures required to map this region
-///     INOUT dir: *Directory - The page directory to map within
+///     IN/OUT allocator: *std.mem.Allocator - The allocator to use to allocate any intermediate data structures required to map this region
+///     IN/OUT dir: *Directory - The page directory to map within
 ///
 /// Error: vmm.MapperError || std.mem.Allocator.Error
 ///     * - See mapDirEntry
@@ -326,7 +326,7 @@ pub fn map(virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usiz
 /// Arguments:
 ///     IN virtual_start: usize - The start of the virtual region to unmap
 ///     IN virtual_end: usize - The end (exclusive) of the virtual region to unmap
-///     INOUT dir: *Directory - The page directory to unmap within
+///     IN/OUT dir: *Directory - The page directory to unmap within
 ///
 /// Error: std.mem.Allocator.Error || vmm.MapperError
 ///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
@@ -396,7 +396,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     log.logInfo("Init paging\n", .{});
     defer log.logInfo("Done paging\n", .{});
 
-    isr.registerIsr(isr.PAGE_FAULT, if (options.rt_test) rt_pageFault else pageFault) catch |e| {
+    isr.registerIsr(isr.PAGE_FAULT, if (build_options.test_mode == .Initialisation) rt_pageFault else pageFault) catch |e| {
         panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", .{e});
     };
     const dir_physaddr = @ptrToInt(mem.virtToPhys(&kernel_directory));
@@ -405,7 +405,10 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
         : [addr] "{eax}" (dir_physaddr)
     );
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem.FIXED_ALLOC_SIZE, PAGE_SIZE_4KB);
-    if (options.rt_test) runtimeTests(v_end);
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(v_end),
+        else => {},
+    }
 }
 
 fn checkDirEntry(entry: DirectoryEntry, virt_start: usize, virt_end: usize, phys_start: usize, attrs: vmm.Attributes, table: *Table, present: bool) void {
@@ -541,7 +544,7 @@ test "map and unmap" {
 }
 
 // The labels to jump to after attempting to cause a page fault. This is needed as we don't want to cause an
-// infinite loop by jummping to the same instruction that caused the fault.
+// infinite loop by jumping to the same instruction that caused the fault.
 extern var rt_fault_callback: *u32;
 extern var rt_fault_callback2: *u32;
 
@@ -560,26 +563,32 @@ fn rt_accessUnmappedMem(v_end: u32) void {
     // Accessing unmapped mem causes a page fault
     var ptr = @intToPtr(*u8, v_end);
     var value = ptr.*;
+    // Need this as in release builds the above is optimised out so it needs to be use
+    log.logError("FAILURE: Value: {}\n", .{value});
     // This is the label that we return to after processing the page fault
     asm volatile (
         \\.global rt_fault_callback
         \\rt_fault_callback:
     );
-    testing.expect(faulted);
+    if (!faulted) {
+        panic(@errorReturnTrace(), "FAILURE: Paging should have faulted\n", .{});
+    }
     log.logInfo("Paging: Tested accessing unmapped memory\n", .{});
 }
 
 fn rt_accessMappedMem(v_end: u32) void {
     use_callback2 = true;
     faulted = false;
-    // Accessing mapped memory does't cause a page fault
+    // Accessing mapped memory doesn't cause a page fault
     var ptr = @intToPtr(*u8, v_end - PAGE_SIZE_4KB);
     var value = ptr.*;
     asm volatile (
         \\.global rt_fault_callback2
         \\rt_fault_callback2:
     );
-    testing.expect(!faulted);
+    if (faulted) {
+        panic(@errorReturnTrace(), "FAILURE: Paging shouldn't have faulted\n", .{});
+    }
     log.logInfo("Paging: Tested accessing mapped memory\n", .{});
 }
 
