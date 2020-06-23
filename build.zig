@@ -19,12 +19,10 @@ const x86_i686 = CrossTarget{
 };
 
 pub fn build(b: *Builder) !void {
-    const arch = b.option([]const u8, "arch", "Architecture to build for: x86") orelse "x86";
-    const target: CrossTarget = if (std.mem.eql(u8, "x86", arch))
-        x86_i686
-    else {
-        std.debug.warn("Unsupported or unknown architecture '{}'\n", .{arch});
-        unreachable;
+    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{x86_i686}, .default_target = x86_i686 });
+    const arch = switch (target.getCpuArch()) {
+        .i386 => "x86",
+        else => unreachable,
     };
 
     const fmt_step = b.addFmt(&[_][]const u8{
