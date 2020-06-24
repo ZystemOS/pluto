@@ -1,0 +1,20 @@
+image:
+  file: tools/gitpod.Dockerfile
+
+ports:
+  - port: 5900
+    onOpen: ignore
+  - port: 6080
+    onOpen: open-browser
+
+tasks:
+  - init: ./tools/update-tools.sh
+    command:
+      export PATH=./tools/zig:$PATH &&
+      echo running pluto unit tests ... &&
+      zig build test
+
+vscode:
+  extensions:
+    - tiehuis.zig@0.2.4:QyZ1jN51sNx8oPaymdmrmA==
+    - SuperAuguste.zls-vscode@1.0.0:m7XXQB5lzYmw1XvxwhbM0w==

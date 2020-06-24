@@ -39,7 +39,10 @@
 .idea/
 
 # Zig
-zig-cache
+core.zig.*
+/tools/zig/
+/tools/zls/
+/zig-cache/
 
 # Build dir
 bin/*
