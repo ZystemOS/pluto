@@ -108,6 +108,10 @@ pub const VmmError = error{
     InvalidPhysAddresses,
 };
 
+/// The boot-time offset that the virtual addresses are from the physical addresses
+/// This is the start of the memory owned by the kernel and so is where the kernel VMM starts
+extern var KERNEL_ADDR_OFFSET: *u32;
+
 ///
 /// Construct a virtual memory manager to keep track of allocated and free virtual memory regions within a certain space
 ///
@@ -186,7 +190,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     Bitmap(u32).Error.OutOfBounds - The address given is outside of the memory managed
         ///
         pub fn isSet(self: *const Self, virt: usize) bitmap.Bitmap(u32).BitmapError!bool {
-            return try self.bmp.isSet(virt / BLOCK_SIZE);
+            return try self.bmp.isSet((virt - self.start) / BLOCK_SIZE);
         }
 
         ///
@@ -237,7 +241,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
 
             virt = virtual.start;
             while (virt < virtual.end) : (virt += BLOCK_SIZE) {
-                try self.bmp.setEntry(virt / BLOCK_SIZE);
+                try self.bmp.setEntry((virt - self.start) / BLOCK_SIZE);
             }
 
             if (physical) |p| {
@@ -348,7 +352,7 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) s
     log.logInfo("Init vmm\n", .{});
     defer log.logInfo("Done vmm\n", .{});
 
-    var vmm = try VirtualMemoryManager(arch.VmmPayload).init(BLOCK_SIZE, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
+    var vmm = try VirtualMemoryManager(arch.VmmPayload).init(@ptrToInt(&KERNEL_ADDR_OFFSET), 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
 
     // Map in kernel
     // Calculate start and end of mapping
