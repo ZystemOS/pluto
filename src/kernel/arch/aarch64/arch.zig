@@ -2,6 +2,7 @@ const std = @import("std");
 const vmm = @import("../../vmm.zig");
 const mem = @import("../../mem.zig");
 const Serial = @import("../../serial.zig").Serial;
+const TTY = @import("../../tty.zig").TTY;
 const log = @import("../../log.zig");
 const rpi = @import("rpi.zig");
 const mmio = @import("mmio.zig");
@@ -24,6 +25,10 @@ const SYSTEM_CLOCK: usize = 700000000;
 const UART_BAUD_RATE: usize = 115200;
 
 var mmio_addr: usize = undefined;
+
+pub fn initTTY(boot_payload: BootPayload) TTY {
+    return undefined;
+}
 
 pub fn initSerial(board: BootPayload) Serial {
     mmio_addr = board.mmioAddress();
