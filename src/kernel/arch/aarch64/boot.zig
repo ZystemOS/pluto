@@ -5,7 +5,7 @@ extern fn kmain(payload: *const rpi.RaspberryPiBoard) void;
 extern var KERNEL_STACK_END: *usize;
 
 export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
-    // The 32bit address to the DTB is in x0
+    // The 32bit address to the DTB is in the lower bits of x0
     // Setup the stack
     asm volatile ("mov sp, %[stack_end]"
         :
