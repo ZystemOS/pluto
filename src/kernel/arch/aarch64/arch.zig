@@ -101,3 +101,8 @@ pub fn halt() noreturn {
 pub fn haltNoInterrupts() noreturn {
     while (true) {}
 }
+
+// TODO: implement
+pub fn spinWait() noreturn {
+    while (true) {}
+}
