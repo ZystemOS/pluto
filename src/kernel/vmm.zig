@@ -253,7 +253,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                     try phys_list.append(phys);
                 }
             }
-            _ = try self.allocations.put(virt, Allocation{ .physical = phys_list });
+            _ = try self.allocations.put(virtual.start, Allocation{ .physical = phys_list });
         }
 
         ///
@@ -310,7 +310,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     Bitmap.BitmapError.OutOfBounds - The address is out of the manager's bounds
         ///
         pub fn free(self: *Self, vaddr: usize) (bitmap.Bitmap(u32).BitmapError || VmmError)!void {
-            const entry = vaddr / BLOCK_SIZE;
+            const entry = (vaddr - self.start) / BLOCK_SIZE;
             if (try self.bmp.isSet(entry)) {
                 // There will be an allocation associated with this virtual address
                 const allocation = self.allocations.get(vaddr) orelse unreachable;
