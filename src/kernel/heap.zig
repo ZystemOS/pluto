@@ -202,7 +202,7 @@ const Heap = struct {
 
             const Self2 = @This();
 
-            pub fn search(min: usize, max: usize, order_min: usize, order_max: usize) ?Self2 {
+            pub fn search(min: usize, max: usize, order_min: usize, order_max: usize, min_size: usize) ?Self2 {
                 if (min == order_min and max == order_max) {
                     return Self2{ .start = order_min, .end = order_max };
                 }
@@ -210,8 +210,10 @@ const Heap = struct {
                     return null;
                 }
                 const order_size = order_max - order_min;
-                if (search(min, max, order_min, order_min + order_size / 2) orelse search(min, max, order_max - order_size / 2, order_max)) |r| {
-                    return r;
+                if (order_size > min_size) {
+                    if (search(min, max, order_min, order_min + order_size / 2, min_size) orelse search(min, max, order_max - order_size / 2, order_max, min_size)) |r| {
+                        return r;
+                    }
                 }
                 return Self2{ .start = order_min, .end = order_max };
             }
@@ -219,10 +221,10 @@ const Heap = struct {
 
         // Since the address could be aligned it may not fall on an allocation boundary, so it's necessary to traverse the tree to find the smallest node in which the address range fits
         // This will not be null as the address range is already guaranteed to be within the heap and so at least the root node will fit it
-        const search_result = NodeSearch.search(addr, addr_end, 0, self.size) orelse unreachable;
+        const search_result = NodeSearch.search(addr, addr_end, 0, self.size, self.block_min_size) orelse unreachable;
 
         const entry_start = search_result.start / self.block_min_size;
-        const entry_end = search_result.end / self.block_min_size + 1;
+        const entry_end = search_result.end / self.block_min_size;
 
         // Clear entries associated with the order that the allocation was stored in
         var entry: u32 = @intCast(u32, entry_start);
@@ -323,9 +325,55 @@ test "whole heap can be allocated and freed" {
     try testBitmapClear(&heap);
 }
 
+test "free only frees the correct blocks" {
+    var heap = try Heap.init(0, 1024, 16, std.heap.page_allocator);
+
+    // Allocate the entire heap in 16 byte blocks
+    var i: usize = 0;
+    while (i < heap.bitmap.num_entries) : (i += 1) {
+        _ = heap.alloc_internal(heap.block_min_size, 1) orelse unreachable;
+    }
+
+    // Free the entire heap bit by bit
+    i = 0;
+    while (i < heap.bitmap.num_entries) : (i += 1) {
+        heap.free(i * heap.block_min_size, heap.block_min_size) catch unreachable;
+        // Only the first i entries in the bitmap should be 0
+        var j: usize = 0;
+        while (j <= i) : (j += 1) {
+            testing.expect(!(heap.bitmap.isSet(j) catch unreachable));
+        }
+        while (j < heap.bitmap.num_entries) : (j += 1) {
+            testing.expect(heap.bitmap.isSet(j) catch unreachable);
+        }
+    }
+
+    // Try the same again but in 32 byte blocks
+    i = 0;
+    while (i < heap.bitmap.num_entries) : (i += 2) {
+        _ = heap.alloc_internal(heap.block_min_size * 2, 1) orelse unreachable;
+    }
+
+    // Free the entire heap bit by bit
+    i = 0;
+    while (i < heap.bitmap.num_entries) : (i += 2) {
+        heap.free(i * heap.block_min_size, heap.block_min_size * 2) catch unreachable;
+        // Only the first i entries in the bitmap should be 0
+        var j: usize = 0;
+        while (j <= i) : (j += 1) {
+            testing.expect(!(heap.bitmap.isSet(j) catch unreachable));
+        }
+        j += 1;
+        while (j < heap.bitmap.num_entries) : (j += 1) {
+            testing.expect(heap.bitmap.isSet(j) catch unreachable);
+        }
+    }
+}
+
 test "Allocator" {
-    var buff = [_]u8{0} ** (4 * 1024 * 1024);
-    var heap = try Heap.init(@ptrToInt(&buff), buff.len, 16, std.heap.page_allocator);
+    var buff = try std.heap.page_allocator.alloc(u8, 4 * 1024 * 1024);
+    @memset(buff.ptr, 0, buff.len);
+    var heap = try Heap.init(@ptrToInt(buff.ptr), buff.len, 16, std.heap.page_allocator);
     var allocator = &heap.allocator;
     try testAllocator(allocator);
     try testAllocatorAligned(allocator, 32);
