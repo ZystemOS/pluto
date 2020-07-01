@@ -69,43 +69,32 @@ const Heap = struct {
             .size = size,
             .bitmap = try Bitmap.init(@intCast(u32, size / block_min_size), allocator),
             .allocator = Allocator{
-                .reallocFn = realloc,
-                .shrinkFn = shrink,
+                .allocFn = alloc,
+                .resizeFn = resize,
             },
         };
     }
 
     /// See std/mem.zig for documentation. This function should only be called by the Allocator interface.
-    fn realloc(allocator: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) Allocator.Error![]u8 {
+    fn alloc(allocator: *Allocator, len: usize, alignment: u29, len_alignment: u29) Allocator.Error![]u8 {
         var heap = @fieldParentPtr(Heap, "allocator", allocator);
-
-        // If this is a new allocation
-        if (old_mem.len == 0) {
-            if (heap.alloc(new_size, new_align)) |addr| {
-                return @intToPtr([*]u8, addr)[0..new_size];
-            }
+        if (heap.alloc_internal(len, alignment)) |addr| {
+            return @intToPtr([*]u8, addr)[0..len];
         }
-
-        // Re-allocation to a smaller size/alignment is not currently supported
         return Allocator.Error.OutOfMemory;
     }
 
     /// See std/mem.zig for documentation. This function should only be called by the Allocator interface.
-    fn shrink(allocator: *Allocator, old_mem: []u8, old_alignment: u29, new_size: usize, new_alignment: u29) []u8 {
+    fn resize(allocator: *Allocator, old_mem: []u8, new_len: usize, len_alignment: u29) Allocator.Error!usize {
         var heap = @fieldParentPtr(Heap, "allocator", allocator);
-        if (new_size != old_mem.len) {
-            // Freeing will error if the pointer was never allocated in the first place, but the Allocator API doesn't allow errors from shrink so use unreachable
+        if (new_len == 0) {
+            // Freeing will error if the pointer was never allocated in the first place, but the Allocator API doesn't allow errors to be thrown from resize in this situation, so use unreachable
             // It's not nice but is the only thing that can be done. Besides, if the unreachable is ever triggered then a double-free bug has been found
             heap.free(@ptrToInt(&old_mem[0]), old_mem.len) catch unreachable;
-            if (new_size != 0) {
-                // Try to re-allocate the memory to a better place
-                // Alloc cannot error here as new_size is guaranteed to be <= old_mem.len and so freeing the old memory guarantees there is space for the new memory
-                var new = @intToPtr([*]u8, heap.alloc(new_size, new_alignment) orelse unreachable)[0..new_size];
-                std.mem.copy(u8, new, old_mem[0..new_size]);
-                return new;
-            }
+            return 0;
         }
-        return old_mem[0..new_size];
+        // Resizing isn't support at the moment
+        return Allocator.Error.OutOfMemory;
     }
 
     ///
@@ -165,7 +154,7 @@ const Heap = struct {
     /// Return: ?usize
     ///     The starting address of the allocation or null if there wasn't enough free memory.
     ///
-    fn alloc(self: *Self, size: usize, alignment: ?u29) ?usize {
+    fn alloc_internal(self: *Self, size: usize, alignment: ?u29) ?usize {
         if (size == 0 or size > self.size)
             return null;
 
@@ -306,19 +295,19 @@ test "whole heap can be allocated and freed" {
     // Allocate entire heap
     while (occupied < heap.size) {
         // This allocation should succeed
-        const result = heap.alloc(heap.block_min_size, null) orelse unreachable;
+        const result = heap.alloc_internal(heap.block_min_size, 1) orelse unreachable;
         testing.expectEqual(occupied, result);
         occupied += heap.block_min_size;
     }
     // No more allocations should be possible
-    testing.expectEqual(heap.alloc(1, null), null);
+    testing.expectEqual(heap.alloc_internal(1, 1), null);
 
     // Try freeing all allocations
     while (occupied > 0) : (occupied -= heap.block_min_size) {
         const addr = occupied - heap.block_min_size;
         heap.free(addr, heap.block_min_size) catch unreachable;
         // Make sure it can be reallocated
-        const result = heap.alloc(heap.block_min_size, null) orelse unreachable;
+        const result = heap.alloc_internal(heap.block_min_size, 1) orelse unreachable;
         testing.expectEqual(addr, result);
         // Re-free it
         heap.free(addr, heap.block_min_size) catch unreachable;
@@ -364,10 +353,11 @@ fn testAllocator(allocator: *Allocator) !void {
         allocator.destroy(item);
     }
 
-    slice = allocator.shrink(slice, 50);
-    testing.expect(slice.len == 50);
-    slice = allocator.shrink(slice, 25);
-    testing.expect(slice.len == 25);
+    // Shrinking is no longer supported
+    //slice = allocator.shrink(slice, 50);
+    //testing.expect(slice.len == 50);
+    //slice = allocator.shrink(slice, 25);
+    //testing.expect(slice.len == 25);
     slice = allocator.shrink(slice, 0);
     testing.expect(slice.len == 0);
     slice = try allocator.alloc(*i32, 10);
@@ -425,15 +415,16 @@ fn testAllocatorLargeAlignment(allocator: *Allocator) Allocator.Error!void {
     var slice = try allocator.alignedAlloc(u8, large_align, 500);
     testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
 
-    slice = allocator.shrink(slice, 100);
-    testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
+    // Shrinking is no longer supported
+    //slice = allocator.shrink(slice, 100);
+    //testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
 
     // Re-allocating isn't supported yet
     //slice = try allocator.realloc(slice, 5000);
     //testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
 
-    slice = allocator.shrink(slice, 10);
-    testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
+    //slice = allocator.shrink(slice, 10);
+    //testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
 
     // Re-allocating isn't supported yet
     //slice = try allocator.realloc(slice, 20000);
