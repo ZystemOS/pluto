@@ -314,7 +314,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             if (try self.bmp.isSet(entry)) {
                 // There will be an allocation associated with this virtual address
                 const allocation = self.allocations.get(vaddr) orelse unreachable;
-                const physical = allocation.value.physical;
+                const physical = allocation.physical;
                 defer physical.deinit();
                 const num_physical_allocations = physical.items.len;
                 for (physical.items) |block, i| {
@@ -439,7 +439,7 @@ test "alloc and free" {
     for (virtual_allocations.items) |alloc| {
         const alloc_group = vmm.allocations.get(alloc);
         std.testing.expect(alloc_group != null);
-        const physical = alloc_group.?.value.physical;
+        const physical = alloc_group.?.physical;
         // We need to create a copy of the physical allocations since the free call deinits them
         var physical_copy = std.ArrayList(usize).init(std.testing.allocator);
         defer physical_copy.deinit();

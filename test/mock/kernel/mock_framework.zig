@@ -23,6 +23,8 @@ const DataElementType = enum {
     ECmosRtcRegister,
     PTR_CONST_GdtPtr,
     PTR_CONST_IdtPtr,
+    GdtPtr,
+    IdtPtr,
     ERROR_IDTERROR_VOID,
     EFN_OVOID,
     NFN_OVOID,
@@ -44,6 +46,8 @@ const DataElementType = enum {
     FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
     FN_IPTRCONSTGDTPTR_OVOID,
     FN_IPTRCONSTIDTPTR_OVOID,
+    FN_OGDTPTR,
+    FN_OIDTPTR,
 };
 
 ///
@@ -63,6 +67,8 @@ const DataElement = union(DataElementType) {
     ECmosStatusRegister: cmos.StatusRegister,
     ECmosRtcRegister: cmos.RtcRegister,
     PTR_CONST_GdtPtr: *const gdt.GdtPtr,
+    IdtPtr: idt.IdtPtr,
+    GdtPtr: gdt.GdtPtr,
     PTR_CONST_IdtPtr: *const idt.IdtPtr,
     ERROR_IDTERROR_VOID: idt.IdtError!void,
     EFN_OVOID: fn () callconv(.C) void,
@@ -85,6 +91,8 @@ const DataElement = union(DataElementType) {
     FN_IU8_INFNOVOID_OERRORIDTERRORVOID: fn (u8, fn () callconv(.Naked) void) idt.IdtError!void,
     FN_IPTRCONSTGDTPTR_OVOID: fn (*const gdt.GdtPtr) void,
     FN_IPTRCONSTIDTPTR_OVOID: fn (*const idt.IdtPtr) void,
+    FN_OGDTPTR: fn () gdt.GdtPtr,
+    FN_OIDTPTR: fn () idt.IdtPtr,
 };
 
 ///
@@ -214,6 +222,8 @@ fn Mock() type {
                 cmos.RtcRegister => DataElementType.ECmosRtcRegister,
                 *const gdt.GdtPtr => DataElement.PTR_CONST_GdtPtr,
                 *const idt.IdtPtr => DataElement.PTR_CONST_IdtPtr,
+                gdt.GdtPtr => DataElement.GdtPtr,
+                idt.IdtPtr => DataElement.IdtPtr,
                 idt.IdtError!void => DataElement.ERROR_IDTERROR_VOID,
                 fn () callconv(.C) void => DataElementType.EFN_OVOID,
                 fn () callconv(.Naked) void => DataElementType.NFN_OVOID,
@@ -232,6 +242,8 @@ fn Mock() type {
                 fn (cmos.RtcRegister) u8 => DataElementType.FN_IECmosRtcRegister_OU8,
                 fn (*const gdt.GdtPtr) void => DataElementType.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => DataElementType.FN_IPTRCONSTIDTPTR_OVOID,
+                fn () gdt.GdtPtr => DataElementType.FN_OGDTPTR,
+                fn () idt.IdtPtr => DataElementType.FN_OIDTPTR,
                 fn (u8, fn () callconv(.C) void) idt.IdtError!void => DataElementType.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
                 fn (u8, fn () callconv(.Naked) void) idt.IdtError!void => DataElementType.FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
@@ -260,6 +272,8 @@ fn Mock() type {
                 cmos.RtcRegister => element.ECmosRtcRegister,
                 *const gdt.GdtPtr => element.PTR_CONST_GdtPtr,
                 *const idt.IdtPtr => element.PTR_CONST_IdtPtr,
+                gdt.GdtPtr => element.GdtPtr,
+                idt.IdtPtr => element.IdtPtr,
                 idt.IdtError!void => element.ERROR_IDTERROR_VOID,
                 fn () callconv(.C) void => element.EFN_OVOID,
                 fn () callconv(.Naked) void => element.NFN_OVOID,
@@ -280,6 +294,8 @@ fn Mock() type {
                 fn (*const idt.IdtPtr) void => element.FN_IPTRCONSTIDTPTR_OVOID,
                 fn (u8, fn () callconv(.C) void) idt.IdtError!void => element.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
                 fn (u8, fn () callconv(.Naked) void) idt.IdtError!void => element.FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
+                fn () gdt.GdtPtr => element.FN_OGDTPTR,
+                fn () idt.IdtPtr => element.FN_OIDTPTR,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
@@ -377,11 +393,11 @@ fn Mock() type {
         pub fn addAction(self: *Self, comptime fun_name: []const u8, data: var, action_type: ActionType) void {
             // Add a new mapping if one doesn't exist.
             if (!self.named_actions.contains(fun_name)) {
-                expect(self.named_actions.put(fun_name, TailQueue(Action).init()) catch unreachable == null);
+                self.named_actions.put(fun_name, TailQueue(Action).init()) catch unreachable;
             }
 
             // Get the function mapping to add the parameter to.
-            if (self.named_actions.get(fun_name)) |actions_kv| {
+            if (self.named_actions.getEntry(fun_name)) |actions_kv| {
                 var action_list = actions_kv.value;
                 const action = Action{
                     .action = action_type,
@@ -412,7 +428,7 @@ fn Mock() type {
         ///     The return value of the mocked function. This can be void.
         ///
         pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: var) RetType {
-            if (self.named_actions.get(fun_name)) |kv_actions_list| {
+            if (self.named_actions.getEntry(fun_name)) |kv_actions_list| {
                 var action_list = kv_actions_list.value;
                 // Peak the first action to test the action type
                 if (action_list.first) |action_node| {
