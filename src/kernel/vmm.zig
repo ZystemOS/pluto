@@ -469,6 +469,8 @@ test "set" {
     const pend = vend + 123;
     const attrs = Attributes{ .kernel = true, .writable = true, .cachable = true };
     try vmm.set(.{ .start = vstart, .end = vend }, mem.Range{ .start = pstart, .end = pend }, attrs);
+    // Make sure it put the correct address in the map
+    std.testing.expect(vmm.allocations.get(vstart) != null);
 
     var allocations = test_allocations orelse unreachable;
     // The entries before the virtual start shouldn't be set
