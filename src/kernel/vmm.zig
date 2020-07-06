@@ -253,7 +253,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                     try phys_list.append(phys);
                 }
             }
-            _ = try self.allocations.put(virt, Allocation{ .physical = phys_list });
+            _ = try self.allocations.put(virtual.start, Allocation{ .physical = phys_list });
         }
 
         ///
@@ -310,7 +310,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     Bitmap.BitmapError.OutOfBounds - The address is out of the manager's bounds
         ///
         pub fn free(self: *Self, vaddr: usize) (bitmap.Bitmap(u32).BitmapError || VmmError)!void {
-            const entry = vaddr / BLOCK_SIZE;
+            const entry = (vaddr - self.start) / BLOCK_SIZE;
             if (try self.bmp.isSet(entry)) {
                 // There will be an allocation associated with this virtual address
                 const allocation = self.allocations.get(vaddr) orelse unreachable;
@@ -318,7 +318,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                 defer physical.deinit();
                 const num_physical_allocations = physical.items.len;
                 for (physical.items) |block, i| {
-                    // Clear the address space entry, unmap the virtual memory and free the physical memory
+                    // Clear the address space entry and free the physical memory
                     try self.bmp.clearEntry(entry + i);
                     pmm.free(block) catch |e| panic(@errorReturnTrace(), "Failed to free PMM reserved memory at 0x{X}: {}\n", .{ block * BLOCK_SIZE, e });
                 }
@@ -469,6 +469,8 @@ test "set" {
     const pend = vend + 123;
     const attrs = Attributes{ .kernel = true, .writable = true, .cachable = true };
     try vmm.set(.{ .start = vstart, .end = vend }, mem.Range{ .start = pstart, .end = pend }, attrs);
+    // Make sure it put the correct address in the map
+    std.testing.expect(vmm.allocations.get(vstart) != null);
 
     var allocations = test_allocations orelse unreachable;
     // The entries before the virtual start shouldn't be set
