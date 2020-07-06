@@ -318,7 +318,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                 defer physical.deinit();
                 const num_physical_allocations = physical.items.len;
                 for (physical.items) |block, i| {
-                    // Clear the address space entry, unmap the virtual memory and free the physical memory
+                    // Clear the address space entry and free the physical memory
                     try self.bmp.clearEntry(entry + i);
                     pmm.free(block) catch |e| panic(@errorReturnTrace(), "Failed to free PMM reserved memory at 0x{X}: {}\n", .{ block * BLOCK_SIZE, e });
                 }
