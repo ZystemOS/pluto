@@ -17,4 +17,11 @@ pub const RaspberryPiBoard = enum {
             .RaspberryPi4 => 0xFE000000,
         };
     }
+
+    pub fn memoryKB(self: @This()) usize {
+        return switch (self) {
+            // TODO: Detect the amount of memory on the RPi4
+            .RaspberryPi3, .RaspberryPi4 => 1 * 1024 * 1024,
+        };
+    }
 };
