@@ -75,69 +75,71 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}\n", .{e});
     };
 
-    pmm.init(&mem_profile, &fixed_allocator.allocator);
-    var kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
-    };
+    if (builtin.arch != .aarch64) {
+        pmm.init(&mem_profile, &fixed_allocator.allocator);
+        var kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
+        };
 
-    kmain_log.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
-    arch.init(&mem_profile);
-    kmain_log.info("Arch init done\n", .{});
+        kmain_log.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+        arch.init(&mem_profile);
+        kmain_log.info("Arch init done\n", .{});
 
-    // The VMM runtime tests can't happen until the architecture has initialised itself
-    switch (build_options.test_mode) {
-        .Initialisation => vmm.runtimeTests(arch.VmmPayload, kernel_vmm, &mem_profile),
-        else => {},
-    }
-
-    // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
-    var heap_size = mem_profile.mem_kb / 10 * 1024;
-    // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
-    if (!std.math.isPowerOfTwo(heap_size)) {
-        heap_size = std.math.floorPowerOfTwo(usize, heap_size);
-    }
-    kernel_heap = heap.init(arch.VmmPayload, kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
-    };
-
-    tty.init(&kernel_heap.allocator, boot_payload);
-    var arch_kb = keyboard.init(&fixed_allocator.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to inititalise keyboard: {}\n", .{e});
-    };
-    if (arch_kb) |kb| {
-        keyboard.addKeyboard(kb) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to add architecture keyboard: {}\n", .{e});
-    }
-
-    // Get the ramdisk module
-    const rd_module = for (mem_profile.modules) |module| {
-        if (std.mem.eql(u8, module.name, "initrd.ramdisk")) {
-            break module;
+        // The VMM runtime tests can't happen until the architecture has initialised itself
+        switch (build_options.test_mode) {
+            .Initialisation => vmm.runtimeTests(arch.VmmPayload, kernel_vmm, &mem_profile),
+            else => {},
         }
-    } else null;
 
-    if (rd_module) |module| {
-        // Load the ram disk
-        const rd_len: usize = module.region.end - module.region.start;
-        const ramdisk_bytes = @intToPtr([*]u8, module.region.start)[0..rd_len];
-        var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
-        var ramdisk_filesystem = initrd.InitrdFS.init(&initrd_stream, &kernel_heap.allocator) catch |e| {
-            panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk: {}\n", .{e});
+        // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
+        var heap_size = mem_profile.mem_kb / 10 * 1024;
+        // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
+        if (!std.math.isPowerOfTwo(heap_size)) {
+            heap_size = std.math.floorPowerOfTwo(usize, heap_size);
+        }
+        kernel_heap = heap.init(arch.VmmPayload, kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
         };
 
-        // Can now free the module as new memory is allocated for the ramdisk filesystem
-        kernel_vmm.free(module.region.start) catch |e| {
-            panic_root.panic(@errorReturnTrace(), "Failed to free ramdisk: {}\n", .{e});
+        tty.init(&kernel_heap.allocator, boot_payload);
+        var arch_kb = keyboard.init(&fixed_allocator.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to inititalise keyboard: {}\n", .{e});
         };
+        if (arch_kb) |kb| {
+            keyboard.addKeyboard(kb) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to add architecture keyboard: {}\n", .{e});
+        }
 
-        // Need to init the vfs after the ramdisk as we need the root node from the ramdisk filesystem
-        vfs.setRoot(ramdisk_filesystem.root_node) catch |e| {
-            panic_root.panic(@errorReturnTrace(), "Ramdisk root node isn't a directory node: {}\n", .{e});
+        // Get the ramdisk module
+        const rd_module = for (mem_profile.modules) |module| {
+            if (std.mem.eql(u8, module.name, "initrd.ramdisk")) {
+                break module;
+            }
+        } else null;
+
+        if (rd_module) |module| {
+            // Load the ram disk
+            const rd_len: usize = module.region.end - module.region.start;
+            const ramdisk_bytes = @intToPtr([*]u8, module.region.start)[0..rd_len];
+            var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+            var ramdisk_filesystem = initrd.InitrdFS.init(&initrd_stream, &kernel_heap.allocator) catch |e| {
+                panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk: {}\n", .{e});
+            };
+
+            // Can now free the module as new memory is allocated for the ramdisk filesystem
+            kernel_vmm.free(module.region.start) catch |e| {
+                panic_root.panic(@errorReturnTrace(), "Failed to free ramdisk: {}\n", .{e});
+            };
+
+            // Need to init the vfs after the ramdisk as we need the root node from the ramdisk filesystem
+            vfs.setRoot(ramdisk_filesystem.root_node) catch |e| {
+                panic_root.panic(@errorReturnTrace(), "Ramdisk root node isn't a directory node: {}\n", .{e});
+            };
+        }
+
+        scheduler.init(&kernel_heap.allocator, &mem_profile) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to initialise scheduler: {}\n", .{e});
         };
     }
-
-    scheduler.init(&kernel_heap.allocator, &mem_profile) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise scheduler: {}\n", .{e});
-    };
 
     // Initialisation is finished, now does other stuff
     kmain_log.info("Init\n", .{});
@@ -147,13 +149,15 @@ export fn kmain(boot_payload: arch.BootPayload) void {
 
     kmain_log.info("Creating init2\n", .{});
 
-    // Create a init2 task
-    var stage2_task = task.Task.create(@ptrToInt(initStage2), true, kernel_vmm, &kernel_heap.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to create init stage 2 task: {}\n", .{e});
-    };
-    scheduler.scheduleTask(stage2_task, &kernel_heap.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to schedule init stage 2 task: {}\n", .{e});
-    };
+    if (builtin.arch != aarch64) {
+        // Create a init2 task
+        var stage2_task = task.Task.create(@ptrToInt(initStage2), true, kernel_vmm, &kernel_heap.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to create init stage 2 task: {}\n", .{e});
+        };
+        scheduler.scheduleTask(stage2_task, &kernel_heap.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to schedule init stage 2 task: {}\n", .{e});
+        };
+    }
 
     // Can't return for now, later this can return maybe
     // TODO: Maybe make this the idle task
