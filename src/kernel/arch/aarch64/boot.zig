@@ -25,9 +25,9 @@ export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
 
     // Setup the exception table
     asm volatile (
-        \\msr vbar_el3, %[table_addr]
-        \\msr vbar_el2, %[table_addr]
         \\msr vbar_el1, %[table_addr]
+        \\msr vbar_el2, %[table_addr]
+        \\msr vbar_el3, %[table_addr]
         :
         : [table_addr] "r" (@ptrToInt(&interrupts.exception_table))
     );
