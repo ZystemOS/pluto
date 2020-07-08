@@ -26,6 +26,9 @@ const UART_BAUD_RATE: usize = 115200;
 
 var mmio_addr: usize = undefined;
 
+extern var KERNEL_PHYSADDR_START: *u32;
+extern var KERNEL_PHYSADDR_END: *u32;
+
 pub fn initTTY(boot_payload: BootPayload) TTY {
     return undefined;
 }
@@ -81,9 +84,17 @@ fn uartWriteByte(byte: u8) void {
 pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
     log.logInfo("Init mem\n", .{});
     defer log.logInfo("Done mem\n", .{});
-    // TODO: implement
     mem.ADDR_OFFSET = 0;
-    return mem.MemProfile{ .vaddr_end = @intToPtr([*]u8, 0x12345678), .vaddr_start = @intToPtr([*]u8, 0x12345678), .physaddr_start = @intToPtr([*]u8, 0x12345678), .physaddr_end = @intToPtr([*]u8, 0x12345678), .mem_kb = 0, .modules = &[_]mem.Module{}, .virtual_reserved = &[_]mem.Map{}, .physical_reserved = &[_]mem.Range{}, .fixed_allocator = undefined };
+    const phys_start = @ptrCast([*]u8, &KERNEL_PHYSADDR_START);
+    const phys_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END);
+    const virt_start = phys_start;
+    const virt_end = phys_end;
+    var allocator = std.heap.FixedBufferAllocator.init(virt_end[0..mem.FIXED_ALLOC_SIZE]);
+
+    var allocator_region = mem.Map{ .virtual = .{ .start = @ptrToInt(virt_end), .end = @ptrToInt(virt_end) + mem.FIXED_ALLOC_SIZE }, .physical = null };
+    allocator_region.physical = .{ .start = mem.virtToPhys(allocator_region.virtual.start), .end = mem.virtToPhys(allocator_region.virtual.end) };
+
+    return mem.MemProfile{ .vaddr_end = virt_end, .vaddr_start = virt_start, .physaddr_start = phys_start, .physaddr_end = phys_end, .mem_kb = payload.memoryKB(), .modules = &[_]mem.Module{}, .virtual_reserved = &[_]mem.Map{allocator_region}, .physical_reserved = &[_]mem.Range{}, .fixed_allocator = allocator };
 }
 
 // TODO: implement
