@@ -139,7 +139,7 @@ pub fn build(b: *Builder) !void {
             try qemu_args_al.append("-cdrom");
             try qemu_args_al.append(output_iso);
         },
-        .aarch64 => try qemu_args_al.appendSlice(&[_][]const u8{ "-kernel", exec.getOutputPath(), "-machine", "-raspi3" }),
+        .aarch64 => try qemu_args_al.appendSlice(&[_][]const u8{ "-kernel", exec.getOutputPath(), "-machine", "raspi3" }),
         else => unreachable,
     }
     if (disable_display) {
