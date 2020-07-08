@@ -68,13 +68,13 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         };
     }
     tty.init(&fixed_allocator.allocator, boot_payload);
+    log.logInfo("Init done\n", .{});
+
     tty.clear();
 
     if (builtin.arch == .aarch64) {
         tty.print("!!!!", .{});
     } else {
-        log.logInfo("Init done\n", .{});
-
         const logo =
             \\                  _____    _        _    _   _______    ____
             \\                 |  __ \  | |      | |  | | |__   __|  / __ \
