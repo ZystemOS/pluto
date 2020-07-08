@@ -75,80 +75,84 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}\n", .{e});
     };
 
-    pmm.init(&mem_profile, &fixed_allocator.allocator);
-    var kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
-    };
+    if (builtin.arch != .aarch64) {
+        pmm.init(&mem_profile, &fixed_allocator.allocator);
+        var kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
+        };
 
-    logger.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
-    arch.init(&mem_profile);
-    logger.info("Arch init done\n", .{});
+        logger.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+        arch.init(&mem_profile);
+        logger.info("Arch init done\n", .{});
 
-    // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
-    var heap_size = mem_profile.mem_kb / 10 * 1024;
-    // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
-    if (!std.math.isPowerOfTwo(heap_size)) {
-        heap_size = std.math.floorPowerOfTwo(usize, heap_size);
-    }
-    kernel_heap = heap.init(arch.VmmPayload, kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
-    };
-
-    tty.init(&kernel_heap.allocator, boot_payload);
-    var arch_kb = keyboard.init(&fixed_allocator.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to inititalise keyboard: {}\n", .{e});
-    };
-    if (arch_kb) |kb| {
-        keyboard.addKeyboard(kb) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to add architecture keyboard: {}\n", .{e});
-    }
-
-    scheduler.init(&kernel_heap.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise scheduler: {}\n", .{e});
-    };
-
-    // Get the ramdisk module
-    const rd_module = for (mem_profile.modules) |module| {
-        if (std.mem.eql(u8, module.name, "initrd.ramdisk")) {
-            break module;
+        // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
+        var heap_size = mem_profile.mem_kb / 10 * 1024;
+        // The heap size must be a power of two so find the power of two smaller than or equal to the heap_size
+        if (!std.math.isPowerOfTwo(heap_size)) {
+            heap_size = std.math.floorPowerOfTwo(usize, heap_size);
         }
-    } else null;
-
-    if (rd_module) |module| {
-        // Load the ram disk
-        const rd_len: usize = module.region.end - module.region.start;
-        const ramdisk_bytes = @intToPtr([*]u8, module.region.start)[0..rd_len];
-        var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
-        var ramdisk_filesystem = initrd.InitrdFS.init(&initrd_stream, &kernel_heap.allocator) catch |e| {
-            panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk: {}\n", .{e});
-        };
-        defer ramdisk_filesystem.deinit();
-
-        // Can now free the module as new memory is allocated for the ramdisk filesystem
-        kernel_vmm.free(module.region.start) catch |e| {
-            panic_root.panic(@errorReturnTrace(), "Failed to free ramdisk: {}\n", .{e});
+        kernel_heap = heap.init(arch.VmmPayload, kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
         };
 
-        // Need to init the vfs after the ramdisk as we need the root node from the ramdisk filesystem
-        vfs.setRoot(ramdisk_filesystem.root_node);
+        tty.init(&kernel_heap.allocator, boot_payload);
+        var arch_kb = keyboard.init(&fixed_allocator.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to inititalise keyboard: {}\n", .{e});
+        };
+        if (arch_kb) |kb| {
+            keyboard.addKeyboard(kb) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to add architecture keyboard: {}\n", .{e});
+        }
+        scheduler.init(&kernel_heap.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to initialise scheduler: {}\n", .{e});
+        };
 
-        // Load all files here
+        // Get the ramdisk module
+        const rd_module = for (mem_profile.modules) |module| {
+            if (std.mem.eql(u8, module.name, "initrd.ramdisk")) {
+                break module;
+            }
+        } else null;
+
+        if (rd_module) |module| {
+            // Load the ram disk
+            const rd_len: usize = module.region.end - module.region.start;
+            const ramdisk_bytes = @intToPtr([*]u8, module.region.start)[0..rd_len];
+            var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+            var ramdisk_filesystem = initrd.InitrdFS.init(&initrd_stream, &kernel_heap.allocator) catch |e| {
+                panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk: {}\n", .{e});
+            };
+            defer ramdisk_filesystem.deinit();
+
+            // Can now free the module as new memory is allocated for the ramdisk filesystem
+            kernel_vmm.free(module.region.start) catch |e| {
+                panic_root.panic(@errorReturnTrace(), "Failed to free ramdisk: {}\n", .{e});
+            };
+
+            // Need to init the vfs after the ramdisk as we need the root node from the ramdisk filesystem
+            vfs.setRoot(ramdisk_filesystem.root_node);
+
+            // Load all files here
+        }
+
+        // Initialisation is finished, now does other stuff
+        logger.info("Init\n", .{});
+
+        // Main initialisation finished so can enable interrupts
+        arch.enableInterrupts();
+
+        logger.info("Creating init2\n", .{});
+
+        // Create a init2 task
+        var idle_task = task.Task.create(initStage2, &kernel_heap.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to create init stage 2 task: {}\n", .{e});
+        };
+        scheduler.scheduleTask(idle_task, &kernel_heap.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to schedule init stage 2 task: {}\n", .{e});
+        };
+    } else {
+        tty.init(&fixed_allocator.allocator, boot_payload);
+        initStage2();
     }
-
-    // Initialisation is finished, now does other stuff
-    logger.info("Init\n", .{});
-
-    // Main initialisation finished so can enable interrupts
-    arch.enableInterrupts();
-
-    logger.info("Creating init2\n", .{});
-
-    // Create a init2 task
-    var idle_task = task.Task.create(initStage2, &kernel_heap.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to create init stage 2 task: {}\n", .{e});
-    };
-    scheduler.scheduleTask(idle_task, &kernel_heap.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to schedule init stage 2 task: {}\n", .{e});
-    };
 
     // Can't return for now, later this can return maybe
     // TODO: Maybe make this the idle task
@@ -187,32 +191,6 @@ fn initStage2() noreturn {
         },
         else => {},
     }
-
-    const kb = keyboard.getKeyboard(0) orelse unreachable;
-    var shift = false;
-    while (true) {
-        if (kb.readKey()) |key| {
-            if (key.released) {
-                if (key.position == keyboard.KeyPosition.LEFT_SHIFT) {
-                    shift = false;
-                }
-                continue;
-            }
-            var char: ?u8 = switch (key.position) {
-                keyboard.KeyPosition.LEFT_SHIFT, keyboard.KeyPosition.RIGHT_SHIFT => blk: {
-                    shift = true;
-                    break :blk null;
-                },
-                keyboard.KeyPosition.Q => if (shift) @as(u8, 'Q') else @as(u8, 'q'),
-                keyboard.KeyPosition.W => if (shift) @as(u8, 'W') else @as(u8, 'w'),
-                else => null,
-            };
-            if (char) |ch| {
-                tty.print("{c}", .{ch});
-            }
-        }
-    }
-
     // Can't return for now, later this can return maybe
     arch.spinWait();
 }
