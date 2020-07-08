@@ -66,11 +66,16 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         var kernel_heap = heap.init(arch.VmmPayload, &kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size, &fixed_allocator.allocator) catch |e| {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
         };
-        tty.init(&kernel_heap.allocator, boot_payload);
+    }
+    tty.init(&fixed_allocator.allocator, boot_payload);
 
-        log.logInfo("Init done\n", .{});
+    log.logInfo("Init done\n", .{});
 
-        tty.clear();
+    tty.clear();
+
+    if (builtin.arch == .aarch64) {
+        tty.print("!!!!!!!!!!!!!!\n!!!!!!!!!!!", .{});
+    } else {
         const logo =
             \\                  _____    _        _    _   _______    ____
             \\                 |  __ \  | |      | |  | | |__   __|  / __ \
