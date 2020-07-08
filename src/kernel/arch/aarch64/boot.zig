@@ -1,16 +1,12 @@
 const rpi = @import("rpi.zig");
+const interrupts = @import("interrupts.zig");
+
 export var kernel_stack: [16 * 1024]u8 align(16) linksection(".bss.stack") = undefined;
 
 extern fn kmain(payload: *const rpi.RaspberryPiBoard) void;
 extern var KERNEL_STACK_END: *usize;
 
 export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
-    // The 32bit address to the DTB is in the lower bits of x0
-    // Setup the stack
-    asm volatile ("mov sp, %[stack_end]"
-        :
-        : [stack_end] "r" (@ptrCast([*]u8, &KERNEL_STACK_END))
-    );
     // Halt all cores other than the primary core, until the kernel has multicore support
     const core_id = asm ("mrs %[res], mpidr_el1"
         : [res] "=r" (-> usize)
@@ -20,6 +16,21 @@ export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
             asm volatile ("wfe");
         }
     }
+
+    // Setup the stack
+    asm volatile ("mov sp, %[stack_end]"
+        :
+        : [stack_end] "r" (@ptrCast([*]u8, &KERNEL_STACK_END))
+    );
+
+    // Setup the exception table
+    asm volatile (
+        \\msr vbar_el3, %[table_addr]
+        \\msr vbar_el2, %[table_addr]
+        \\msr vbar_el1, %[table_addr]
+        :
+        : [table_addr] "r" (@ptrToInt(&interrupts.exception_table))
+    );
 
     // The rpi puts the board part number in midr_el1
     const board = detectBoard();
