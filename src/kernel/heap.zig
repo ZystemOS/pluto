@@ -1,485 +1,571 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+const testing = std.testing;
 const builtin = @import("builtin");
+const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
-const is_test = builtin.is_test;
-const testing = std.testing;
-const Allocator = std.mem.Allocator;
-const Bitmap = @import("bitmap.zig").Bitmap(usize);
 const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
 const log = @import("log.zig");
 const panic = @import("panic.zig").panic;
 
-const Error = error{
-    /// A value provided isn't a power of two
-    NotPowerOfTwo,
-    /// A pointer being freed hasn't been allocated or has already been freed
-    NotAllocated,
-};
+const FreeListAllocator = struct {
+    const Error = error{TooSmall};
+    const Header = struct {
+        size: usize,
+        next_free: ?*Header,
 
-/// A heap tracking occupied and free memory. This uses a buddy allocation system where memory is partitioned into blocks to fit an allocation request as suitably as possible.
-/// If a block is greater than or the same as double the requested size it is halved, up until a minimum block size.
-/// A bitmap is used to keep track of the allocated blocks with each bit corresponding to a partition of the minimum size.
-const Heap = struct {
-    /// The minimum block size
-    block_min_size: u32,
-    /// The start address of memory to allocate at
-    start: usize,
-    /// The size of the memory region to allocate within
-    size: usize,
-    /// Bitmap keeping track of allocated and unallocated blocks
-    /// Each bit corresponds to a block of minimum size and is 1 if allocated else 0
-    bitmap: Bitmap,
-    allocator: Allocator,
+        const Self = @Self();
 
-    const Self = @This();
-
-    /// The result of a heap search for a requested allocation
-    const SearchResult = struct {
-        /// The address found
-        addr: usize,
-        /// The number of heap entries occupied by an allocation request
-        entries: usize,
-        /// The entry associated with the start of the allocation
-        entry: usize,
+        ///
+        /// Intitialise the header for a free allocation node
+        ///
+        /// Arguments:
+        ///     IN size: usize - The node's size, not including the size of the header itself
+        ///     IN next_free: ?*Header - A pointer to the next free node
+        ///
+        /// Return: Header
+        ///     The header constructed
+        fn init(size: usize, next_free: ?*Header) Header {
+            return .{
+                .size = size,
+                .next_free = next_free,
+            };
+        }
     };
 
+    first_free: ?*Header,
+    allocator: Allocator,
+
     ///
-    /// Initialise a new heap.
+    /// Initialise an empty and free FreeListAllocator
     ///
     /// Arguments:
-    ///     IN start: usize - The start address of the memory region to allocate within
-    ///     IN size: usize - The size of the memory region to allocate within. Must be greater than 0 and a power of two
-    ///     IN block_min_size: u32 - The smallest possible block size. Smaller sizes give less wasted memory but increases the memory required by the heap itself
-    ///     IN allocator: *std.mem.Allocator - The allocator used to create the data structures required by the heap. Not used after initialisation
+    ///     IN start: usize - The starting address for all alloctions
+    ///     IN size: usize - The size of the region of memory to allocate within. Must be greater than @sizeOf(Header)
     ///
-    /// Return: Heap
-    ///     The heap created.
+    /// Return: FreeListAllocator
+    ///     The FreeListAllocator constructed
     ///
-    /// Error: std.mem.Allocator.Error || Heap.Error
-    ///     Heap.Error.NotPowerOfTwo: Either block_min_size or size doesn't satisfy its constraints
-    ///     std.mem.Allocator.Error.OutOfMemory: There wasn't enough free memory to allocate the heap's data structures.
+    /// Error: Error
+    ///     Error.TooSmall - If size <= @sizeOf(Header)
     ///
-    pub fn init(start: usize, size: usize, block_min_size: u32, allocator: *Allocator) (Allocator.Error || Error)!Heap {
-        if (block_min_size == 0 or size == 0 or !std.math.isPowerOfTwo(size) or !std.math.isPowerOfTwo(block_min_size))
-            return Error.NotPowerOfTwo;
-        return Heap{
-            .block_min_size = block_min_size,
-            .start = start,
-            .size = size,
-            .bitmap = try Bitmap.init(@intCast(u32, size / block_min_size), allocator),
-            .allocator = Allocator{
+    pub fn init(start: usize, size: usize) Error!FreeListAllocator {
+        if (size <= @sizeOf(Header)) return Error.TooSmall;
+        return FreeListAllocator{
+            .first_free = insertFreeHeader(start, size - @sizeOf(Header), null),
+            .allocator = .{
                 .allocFn = alloc,
                 .resizeFn = resize,
             },
         };
     }
 
-    /// See std/mem.zig for documentation. This function should only be called by the Allocator interface.
-    fn alloc(allocator: *Allocator, len: usize, alignment: u29, len_alignment: u29) Allocator.Error![]u8 {
-        var heap = @fieldParentPtr(Heap, "allocator", allocator);
-        if (heap.alloc_internal(len, alignment)) |addr| {
-            return @intToPtr([*]u8, addr)[0..len];
-        }
-        return Allocator.Error.OutOfMemory;
+    ///
+    /// Create a free header at a specific location
+    ///
+    /// Arguments:
+    ///     IN at: usize - The address to create it at
+    ///     IN size: usize - The node's size, excluding the size of the header itself
+    ///     IN next_free: ?*Header - The next free header in the allocator, or null if there isn't one
+    ///
+    /// Return *Header
+    ///     The pointer to the header created
+    ///
+    fn insertFreeHeader(at: usize, size: usize, next_free: ?*Header) *Header {
+        var node = @intToPtr(*Header, at);
+        node.* = Header.init(size, next_free);
+        return node;
     }
 
-    /// See std/mem.zig for documentation. This function should only be called by the Allocator interface.
-    fn resize(allocator: *Allocator, old_mem: []u8, new_len: usize, len_alignment: u29) Allocator.Error!usize {
-        var heap = @fieldParentPtr(Heap, "allocator", allocator);
-        if (new_len == 0) {
-            // Freeing will error if the pointer was never allocated in the first place, but the Allocator API doesn't allow errors to be thrown from resize in this situation, so use unreachable
-            // It's not nice but is the only thing that can be done. Besides, if the unreachable is ever triggered then a double-free bug has been found
-            heap.free(@ptrToInt(&old_mem[0]), old_mem.len) catch unreachable;
+    ///
+    /// Update the free header pointers that should point to the provided header
+    ///
+    /// Arguments:
+    ///     IN self: *FreeListAllocator - The FreeListAllocator to modify
+    ///     IN previos: ?*Header - The previous free node or null if there wasn't one. If null, self.first_free will be set to header, else previous.next_free will be set to header
+    ///     IN header: ?*Header - The header being pointed to. This will be the new value of self.first_free or previous.next_free
+    ///
+    fn registerFreeHeader(self: *FreeListAllocator, previous: ?*Header, header: ?*Header) void {
+        if (previous) |p| {
+            p.next_free = header;
+        } else {
+            self.first_free = header;
+        }
+    }
+
+    ///
+    /// Free an allocation
+    ///
+    /// Arguments:
+    ///     IN self: *FreeListAllocator - The allocator being freed within
+    ///     IN mem: []u8 - The memory to free
+    ///
+    fn free(self: *FreeListAllocator, mem: []u8) void {
+        const size = std.math.max(mem.len, @sizeOf(Header));
+        const addr = @ptrToInt(mem.ptr);
+        var header = insertFreeHeader(addr, size - @sizeOf(Header), null);
+        if (self.first_free) |first| {
+            var prev: ?*Header = null;
+            // Find the previous free node
+            if (@ptrToInt(first) < addr) {
+                prev = first;
+                while (prev.?.next_free) |next| {
+                    if (@ptrToInt(next) > addr) break;
+                    prev = next;
+                }
+            }
+            // Make the freed header point to the next one, which is the one after the previous or the first if there was no previous
+            header.next_free = if (prev) |p| p.next_free else first;
+
+            self.registerFreeHeader(prev, header);
+
+            // Join with the next one until the next isn't a neighbour
+            if (header.next_free) |next| {
+                if (@ptrToInt(next) == @ptrToInt(header) + header.size + @sizeOf(Header)) {
+                    header.size += next.size + @sizeOf(Header);
+                    header.next_free = next.next_free;
+                }
+            }
+
+            // Try joining with the previous one
+            if (prev) |p| {
+                p.size += header.size + @sizeOf(Header);
+                p.next_free = header.next_free;
+            }
+        } else {
+            self.first_free = header;
+        }
+    }
+
+    ///
+    /// Attempt to resize an allocation. This should only be called via the Allocator interface.
+    ///
+    /// When the new size requested is 0, a free happens. See the free function for details.
+    ///
+    /// When the new size is greater than the old buffer's size, we attempt to steal some space from the neighbouring node.
+    /// This can only be done if the neighbouring node is free and the remaining space after taking what is needed to resize is enough to create a new Header. This is because we don't want to leave any dangling memory that isn't tracked by a header.
+    ///
+    /// | <----- new_size ----->
+    /// |---------|--------\----------------|
+    /// |         |        \                |
+    /// | old_mem | header \ header's space |
+    /// |         |        \                |
+    /// |---------|--------\----------------|
+    ///
+    /// After expanding to new_size, it will look like
+    /// |-----------------------|--------\--|
+    /// |                       |        \  |
+    /// |        old_mem        | header \  |
+    /// |                       |        \  |
+    /// |-----------------------|--------\--|
+    /// The free node before old_mem needs to then point to the new header rather than the old one and the new header needs to point to the free node after the old one. If there was no previous free node then the new one becomes the first free node.
+    ///
+    /// When the new size is smaller than the old_buffer's size, we attempt to shrink it and create a new header to the right.
+    /// This can only be done if the space left by the shrinking is enough to create a new header, since we don't want to leave any dangling untracked memory.
+    /// | <--- new_size --->
+    /// |-----------------------------------|
+    /// |                                   |
+    /// |             old_mem               |
+    /// |                                   |
+    /// |-----------------------------------|
+    ///
+    /// After shrinking to new_size, it will look like
+    /// | <--- new_size --->
+    /// |-------------------|--------\-- ---|
+    /// |                   |        \      |
+    /// |      old_mem      | header \      |
+    /// |                   |        \      |
+    /// |-------------------|--------\------|
+    /// We then attempt to join with neighbouring free nodes.
+    /// The node before old_mem needs to then point to the new header and the new header needs to point to the next free node.
+    ///
+    /// Arguments:
+    ///     IN allocator: *std.Allocator - The allocator to resize within.
+    ///     IN old_mem: []u8 - The buffer to resize.
+    ///     IN new_size: usize - What to resize to.
+    ///     IN size_alignment: u29 - The alignment that the size should have.
+    ///
+    /// Return: usize
+    ///     The new size of the buffer, which will be new_size if the operation was successful.
+    ///
+    /// Error: std.Allocator.Error
+    ///     std.Allocator.Error.OutOfMemory - If there wasn't enough free memory to expand into
+    ///
+    fn resize(allocator: *Allocator, old_mem: []u8, new_size: usize, size_alignment: u29) Allocator.Error!usize {
+        var self = @fieldParentPtr(FreeListAllocator, "allocator", allocator);
+        if (new_size == 0) {
+            self.free(old_mem);
             return 0;
         }
-        // Resizing isn't support at the moment
+        if (new_size == old_mem.len) return new_size;
+
+        const end = @ptrToInt(old_mem.ptr) + old_mem.len;
+        const real_size = if (size_alignment > 1) std.mem.alignForward(new_size, size_alignment) else new_size;
+
+        // Try to find the buffer's neighbour (if it's free) and the previous free node
+        // We'll be stealing some of the free neighbour's space when expanding or joining up with it when shrinking
+        var free_node = self.first_free;
+        var next: ?*Header = null;
+        var prev: ?*Header = null;
+        while (free_node) |f| {
+            if (@ptrToInt(f) == end) {
+                // This free node is right next to the node being freed so is its neighbour
+                next = f;
+                break;
+            } else if (@ptrToInt(f) > end) {
+                // We've found a node past the node being freed so end early
+                break;
+            }
+            prev = f;
+            free_node = f.next_free;
+        }
+
+        // If we're expanding the buffer
+        if (real_size > old_mem.len) {
+            if (next) |n| {
+                // If the free neighbour isn't big enough then fail
+                if (old_mem.len + n.size + @sizeOf(Header) < real_size) return Allocator.Error.OutOfMemory;
+
+                const size_diff = real_size - old_mem.len;
+                const consumes_whole_neighbour = size_diff == n.size + @sizeOf(Header);
+                // If the space left over in the free neighbour from the resize isn't enough to fit a new node, then fail
+                if (!consumes_whole_neighbour and n.size + @sizeOf(Header) - size_diff < @sizeOf(Header)) return Allocator.Error.OutOfMemory;
+                var new_next: ?*Header = n.next_free;
+                // We don't do any splitting when consuming the whole neighbour
+                if (!consumes_whole_neighbour) {
+                    // Create the new header. It starts at the end of the buffer plus the stolen space
+                    // The size will be the previous size minus what we stole
+                    new_next = insertFreeHeader(end + size_diff, n.size - size_diff, n.next_free);
+                }
+                self.registerFreeHeader(prev, new_next);
+                return real_size;
+            }
+            // The neighbour isn't free so we can't expand into it
+            return Allocator.Error.OutOfMemory;
+        } else {
+            // Shrinking
+            const size_diff = old_mem.len - real_size;
+            // If shrinking would leave less space than required for a new header,
+            // or if shrinking would make the buffer too small, don't shrink
+            if (size_diff < @sizeOf(Header) or real_size < @sizeOf(Header)) return Allocator.Error.OutOfMemory;
+
+            // Create a new header for the space gained from shrinking
+            var new_next = insertFreeHeader(@ptrToInt(old_mem.ptr) + real_size, size_diff - @sizeOf(Header), if (prev) |p| p.next_free else self.first_free);
+            self.registerFreeHeader(prev, new_next);
+
+            // Join with the neighbour
+            if (next) |n| {
+                new_next.size += n.size + @sizeOf(Header);
+                new_next.next_free = n.next_free;
+            }
+
+            return real_size;
+        }
+    }
+
+    ///
+    /// Allocate a portion of memory. This should only be called via the Allocator interface.
+    ///
+    /// This will find the first free node within the heap that can fit the size requested. If the size of the node is larger than the requested size but any space left over isn't enough to create a new Header, the next node is tried. If the node would require some padding to reach the desired alignment and that padding wouldn't fit a new Header, the next node is tried (however this node is kept as a backup in case no future nodes can fit the request).
+    ///
+    /// |--------------\---------------------|
+    /// |              \                     |
+    /// | free header  \     free space      |
+    /// |              \                     |
+    /// |--------------\---------------------|
+    ///
+    /// When the alignment padding is large enough for a new Header, the node found is split on the left, like so
+    /// <---- padding ---->
+    /// |------------\-----|-------------\---|
+    /// |            \     |             \   |
+    /// | new header \     | free header \   |
+    /// |            \     |             \   |
+    /// |------------\-----|-------------\---|
+    /// The previous free node should then point to the left split. The left split should point to the free node after the one that was found
+    ///
+    /// When the space left over in the free node is more than required for the allocation, it is split on the right
+    /// |--------------\-------|------------\--|
+    /// |              \       |            \  |
+    /// | free header  \ space | new header \  |
+    /// |              \       |            \  |
+    /// |--------------\-------|------------\--|
+    /// The previous free node should then point to the new node on the left and the new node should point to the next free node
+    ///
+    /// Splitting on the left and right can both happen in one allocation
+    ///
+    /// Arguments:
+    ///     IN allocator: *std.Allocator - The allocator to use
+    ///     IN size: usize - The amount of memory requested
+    ///     IN alignment: u29 - The alignment that the address of the allocated memory should have
+    ///     IN size_alignment: u29 - The alignment that the length of the allocated memory should have
+    ///
+    /// Return: []u8
+    ///     The allocated memory
+    ///
+    /// Error: std.Allocator.Error
+    ///     std.Allocator.Error.OutOfMemory - There wasn't enough memory left to fulfill the request
+    ///
+    pub fn alloc(allocator: *Allocator, size: usize, alignment: u29, size_alignment: u29) Allocator.Error![]u8 {
+        var self = @fieldParentPtr(FreeListAllocator, "allocator", allocator);
+        if (self.first_free == null) return Allocator.Error.OutOfMemory;
+
+        // Get the real size being allocated, which is the aligned size or the size of a header (whichever is largest)
+        // The size must be at least the size of a header so that it can be freed properly
+        const real_size = std.math.max(if (size_alignment > 1) std.mem.alignForward(size, size_alignment) else size, @sizeOf(Header));
+
+        var free_header = self.first_free;
+        var prev: ?*Header = null;
+        var backup: ?*Header = null;
+        var backup_prev: ?*Header = null;
+
+        // Search for the first node that can fit the request
+        const alloc_to = find: while (free_header) |h| : ({
+            prev = h;
+            free_header = h.next_free;
+        }) {
+            if (h.size + @sizeOf(Header) < real_size) {
+                continue;
+            }
+            // The address at which to allocate. This will clobber the header.
+            const addr = @ptrToInt(h);
+            var alignment_padding: usize = 0;
+
+            if (alignment > 1 and !std.mem.isAligned(addr, alignment)) {
+                alignment_padding = alignment - (addr % alignment);
+                // If the size can't fit the alignment padding then try the next one
+                if (h.size + @sizeOf(Header) < real_size + alignment_padding) continue;
+                // If a new node couldn't be created from the space left by alignment padding then try the next one
+                // This check is necessary as otherwise we'd have wasted space that could never be allocated
+                // We do however set the backup variable to this node so that in the unfortunate case that no other nodes can take the allocation, we allocate it here and sacrifice the wasted space
+                if (alignment_padding < @sizeOf(Header)) {
+                    backup = h;
+                    backup_prev = prev;
+                    continue;
+                }
+            }
+
+            // If we wouldn't be able to create a node with any unused space, try the next one
+            // This check is necessary as otherwise we'd have wasted space that could never be allocated
+            // Much like with the alignment padding, we set this node as a backup
+            if (@sizeOf(Header) + h.size - alignment_padding - real_size < @sizeOf(Header)) {
+                backup = h;
+                backup_prev = prev;
+                continue;
+            }
+
+            break :find h;
+        } else backup;
+
+        if (alloc_to == backup)
+            prev = backup_prev;
+
+        if (alloc_to) |x| {
+            var header = x;
+            var addr = @ptrToInt(header);
+            // Allocate to this node
+            var alignment_padding: usize = 0;
+            if (alignment > 1 and !std.mem.isAligned(addr, alignment)) {
+                alignment_padding = alignment - (addr % alignment);
+            }
+
+            // If we were going to use alignment padding and it's big enough to fit a new node, create a node to the left using the unused space
+            if (alignment_padding >= @sizeOf(Header)) {
+                // Since the header's address is going to be reused for the smaller one being created, backup the header to its new position
+                header = insertFreeHeader(addr + alignment_padding, header.size - alignment_padding, header.next_free);
+
+                var left = insertFreeHeader(addr, alignment_padding - @sizeOf(Header), header.next_free);
+                // The previous should link to the new one instead
+                self.registerFreeHeader(prev, left);
+                prev = left;
+                alignment_padding = 0;
+            }
+
+            // If there is enough unused space to the right of this node then create a smaller node
+            if ((@sizeOf(Header) + header.size) - alignment_padding - real_size > @sizeOf(Header)) {
+                header.next_free = insertFreeHeader(@ptrToInt(header) + real_size + alignment_padding, header.size + @sizeOf(Header) - real_size - alignment_padding - @sizeOf(Header), header.next_free);
+            }
+            self.registerFreeHeader(prev, header.next_free);
+
+            return @intToPtr([*]u8, @ptrToInt(header))[0..std.mem.alignForward(size, if (size_alignment > 1) size_alignment else 1)];
+        }
+
         return Allocator.Error.OutOfMemory;
     }
 
-    ///
-    /// Search the entire heap for a block that can store the requested size and alignment.
-    ///
-    /// Arguments:
-    ///     IN self: *Heap - The heap to search
-    ///     IN addr: usize - The address associated with the block currently being searched
-    ///     IN size: usize - The requested allocation size
-    ///     IN order_size: usize - The size of the block being searched
-    ///     IN alignment: ?u29 - The requested alignment or null if there wasn't one
-    ///
-    /// Return: ?SearchResult
-    ///     The result of a successful search or null if the search failed
-    ///
-    fn search(self: *Self, addr: usize, size: usize, order_size: usize, alignment: ?u29) ?SearchResult {
-        // If the requested size is greater than the order size then it can't fit here so return null
-        if (size > order_size)
-            return null;
+    test "init" {
+        const size = 1024;
+        var region = try testing.allocator.alloc(u8, size);
+        defer testing.allocator.free(region);
+        var free_list = &(try FreeListAllocator.init(@ptrToInt(region.ptr), size));
 
-        // If half of this block is bigger than the requested size and this block can be split then check each half
-        if (order_size / 2 >= size and order_size > self.block_min_size) {
-            if (self.search(addr, size, order_size / 2, alignment) orelse self.search(addr + order_size / 2, size, order_size / 2, alignment)) |e|
-                return e;
-        }
+        var header = @intToPtr(*FreeListAllocator.Header, @ptrToInt(region.ptr));
+        testing.expectEqual(header, free_list.first_free.?);
+        testing.expectEqual(header.next_free, null);
+        testing.expectEqual(header.size, size - @sizeOf(Header));
 
-        // Fail if this entry's address is not aligned and alignment padding makes the allocation bigger than this order
-        if (alignment) |al| {
-            if (!std.mem.isAligned(addr, al) and size + (al - (addr % al)) > order_size)
-                return null;
-        }
-
-        // Otherwise we must try to allocate at this block
-        // Even if this block is made up of multiple entries, just checking if the first is free is sufficient to know the whole block is free
-        const entry = (addr - self.start) / self.block_min_size;
-        // isSet cannot error as the entry number will not be outside of the heap
-        const is_free = !(self.bitmap.isSet(@intCast(u32, entry)) catch unreachable);
-        if (is_free) {
-            return SearchResult{
-                .entry = entry,
-                // The order size is guaranteed to be a power of 2 and multiple of the block size due to the checks in Heap.init, so no rounding is necessary
-                .entries = order_size / self.block_min_size,
-                .addr = if (alignment) |al| std.mem.alignForward(addr, al) else addr,
-            };
-        }
-        return null;
+        testing.expectError(Error.TooSmall, FreeListAllocator.init(0, @sizeOf(Header) - 1));
     }
 
-    ///
-    /// Attempt to allocate a portion of memory within a heap. It is recommended to not call this directly and instead use the Allocator interface.
-    ///
-    /// Arguments:
-    ///     IN/OUT self: *Heap - The heap to allocate within
-    ///     IN size: usize - The size of the allocation
-    ///     IN alignment: ?u29 - The alignment that the returned address should have, else null if no alignment is required
-    ///
-    /// Return: ?usize
-    ///     The starting address of the allocation or null if there wasn't enough free memory.
-    ///
-    fn alloc_internal(self: *Self, size: usize, alignment: ?u29) ?usize {
-        if (size == 0 or size > self.size)
-            return null;
+    test "alloc" {
+        const size = 1024;
+        var region = try testing.allocator.alloc(u8, size);
+        defer testing.allocator.free(region);
+        const start = @ptrToInt(region.ptr);
+        var free_list = &(try FreeListAllocator.init(start, size));
+        var allocator = &free_list.allocator;
 
-        // The end of the allocation is marked with a 0 bit so search for the requested size plus one extra block for the 0
-        if (self.search(self.start, size, self.size, alignment)) |result| {
-            var i: u32 = 0;
-            // Set the found entries as allocated
-            while (i < result.entries) : (i += 1) {
-                // Set the entry as allocated
-                // Cannot error as the entry being set will not be outside of the heap
-                self.bitmap.setEntry(@intCast(u32, result.entry + i)) catch unreachable;
-            }
-            return result.addr;
+        const alloc0 = try alloc(allocator, 64, 0, 0);
+        const alloc0_addr = @ptrToInt(alloc0.ptr);
+        // Should be at the start of the heap
+        testing.expectEqual(alloc0_addr, start);
+        // The allocation should have produced a node on the right of the allocation
+        var header = @intToPtr(*Header, start + 64);
+        testing.expectEqual(header.size, size - 64 - @sizeOf(Header));
+        testing.expectEqual(header.next_free, null);
+        testing.expectEqual(free_list.first_free, header);
+
+        // 64 bytes aligned to 4 bytes
+        const alloc1 = try alloc(allocator, 64, 4, 0);
+        const alloc1_addr = @ptrToInt(alloc1.ptr);
+        const alloc1_end = alloc1_addr + alloc1.len;
+        // Should be to the right of the first allocation, with some alignment padding in between
+        const alloc0_end = alloc0_addr + alloc0.len;
+        testing.expect(alloc0_end <= alloc1_addr);
+        testing.expectEqual(std.mem.alignForward(alloc0_end, 4), alloc1_addr);
+        // It should have produced a node on the right
+        header = @intToPtr(*Header, alloc1_end);
+        testing.expectEqual(header.size, size - (alloc1_end - start) - @sizeOf(Header));
+        testing.expectEqual(header.next_free, null);
+        testing.expectEqual(free_list.first_free, header);
+
+        const alloc2 = try alloc(allocator, 64, 256, 0);
+        const alloc2_addr = @ptrToInt(alloc2.ptr);
+        const alloc2_end = alloc2_addr + alloc2.len;
+        testing.expect(alloc1_end < alloc2_addr);
+        // There should be a free node to the right of alloc2
+        const second_header = @intToPtr(*Header, alloc2_end);
+        testing.expectEqual(second_header.size, size - (alloc2_end - start) - @sizeOf(Header));
+        testing.expectEqual(second_header.next_free, null);
+        // There should be a free node in between alloc1 and alloc2 due to the large alignment padding (depends on the allocation by the testing allocator, hence the check)
+        if (alloc2_addr - alloc1_end >= @sizeOf(Header)) {
+            header = @intToPtr(*Header, alloc1_end);
+            testing.expectEqual(free_list.first_free, header);
+            testing.expectEqual(header.next_free, second_header);
         }
-        return null;
+
+        // Try allocating something smaller than @sizeOf(Header). This should scale up to @sizeOf(Header)
+        var alloc3 = try alloc(allocator, 1, 0, 0);
+        const alloc3_addr = @ptrToInt(alloc3.ptr);
+        const alloc3_end = alloc3_addr + @sizeOf(Header);
+        const header2 = @intToPtr(*Header, alloc3_end);
+        // The new free node on the right should be the first one free
+        testing.expectEqual(free_list.first_free, header2);
+        // And it should point to the free node on the right of alloc2
+        testing.expectEqual(header2.next_free, second_header);
+
+        // Attempting to allocate more than the size of the largest free node should fail
+        const remaining_size = second_header.size + @sizeOf(Header);
+        testing.expectError(Allocator.Error.OutOfMemory, alloc(&free_list.allocator, remaining_size + 1, 0, 0));
     }
 
-    ///
-    /// Free previously allocated memory. It is recommended to not call this directly and instead use the Allocator interface.
-    ///
-    /// Arguments:
-    ///     IN/OUT self: *Heap - The heap to free within
-    ///     IN ptr: usize - The address of the allocation to free. Should have been returned from a prior call to alloc.
-    ///     IN len: usize - The size of the allocated region.
-    ///
-    /// Error: Heap.Error.
-    ///     Heap.Error.NotAllocated: The address hasn't been allocated or is outside of the heap.
-    ///
-    fn free(self: *Self, ptr: usize, len: usize) Error!void {
-        if (ptr < self.start or ptr + len > self.start + self.size)
-            return Error.NotAllocated;
+    test "free" {
+        const size = 1024;
+        var region = try testing.allocator.alloc(u8, size);
+        defer testing.allocator.free(region);
+        const start = @ptrToInt(region.ptr);
+        var free_list = &(try FreeListAllocator.init(start, size));
+        var allocator = &free_list.allocator;
 
-        const addr = ptr - self.start;
-        const addr_end = addr + len;
+        var alloc0 = try alloc(allocator, 128, 0, 0);
+        var alloc1 = try alloc(allocator, 256, 0, 0);
+        var alloc2 = try alloc(allocator, 64, 0, 0);
 
-        var addr_entry = @intCast(u32, addr / self.block_min_size);
-        // Make sure the entry for this address has been allocated
-        // Won't error as we've already checked the address is valid above
-        if (!(self.bitmap.isSet(addr_entry) catch unreachable))
-            return Error.NotAllocated;
+        // There should be a single free node after alloc2
+        const free_node3 = @intToPtr(*Header, @ptrToInt(alloc2.ptr) + alloc2.len);
+        testing.expectEqual(free_list.first_free, free_node3);
+        testing.expectEqual(free_node3.size, size - alloc0.len - alloc1.len - alloc2.len - @sizeOf(Header));
+        testing.expectEqual(free_node3.next_free, null);
 
-        const NodeSearch = struct {
-            start: usize,
-            end: usize,
+        free_list.free(alloc0);
+        // There should now be two free nodes. One where alloc0 was and another after alloc2
+        const free_node0 = @intToPtr(*Header, start);
+        testing.expectEqual(free_list.first_free, free_node0);
+        testing.expectEqual(free_node0.size, alloc0.len - @sizeOf(Header));
+        testing.expectEqual(free_node0.next_free, free_node3);
 
-            const Self2 = @This();
+        // Freeing alloc1 should join it with free_node0
+        free_list.free(alloc1);
+        testing.expectEqual(free_list.first_free, free_node0);
+        testing.expectEqual(free_node0.size, alloc0.len - @sizeOf(Header) + alloc1.len);
+        testing.expectEqual(free_node0.next_free, free_node3);
 
-            pub fn search(min: usize, max: usize, order_min: usize, order_max: usize, min_size: usize) ?Self2 {
-                if (min == order_min and max == order_max) {
-                    return Self2{ .start = order_min, .end = order_max };
-                }
-                if (order_min > min or order_max < max) {
-                    return null;
-                }
-                const order_size = order_max - order_min;
-                if (order_size > min_size) {
-                    if (search(min, max, order_min, order_min + order_size / 2, min_size) orelse search(min, max, order_max - order_size / 2, order_max, min_size)) |r| {
-                        return r;
-                    }
-                }
-                return Self2{ .start = order_min, .end = order_max };
-            }
-        };
+        // Freeing alloc2 should then join them all together into one big free node
+        free_list.free(alloc2);
+        testing.expectEqual(free_list.first_free, free_node0);
+        testing.expectEqual(free_node0.size, size - @sizeOf(Header));
+        testing.expectEqual(free_node0.next_free, null);
+    }
 
-        // Since the address could be aligned it may not fall on an allocation boundary, so it's necessary to traverse the tree to find the smallest node in which the address range fits
-        // This will not be null as the address range is already guaranteed to be within the heap and so at least the root node will fit it
-        const search_result = NodeSearch.search(addr, addr_end, 0, self.size, self.block_min_size) orelse unreachable;
+    test "resize" {
+        const size = 1024;
+        var region = try testing.allocator.alloc(u8, size);
+        defer testing.allocator.free(region);
+        const start = @ptrToInt(region.ptr);
+        var free_list = &(try FreeListAllocator.init(start, size));
+        var allocator = &free_list.allocator;
 
-        const entry_start = search_result.start / self.block_min_size;
-        const entry_end = search_result.end / self.block_min_size;
+        var alloc0 = try alloc(allocator, 128, 0, 0);
+        var alloc1 = try alloc(allocator, 256, 0, 0);
 
-        // Clear entries associated with the order that the allocation was stored in
-        var entry: u32 = @intCast(u32, entry_start);
-        while (entry < entry_end and entry < self.size / self.block_min_size) : (entry += 1) {
-            self.bitmap.clearEntry(entry) catch unreachable;
-        }
+        // Expanding alloc0 should fail as alloc1 is right next to it
+        testing.expectError(Allocator.Error.OutOfMemory, resize(&free_list.allocator, alloc0, 136, 0));
+
+        // Expanding alloc1 should succeed
+        testing.expectEqual(try resize(allocator, alloc1, 512, 0), 512);
+        alloc1 = alloc1.ptr[0..512];
+        // And there should be a free node on the right of it
+        var header = @intToPtr(*Header, @ptrToInt(alloc1.ptr) + 512);
+        testing.expectEqual(header.size, size - 128 - 512 - @sizeOf(Header));
+        testing.expectEqual(header.next_free, null);
+        testing.expectEqual(free_list.first_free, header);
+
+        // Shrinking alloc1 should produce a big free node on the right
+        testing.expectEqual(try resize(allocator, alloc1, 128, 0), 128);
+        alloc1 = alloc1.ptr[0..128];
+        header = @intToPtr(*Header, @ptrToInt(alloc1.ptr) + 128);
+        testing.expectEqual(header.size, size - 128 - 128 - @sizeOf(Header));
+        testing.expectEqual(header.next_free, null);
+        testing.expectEqual(free_list.first_free, header);
+
+        // Shrinking by less space than would allow for a new Header shouldn't work
+        testing.expectError(Allocator.Error.OutOfMemory, resize(allocator, alloc1, alloc1.len - @sizeOf(Header) / 2, 0));
+        // Shrinking to less space than would allow for a new Header shouldn't work
+        testing.expectError(Allocator.Error.OutOfMemory, resize(allocator, alloc1, @sizeOf(Header) / 2, 0));
     }
 };
 
 ///
-/// Initialise a heap to keep track of allocated memory.
+/// Initialise the kernel heap with a chosen allocator
 ///
 /// Arguments:
-///     IN vmm_payload: type - The virtual memory manager's payload type.
-///     IN heap_vmm: vmm.VirtualMemoryManager(vmm_payload) - The virtual memory manager that will allocate a region of memory for the heap to govern.
-///     IN attributes: vmm.Attributes - The attributes to apply to the heap's memory.
-///     IN heap_size: usize - The size of the heap. Must be greater than zero, a power of two and should be a multiple of the vmm's block size.
-///     IN allocator: *Allocator - The allocator to use to initialise the heap structure.
+///     IN vmm_payload: type - The payload passed around by the VMM. Decided by the architecture
+///     IN heap_vmm: *vmm.VirtualMemoryManager - The VMM associated with the kernel
+///     IN attributes: vmm.Attributes - The attributes to associate with the memory allocated for the heap
+///     IN heap_size: usize - The desired size of the heap, in bytes. Must be greater than @sizeOf(FreeListAllocator.Header)
 ///
-/// Return: Heap
-///     The heap constructed.
+/// Return: FreeListAllocator
+///     The FreeListAllocator created to keep track of the kernel heap
 ///
-/// Error: Allocator.Error || Error
-///     Allocator.Error.OutOfMemory: There wasn't enough memory in the allocator to create the heap.
-///     Heap.Error.NotPowerOfTwo: The heap size isn't a power of two or is 0.
+/// Error: FreeListAllocator.Error || Allocator.Error
+///     FreeListAllocator.Error.TooSmall - heap_size is too small
+///     Allocator.Error.OutOfMemory - heap_vmm's allocator didn't have enough memory available to fulfill the request
 ///
-pub fn init(comptime vmm_payload: type, heap_vmm: *vmm.VirtualMemoryManager(vmm_payload), attributes: vmm.Attributes, heap_size: usize, allocator: *Allocator) (Allocator.Error || Error)!Heap {
+pub fn init(comptime vmm_payload: type, heap_vmm: *vmm.VirtualMemoryManager(vmm_payload), attributes: vmm.Attributes, heap_size: usize) (FreeListAllocator.Error || Allocator.Error)!FreeListAllocator {
     log.logInfo("Init heap\n", .{});
     defer log.logInfo("Done heap\n", .{});
-    var heap_start = (try heap_vmm.alloc(heap_size / vmm.BLOCK_SIZE, attributes)) orelse panic(null, "Not enough contiguous physical memory blocks to allocate to kernel heap\n", .{});
+    var heap_start = (try heap_vmm.alloc(heap_size / vmm.BLOCK_SIZE, attributes)) orelse panic(null, "Not enough contiguous virtual memory blocks to allocate to kernel heap\n", .{});
     // This free call cannot error as it is guaranteed to have been allocated above
     errdefer heap_vmm.free(heap_start) catch unreachable;
-    return try Heap.init(heap_start, heap_size, 16, allocator);
-}
-
-test "init errors on non-power-of-two" {
-    const start = 10;
-    const allocator = std.heap.page_allocator;
-    // Zero heap size
-    testing.expectError(Error.NotPowerOfTwo, Heap.init(start, 0, 1024, allocator));
-    // Non-power-of-size heap size
-    testing.expectError(Error.NotPowerOfTwo, Heap.init(start, 100, 1024, allocator));
-    // Non-power-of-two min block size
-    testing.expectError(Error.NotPowerOfTwo, Heap.init(start, 1024, 100, allocator));
-    // Non-power-of-two heap size and min block size
-    testing.expectError(Error.NotPowerOfTwo, Heap.init(start, 100, 100, allocator));
-    // Power-of-two heap size and min block size
-    var heap = try Heap.init(start, 1024, 1024, allocator);
-}
-
-test "free detects unallocated addresses" {
-    var heap = try Heap.init(10, 1024, 16, std.heap.page_allocator);
-    // Before start of heap
-    testing.expectError(Error.NotAllocated, heap.free(0, heap.block_min_size));
-    // At start of heap
-    testing.expectError(Error.NotAllocated, heap.free(heap.start, heap.block_min_size));
-    // Within the heap
-    testing.expectError(Error.NotAllocated, heap.free(21, heap.block_min_size));
-    // End of heap
-    testing.expectError(Error.NotAllocated, heap.free(heap.start + heap.size, heap.block_min_size));
-    // Beyond heap
-    testing.expectError(Error.NotAllocated, heap.free(heap.start + heap.size + 1, heap.block_min_size));
-}
-
-test "whole heap can be allocated and freed" {
-    var heap = try Heap.init(0, 1024, 16, std.heap.page_allocator);
-    var occupied: usize = 0;
-    var rand = std.rand.DefaultPrng.init(123).random;
-
-    // Allocate entire heap
-    while (occupied < heap.size) {
-        // This allocation should succeed
-        const result = heap.alloc_internal(heap.block_min_size, 1) orelse unreachable;
-        testing.expectEqual(occupied, result);
-        occupied += heap.block_min_size;
-    }
-    // No more allocations should be possible
-    testing.expectEqual(heap.alloc_internal(1, 1), null);
-
-    // Try freeing all allocations
-    while (occupied > 0) : (occupied -= heap.block_min_size) {
-        const addr = occupied - heap.block_min_size;
-        heap.free(addr, heap.block_min_size) catch unreachable;
-        // Make sure it can be reallocated
-        const result = heap.alloc_internal(heap.block_min_size, 1) orelse unreachable;
-        testing.expectEqual(addr, result);
-        // Re-free it
-        heap.free(addr, heap.block_min_size) catch unreachable;
-    }
-
-    // Trying to free any previously allocated address should now fail
-    var addr: usize = 0;
-    while (addr < heap.size) : (addr += heap.block_min_size) {
-        testing.expectError(Error.NotAllocated, heap.free(addr, heap.block_min_size));
-    }
-
-    // The bitmap should now be clear, otherwise free didn't clean up properly
-    try testBitmapClear(&heap);
-}
-
-test "free only frees the correct blocks" {
-    var heap = try Heap.init(0, 1024, 16, std.heap.page_allocator);
-
-    // Allocate the entire heap in 16 byte blocks
-    var i: usize = 0;
-    while (i < heap.bitmap.num_entries) : (i += 1) {
-        _ = heap.alloc_internal(heap.block_min_size, 1) orelse unreachable;
-    }
-
-    // Free the entire heap bit by bit
-    i = 0;
-    while (i < heap.bitmap.num_entries) : (i += 1) {
-        heap.free(i * heap.block_min_size, heap.block_min_size) catch unreachable;
-        // Only the first i entries in the bitmap should be 0
-        var j: usize = 0;
-        while (j <= i) : (j += 1) {
-            testing.expect(!(heap.bitmap.isSet(j) catch unreachable));
-        }
-        while (j < heap.bitmap.num_entries) : (j += 1) {
-            testing.expect(heap.bitmap.isSet(j) catch unreachable);
-        }
-    }
-
-    // Try the same again but in 32 byte blocks
-    i = 0;
-    while (i < heap.bitmap.num_entries) : (i += 2) {
-        _ = heap.alloc_internal(heap.block_min_size * 2, 1) orelse unreachable;
-    }
-
-    // Free the entire heap bit by bit
-    i = 0;
-    while (i < heap.bitmap.num_entries) : (i += 2) {
-        heap.free(i * heap.block_min_size, heap.block_min_size * 2) catch unreachable;
-        // Only the first i entries in the bitmap should be 0
-        var j: usize = 0;
-        while (j <= i) : (j += 1) {
-            testing.expect(!(heap.bitmap.isSet(j) catch unreachable));
-        }
-        j += 1;
-        while (j < heap.bitmap.num_entries) : (j += 1) {
-            testing.expect(heap.bitmap.isSet(j) catch unreachable);
-        }
-    }
-}
-
-test "Allocator" {
-    var buff = try std.heap.page_allocator.alloc(u8, 4 * 1024 * 1024);
-    @memset(buff.ptr, 0, buff.len);
-    var heap = try Heap.init(@ptrToInt(buff.ptr), buff.len, 16, std.heap.page_allocator);
-    var allocator = &heap.allocator;
-    try testAllocator(allocator);
-    try testAllocatorAligned(allocator, 32);
-    try testAllocatorLargeAlignment(allocator);
-}
-
-fn testBitmapClear(heap: *Heap) !void {
-    var entry: u32 = 0;
-    while (entry < heap.bitmap.num_entries) : (entry += 1) {
-        testing.expect(!(try heap.bitmap.isSet(entry)));
-    }
-}
-
-// Copied from std.heap
-fn testAllocator(allocator: *Allocator) !void {
-    var slice = try allocator.alloc(*i32, 100);
-    testing.expect(slice.len == 100);
-
-    for (slice) |*item, i| {
-        item.* = try allocator.create(i32);
-        item.*.* = @intCast(i32, i);
-    }
-
-    for (slice) |item| {
-        allocator.destroy(item);
-    }
-
-    // Shrinking is no longer supported
-    //slice = allocator.shrink(slice, 50);
-    //testing.expect(slice.len == 50);
-    //slice = allocator.shrink(slice, 25);
-    //testing.expect(slice.len == 25);
-    slice = allocator.shrink(slice, 0);
-    testing.expect(slice.len == 0);
-    slice = try allocator.alloc(*i32, 10);
-    testing.expect(slice.len == 10);
-
-    allocator.free(slice);
-
-    // The bitmap should now be clear, otherwise free didn't clean up properly
-    testBitmapClear(@fieldParentPtr(Heap, "allocator", allocator)) catch unreachable;
-}
-
-// Copied from std.heap
-fn testAllocatorAligned(allocator: *Allocator, comptime alignment: u29) !void {
-    // initial
-    var slice = try allocator.alignedAlloc(u8, alignment, 10);
-    testing.expect(slice.len == 10);
-    // Re-allocing isn't supported yet
-    // grow
-    //slice = try allocator.realloc(slice, 100);
-    //testing.expect(slice.len == 100);
-    // shrink
-    slice = allocator.shrink(slice, 10);
-    testing.expect(slice.len == 10);
-    // go to zero
-    slice = allocator.shrink(slice, 0);
-    testing.expect(slice.len == 0);
-    // realloc from zero
-    // Re-allocing isn't supported yet
-    //slice = try allocator.realloc(slice, 100);
-    //testing.expect(slice.len == 100);
-    // shrink with shrink
-    //slice = allocator.shrink(slice, 10);
-    //testing.expect(slice.len == 10);
-
-    // shrink to zero
-    slice = allocator.shrink(slice, 0);
-    testing.expect(slice.len == 0);
-
-    // The bitmap should now be clear, otherwise free didn't clean up properly
-    testBitmapClear(@fieldParentPtr(Heap, "allocator", allocator)) catch unreachable;
-}
-
-// Copied from std.heap
-fn testAllocatorLargeAlignment(allocator: *Allocator) Allocator.Error!void {
-    //Maybe a platform's page_size is actually the same as or
-    //  very near usize?
-    if (std.mem.page_size << 2 > std.math.maxInt(usize)) return;
-
-    const USizeShift = std.meta.IntType(false, std.math.log2(usize.bit_count));
-    const large_align = @as(u29, std.mem.page_size << 2);
-
-    var align_mask: usize = undefined;
-    _ = @shlWithOverflow(usize, ~@as(usize, 0), @as(USizeShift, @ctz(u29, large_align)), &align_mask);
-
-    var slice = try allocator.alignedAlloc(u8, large_align, 500);
-    testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
-
-    // Shrinking is no longer supported
-    //slice = allocator.shrink(slice, 100);
-    //testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
-
-    // Re-allocating isn't supported yet
-    //slice = try allocator.realloc(slice, 5000);
-    //testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
-
-    //slice = allocator.shrink(slice, 10);
-    //testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
-
-    // Re-allocating isn't supported yet
-    //slice = try allocator.realloc(slice, 20000);
-    //testing.expect(@ptrToInt(slice.ptr) & align_mask == @ptrToInt(slice.ptr));
-
-    allocator.free(slice);
-
-    // The bitmap should now be clear, otherwise free didn't clean up properly
-    testBitmapClear(@fieldParentPtr(Heap, "allocator", allocator)) catch unreachable;
+    return try FreeListAllocator.init(heap_start, heap_size);
 }
