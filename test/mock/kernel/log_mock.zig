@@ -12,22 +12,22 @@ pub const Level = enum {
     ERROR,
 };
 
-pub fn log(comptime level: Level, comptime format: []const u8, args: var) void {
+pub fn log(comptime level: Level, comptime format: []const u8, args: anytype) void {
     //return mock_framework.performAction("log", void, level, format, args);
 }
 
-pub fn logInfo(comptime format: []const u8, args: var) void {
+pub fn logInfo(comptime format: []const u8, args: anytype) void {
     //return mock_framework.performAction("logInfo", void, format, args);
 }
 
-pub fn logDebug(comptime format: []const u8, args: var) void {
+pub fn logDebug(comptime format: []const u8, args: anytype) void {
     //return mock_framework.performAction("logDebug", void, format, args);
 }
 
-pub fn logWarning(comptime format: []const u8, args: var) void {
+pub fn logWarning(comptime format: []const u8, args: anytype) void {
     //return mock_framework.performAction("logWarning", void, format, args);
 }
 
-pub fn logError(comptime format: []const u8, args: var) void {
+pub fn logError(comptime format: []const u8, args: anytype) void {
     //return mock_framework.performAction("logError", void, format, args);
 }

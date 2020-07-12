@@ -46,9 +46,9 @@ fn logCallback(context: void, str: []const u8) LoggingError!usize {
 ///                                whether it is filtered.
 ///     IN comptime format: []const u8 - The message format. Uses the standard format specification
 ///                                      options.
-///     IN args: var - A struct of the parameters for the format string.
+///     IN args: anytype - A struct of the parameters for the format string.
 ///
-pub fn log(comptime level: Level, comptime format: []const u8, args: var) void {
+pub fn log(comptime level: Level, comptime format: []const u8, args: anytype) void {
     fmt.format(OutStream{ .context = {} }, "[" ++ @tagName(level) ++ "] " ++ format, args) catch unreachable;
 }
 
@@ -58,9 +58,9 @@ pub fn log(comptime level: Level, comptime format: []const u8, args: var) void {
 /// Arguments:
 ///     IN comptime format: []const u8 - The message format. Uses the standard format specification
 ///                                      options.
-///     IN args: var - A struct of the parameters for the format string.
+///     IN args: anytype - A struct of the parameters for the format string.
 ///
-pub fn logInfo(comptime format: []const u8, args: var) void {
+pub fn logInfo(comptime format: []const u8, args: anytype) void {
     log(Level.INFO, format, args);
 }
 
@@ -70,9 +70,9 @@ pub fn logInfo(comptime format: []const u8, args: var) void {
 /// Arguments:
 ///     IN comptime format: []const u8 - The message format. Uses the standard format specification
 ///                                      options.
-///     IN args: var - A struct of the parameters for the format string.
+///     IN args: anytype - A struct of the parameters for the format string.
 ///
-pub fn logDebug(comptime format: []const u8, args: var) void {
+pub fn logDebug(comptime format: []const u8, args: anytype) void {
     log(Level.DEBUG, format, args);
 }
 
@@ -82,9 +82,9 @@ pub fn logDebug(comptime format: []const u8, args: var) void {
 /// Arguments:
 ///     IN comptime format: []const u8 - The message format. Uses the standard format specification
 ///                                      options.
-///     IN args: var - A struct of the parameters for the format string.
+///     IN args: anytype - A struct of the parameters for the format string.
 ///
-pub fn logWarning(comptime format: []const u8, args: var) void {
+pub fn logWarning(comptime format: []const u8, args: anytype) void {
     log(Level.WARNING, format, args);
 }
 
@@ -94,9 +94,9 @@ pub fn logWarning(comptime format: []const u8, args: var) void {
 /// Arguments:
 ///     IN comptime format: []const u8 - The message format. Uses the standard format specification
 ///                                      options.
-///     IN args: var - A struct of the parameters for the format string.
+///     IN args: anytype - A struct of the parameters for the format string.
 ///
-pub fn logError(comptime format: []const u8, args: var) void {
+pub fn logError(comptime format: []const u8, args: anytype) void {
     log(Level.ERROR, format, args);
 }
 

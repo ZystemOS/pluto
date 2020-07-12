@@ -2,7 +2,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 const MemProfile = @import("mem_mock.zig").MemProfile;
 
-pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var) noreturn {
+pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
     std.debug.panic(format, args);
 }

@@ -161,12 +161,12 @@ fn Mock() type {
         /// to have a list of different types.
         ///
         /// Arguments:
-        ///     IN arg: var - The data, this can be a function or basic type value.
+        ///     IN arg: anytype - The data, this can be a function or basic type value.
         ///
         /// Return: DataElement
         ///     A DataElement with the data wrapped.
         ///
-        fn createDataElement(arg: var) DataElement {
+        fn createDataElement(arg: anytype) DataElement {
             return switch (@TypeOf(arg)) {
                 bool => DataElement{ .BOOL = arg },
                 u4 => DataElement{ .U4 = arg },
@@ -306,12 +306,12 @@ fn Mock() type {
         ///
         /// Arguments:
         ///     IN RetType: type   - The return type of the function.
-        ///     IN params: var     - The argument list for the function.
+        ///     IN params: anytype     - The argument list for the function.
         ///
         /// Return: type
         ///     A function type that represents the return type and its arguments.
         ///
-        fn getFunctionType(comptime RetType: type, params: var) type {
+        fn getFunctionType(comptime RetType: type, params: anytype) type {
             return switch (params.len) {
                 0 => fn () RetType,
                 1 => fn (@TypeOf(params[0])) RetType,
@@ -387,10 +387,10 @@ fn Mock() type {
         ///     IN/OUT self: *Self         - Self. This is the mocking object to be modified to add
         ///                                  the test data.
         ///     IN fun_name: []const u8    - The function name to add the test parameters to.
-        ///     IN data: var               - The data to add.
+        ///     IN data: anytype               - The data to add.
         ///     IN action_type: ActionType - The action type to add.
         ///
-        pub fn addAction(self: *Self, comptime fun_name: []const u8, data: var, action_type: ActionType) void {
+        pub fn addAction(self: *Self, comptime fun_name: []const u8, data: anytype, action_type: ActionType) void {
             // Add a new mapping if one doesn't exist.
             if (!self.named_actions.contains(fun_name)) {
                 self.named_actions.put(fun_name, TailQueue(Action).init()) catch unreachable;
@@ -422,12 +422,12 @@ fn Mock() type {
         ///                               perform a action.
         ///     IN fun_name: []const u8 - The function name to act on.
         ///     IN RetType: type        - The return type of the function being mocked.
-        ///     IN params: var          - The list of parameters of the mocked function.
+        ///     IN params: anytype          - The list of parameters of the mocked function.
         ///
         /// Return: RetType
         ///     The return value of the mocked function. This can be void.
         ///
-        pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: var) RetType {
+        pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: anytype) RetType {
             if (self.named_actions.getEntry(fun_name)) |kv_actions_list| {
                 var action_list = kv_actions_list.value;
                 // Peak the first action to test the action type
@@ -655,9 +655,9 @@ pub fn freeTest() void {
 ///     IN/OUT self: *Self      - Self. This is the mocking object to be modified to add
 ///                               the test parameters.
 ///     IN fun_name: []const u8 - The function name to add the test parameters to.
-///     IN params: var          - The parameters to add.
+///     IN params: anytype          - The parameters to add.
 ///
-pub fn addTestParams(comptime fun_name: []const u8, params: var) void {
+pub fn addTestParams(comptime fun_name: []const u8, params: anytype) void {
     var mock_obj = getMockObject();
     comptime var i = 0;
     inline while (i < params.len) : (i += 1) {
@@ -671,9 +671,9 @@ pub fn addTestParams(comptime fun_name: []const u8, params: var) void {
 ///
 /// Arguments:
 ///     IN fun_name: []const u8 - The function name to add the function to.
-///     IN function: var        - The function to add.
+///     IN function: anytype        - The function to add.
 ///
-pub fn addConsumeFunction(comptime fun_name: []const u8, function: var) void {
+pub fn addConsumeFunction(comptime fun_name: []const u8, function: anytype) void {
     getMockObject().addAction(fun_name, function, ActionType.ConsumeFunctionCall);
 }
 
@@ -683,9 +683,9 @@ pub fn addConsumeFunction(comptime fun_name: []const u8, function: var) void {
 ///
 /// Arguments:
 ///     IN fun_name: []const u8 - The function name to add the function to.
-///     IN function: var        - The function to add.
+///     IN function: anytype        - The function to add.
 ///
-pub fn addRepeatFunction(comptime fun_name: []const u8, function: var) void {
+pub fn addRepeatFunction(comptime fun_name: []const u8, function: anytype) void {
     getMockObject().addAction(fun_name, function, ActionType.RepeatFunctionCall);
 }
 
@@ -695,11 +695,11 @@ pub fn addRepeatFunction(comptime fun_name: []const u8, function: var) void {
 /// Arguments:
 ///     IN fun_name: []const u8 - The function name to act on.
 ///     IN RetType: type        - The return type of the function being mocked.
-///     IN params: var          - The list of parameters of the mocked function.
+///     IN params: anytype          - The list of parameters of the mocked function.
 ///
 /// Return: RetType
 ///     The return value of the mocked function. This can be void.
 ///
-pub fn performAction(comptime fun_name: []const u8, comptime RetType: type, params: var) RetType {
+pub fn performAction(comptime fun_name: []const u8, comptime RetType: type, params: anytype) RetType {
     return getMockObject().performAction(fun_name, RetType, params);
 }

@@ -31,7 +31,7 @@ pub const MemProfile = struct {
 // The size of the fixed allocator used before the heap is set up. Set to 1MiB.
 const FIXED_ALLOC_SIZE = 1024 * 1024;
 
-pub fn virtToPhys(virt: var) @TypeOf(virt) {
+pub fn virtToPhys(virt: anytype) @TypeOf(virt) {
     const T = @TypeOf(virt);
     return switch (@typeInfo(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(virt) - KERNEL_ADDR_OFFSET),
@@ -40,7 +40,7 @@ pub fn virtToPhys(virt: var) @TypeOf(virt) {
     };
 }
 
-pub fn physToVirt(phys: var) @TypeOf(phys) {
+pub fn physToVirt(phys: anytype) @TypeOf(phys) {
     const T = @TypeOf(phys);
     return switch (@typeInfo(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(phys) + KERNEL_ADDR_OFFSET),

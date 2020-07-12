@@ -47,9 +47,9 @@ fn printCallback(ctx: void, str: []const u8) !usize {
 ///
 /// Arguments:
 ///     IN comptime format: []const u8 - The format string to print
-///     IN args: var                   - The arguments to be used in the formatted string
+///     IN args: anytype                   - The arguments to be used in the formatted string
 ///
-pub fn print(comptime format: []const u8, args: var) void {
+pub fn print(comptime format: []const u8, args: anytype) void {
     // Printing can't error because of the scrolling, if it does, we have a big problem
     fmt.format(OutStream{ .context = {} }, format, args) catch |e| {
         log.logError("TTY: Error printing. Error: {}\n", .{e});
