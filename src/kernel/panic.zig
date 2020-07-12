@@ -105,7 +105,7 @@ fn logTraceAddress(addr: usize) void {
     log.logError("{x}: {}\n", .{ addr, str });
 }
 
-pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var) noreturn {
+pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
     log.logError("Kernel panic: " ++ format ++ "\n", args);
     if (trace) |trc| {

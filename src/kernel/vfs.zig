@@ -417,7 +417,7 @@ const TestFS = struct {
         self.allocator.destroy(self.fs);
     }
 
-    fn getTreeNode(test_fs: *Self, node: var) Allocator.Error!?*TreeNode {
+    fn getTreeNode(test_fs: *Self, node: anytype) Allocator.Error!?*TreeNode {
         switch (@TypeOf(node)) {
             *const Node, *const FileNode, *const DirNode => {},
             else => @compileError("Node is of type " ++ @typeName(@TypeOf(node)) ++ ". Only *const Node, *const FileNode and *const DirNode are supported"),
