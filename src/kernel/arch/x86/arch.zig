@@ -17,9 +17,11 @@ const vga = @import("vga.zig");
 const mem = @import("../../mem.zig");
 const multiboot = @import("multiboot.zig");
 const vmm = @import("../../vmm.zig");
+const keyboard = @import("keyboard.zig");
 const Serial = @import("../../serial.zig").Serial;
 const panic = @import("../../panic.zig").panic;
 const TTY = @import("../../tty.zig").TTY;
+const Keyboard = @import("../../keyboard.zig").Keyboard;
 const MemProfile = mem.MemProfile;
 
 /// The virtual end of the kernel code.
@@ -447,6 +449,23 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
         .virtual_reserved = reserved_virtual_mem.items,
         .fixed_allocator = mem.fixed_buffer_allocator,
     };
+}
+
+///
+/// Initialise the keyboard that may depend on the chipset or architecture in general.
+/// x86 initialises the keyboard connected to the PS/2 port
+///
+/// Arguments:
+///     IN allocator: *std.mem.Allocator - The allocator to use if necessary
+///
+/// Return: *Keyboard
+///     The initialised PS/2 keyboard
+///
+/// Error: std.mem.Allocator.Error
+///     OutOfMemory - There wasn't enough memory to allocate what was needed
+///
+pub fn initKeyboard(allocator: *Allocator) Allocator.Error!*Keyboard {
+    return keyboard.init(allocator);
 }
 
 ///
