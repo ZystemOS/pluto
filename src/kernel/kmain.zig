@@ -61,7 +61,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     if (!std.math.isPowerOfTwo(heap_size)) {
         heap_size = std.math.floorPowerOfTwo(usize, heap_size);
     }
-    var kernel_heap = heap.init(arch.VmmPayload, &kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size, &fixed_allocator.allocator) catch |e| {
+    var kernel_heap = heap.init(arch.VmmPayload, &kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
     };
     tty.init(&kernel_heap.allocator, boot_payload);
