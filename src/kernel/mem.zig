@@ -70,7 +70,7 @@ pub var ADDR_OFFSET: usize = undefined;
 /// Return: @TypeOf(virt)
 ///     The physical address.
 ///
-pub fn virtToPhys(virt: var) @TypeOf(virt) {
+pub fn virtToPhys(virt: anytype) @TypeOf(virt) {
     const T = @TypeOf(virt);
     return switch (@typeInfo(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(virt) - ADDR_OFFSET),
@@ -88,7 +88,7 @@ pub fn virtToPhys(virt: var) @TypeOf(virt) {
 /// Return: @TypeOf(virt)
 ///     The virtual address.
 ///
-pub fn physToVirt(phys: var) @TypeOf(phys) {
+pub fn physToVirt(phys: anytype) @TypeOf(phys) {
     const T = @TypeOf(phys);
     return switch (@typeInfo(T)) {
         .Pointer => @intToPtr(T, @ptrToInt(phys) + ADDR_OFFSET),
