@@ -1,5 +1,5 @@
 const constants = @import("constants");
-const multiboot_info = @import("multiboot.zig").multiboot_info_t;
+const arch = @import("arch.zig");
 
 /// The multiboot header
 const MultiBoot = packed struct {
@@ -66,7 +66,7 @@ export var boot_page_directory: [1024]u32 align(4096) linksection(".rodata.boot"
 export var kernel_stack: [16 * 1024]u8 align(16) linksection(".bss.stack") = undefined;
 extern var KERNEL_ADDR_OFFSET: *u32;
 
-extern fn kmain(mb_info: *multiboot_info) void;
+extern fn kmain(mb_info: arch.BootPayload) void;
 
 export fn _start() align(16) linksection(".text.boot") callconv(.Naked) noreturn {
     // Set the page directory to the boot directory
@@ -109,6 +109,6 @@ export fn start_higher_half() callconv(.Naked) noreturn {
         \\mov %%ebx, %[res]
         : [res] "=r" (-> usize)
     ) + @ptrToInt(&KERNEL_ADDR_OFFSET);
-    kmain(@intToPtr(*multiboot_info, mb_info_addr));
+    kmain(@intToPtr(arch.BootPayload, mb_info_addr));
     while (true) {}
 }

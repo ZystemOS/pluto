@@ -9,6 +9,8 @@ const paging = @import("paging_mock.zig");
 const Serial = @import("../../../src/kernel/serial.zig").Serial;
 const TTY = @import("../../../src/kernel/tty.zig").TTY;
 
+pub const task = @import("task_mock.zig");
+
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
 pub const freeTest = mock_framework.freeTest;
@@ -16,7 +18,8 @@ pub const addTestParams = mock_framework.addTestParams;
 pub const addConsumeFunction = mock_framework.addConsumeFunction;
 pub const addRepeatFunction = mock_framework.addRepeatFunction;
 
-pub const InterruptContext = struct {
+pub const CpuState = struct {
+    ss: u32,
     gs: u32,
     fs: u32,
     es: u32,
@@ -35,14 +38,16 @@ pub const InterruptContext = struct {
     cs: u32,
     eflags: u32,
     user_esp: u32,
-    ss: u32,
+    user_ss: u32,
 };
 
 pub const VmmPayload = u8;
 pub const KERNEL_VMM_PAYLOAD: usize = 0;
 pub const MEMORY_BLOCK_SIZE: u32 = paging.PAGE_SIZE_4KB;
+pub const STACK_SIZE: u32 = MEMORY_BLOCK_SIZE / @sizeOf(u32);
 pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = undefined;
 pub const BootPayload = u8;
+pub const Task = task.Task;
 
 // The virtual/physical start/end of the kernel code
 var KERNEL_PHYSADDR_START: u32 = 0x00100000;
@@ -132,8 +137,13 @@ pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
     };
 }
 
+pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!struct { stack: []u32, pointer: usize } {
+    const ret = .{ .stack = &([_]u32{}), .pointer = 0 };
+    return ret;
+}
+
 pub fn init(payload: BootPayload, mem_profile: *const MemProfile, allocator: *Allocator) void {
-    // I'll get back to this as this doesn't effect the GDT testing.
+    // I'll get back to this as this doesn't effect the current testing.
     // When I come on to the mem.zig testing, I'll fix :)
     //return mock_framework.performAction("init", void, mem_profile, allocator);
 }

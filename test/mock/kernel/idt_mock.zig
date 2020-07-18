@@ -7,7 +7,7 @@ pub const addTestParams = mock_framework.addTestParams;
 pub const addConsumeFunction = mock_framework.addConsumeFunction;
 pub const addRepeatFunction = mock_framework.addRepeatFunction;
 
-const IdtEntry = packed struct {
+pub const IdtEntry = packed struct {
     base_low: u16,
     selector: u16,
     zero: u8,
@@ -34,9 +34,13 @@ const PRIVILEGE_RING_1: u2 = 0x1;
 const PRIVILEGE_RING_2: u2 = 0x2;
 const PRIVILEGE_RING_3: u2 = 0x3;
 
-const NUMBER_OF_ENTRIES: u16 = 256;
+pub const NUMBER_OF_ENTRIES: u16 = 256;
 
 const TABLE_SIZE: u16 = @sizeOf(IdtEntry) * NUMBER_OF_ENTRIES - 1;
+
+pub fn isIdtOpen(entry: IdtEntry) bool {
+    return mock_framework.performAction("isIdtOpen", bool, .{entry});
+}
 
 pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
     return mock_framework.performAction("openInterruptGate", IdtError!void, .{ index, handler });

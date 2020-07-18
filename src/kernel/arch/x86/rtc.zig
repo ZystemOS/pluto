@@ -6,13 +6,14 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
-const arch = @import("arch.zig");
+const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
 const log = @import("../../log.zig");
 const pic = @import("pic.zig");
 const pit = @import("pit.zig");
 const irq = @import("irq.zig");
 const cmos = if (is_test) @import(mock_path ++ "cmos_mock.zig") else @import("cmos.zig");
 const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("../../panic.zig").panic;
+const scheduler = @import("../../scheduler.zig");
 
 /// The Century register is unreliable. We need a APIC interface to infer if we have a century
 /// register. So this is a current TODO.
@@ -43,6 +44,8 @@ const RtcError = error{
 
 /// The number of ticks that has passed when RTC was initially set up.
 var ticks: u32 = 0;
+
+var schedule: bool = true;
 
 ///
 /// Checks if the CMOS chip isn't updating the RTC registers. Call this before reading any RTC
@@ -206,14 +209,26 @@ fn readRtc() DateTime {
 /// The interrupt handler for the RTC.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - Pointer to the interrupt context containing the contents
+///     IN ctx: *arch.CpuState - Pointer to the interrupt context containing the contents
 ///                                      of the register at the time of the interrupt.
 ///
-fn rtcHandler(ctx: *arch.InterruptContext) void {
+fn rtcHandler(ctx: *arch.CpuState) usize {
     ticks +%= 1;
 
+    var ret_esp: usize = undefined;
+
+    // Call the scheduler
+    if (schedule) {
+        ret_esp = scheduler.pickNextTask(ctx);
+    } else {
+        ret_esp = @ptrToInt(ctx);
+    }
+
     // Need to read status register C
+    // Might need to disable the NMI bit, set to true
     const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
+
+    return ret_esp;
 }
 
 ///
@@ -264,9 +279,6 @@ pub fn init() void {
         },
     };
 
-    // Need to disable interrupts went setting up the RTC
-    arch.disableInterrupts();
-
     // Set the interrupt rate to 512Hz
     setRate(7) catch |err| switch (err) {
         error.RateError => {
@@ -276,9 +288,6 @@ pub fn init() void {
 
     // Enable RTC interrupts
     enableInterrupts();
-
-    // Can now enable interrupts
-    arch.enableInterrupts();
 
     // Read status register C to clear any interrupts that may have happened during set up
     const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
@@ -739,7 +748,15 @@ fn rt_interrupts() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
     rt_init();
+
+    // Disable the scheduler temporary
+    schedule = false;
+    // Interrupts aren't enabled yet, so for the runtime tests, enable it temporary
+    arch.enableInterrupts();
     rt_interrupts();
+    arch.disableInterrupts();
+    // Can enable it back
+    schedule = true;
 }

@@ -3,22 +3,22 @@ const syscalls = @import("syscalls.zig");
 const irq = @import("irq.zig");
 const idt = @import("idt.zig");
 
-extern fn irqHandler(ctx: *arch.InterruptContext) void;
-extern fn isrHandler(ctx: *arch.InterruptContext) void;
+extern fn irqHandler(ctx: *arch.CpuState) usize;
+extern fn isrHandler(ctx: *arch.CpuState) usize;
 
 ///
 /// The main handler for all exceptions and interrupts. This will then go and call the correct
 /// handler for an ISR or IRQ.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - Pointer to the exception context containing the contents
-///                                      of the registers at the time of a exception.
+///     IN ctx: *arch.CpuState - Pointer to the exception context containing the contents
+///                              of the registers at the time of a exception.
 ///
-export fn handler(ctx: *arch.InterruptContext) void {
+export fn handler(ctx: *arch.CpuState) usize {
     if (ctx.int_num < irq.IRQ_OFFSET or ctx.int_num == syscalls.INTERRUPT) {
-        isrHandler(ctx);
+        return isrHandler(ctx);
     } else {
-        irqHandler(ctx);
+        return irqHandler(ctx);
     }
 }
 
@@ -32,6 +32,7 @@ export fn commonStub() callconv(.Naked) void {
         \\push  %%es
         \\push  %%fs
         \\push  %%gs
+        \\push  %%ss
         \\mov   $0x10, %%ax
         \\mov   %%ax, %%ds
         \\mov   %%ax, %%es
@@ -40,7 +41,8 @@ export fn commonStub() callconv(.Naked) void {
         \\mov   %%esp, %%eax
         \\push  %%eax
         \\call  handler
-        \\pop   %%eax
+        \\mov   %%eax, %%esp
+        \\pop   %%ss
         \\pop   %%gs
         \\pop   %%fs
         \\pop   %%es

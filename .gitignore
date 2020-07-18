@@ -38,6 +38,9 @@
 # Intellij
 .idea/
 
+# VSCode
+.vscode/
+
 # Zig
 zig-cache
 

@@ -37,3 +37,5 @@ jobs:
       run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
     - name: Run runtime test - Panic
       run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
+    - name: Run runtime test - Scheduler
+      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}

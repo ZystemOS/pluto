@@ -35,7 +35,7 @@ const GdtEntry = packed struct {
     base_high: u8,
 };
 
-const TtsEntry = packed struct {
+const Tss = packed struct {
     prev_tss: u32,
     esp0: u32,
     ss0: u32,
@@ -159,10 +159,6 @@ pub const KERNEL_DATA_OFFSET: u16 = 0x10;
 pub const USER_CODE_OFFSET: u16 = 0x18;
 pub const USER_DATA_OFFSET: u16 = 0x20;
 pub const TSS_OFFSET: u16 = 0x28;
-
-pub fn setTssStack(esp0: u32) void {
-    return mock_framework.performAction("setTssStack", void, esp0);
-}
 
 pub fn init() void {
     return mock_framework.performAction("init", void);

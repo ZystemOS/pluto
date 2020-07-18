@@ -1,7 +1,8 @@
 const build_options = @import("build_options");
 const std = @import("std");
-const Serial = @import("serial.zig").Serial;
 const fmt = std.fmt;
+const Serial = @import("serial.zig").Serial;
+const scheduler = @import("scheduler.zig");
 
 /// The errors that can occur when logging
 const LoggingError = error{};
@@ -49,7 +50,9 @@ fn logCallback(context: void, str: []const u8) LoggingError!usize {
 ///     IN args: anytype - A struct of the parameters for the format string.
 ///
 pub fn log(comptime level: Level, comptime format: []const u8, args: anytype) void {
+    scheduler.taskSwitching(false);
     fmt.format(OutStream{ .context = {} }, "[" ++ @tagName(level) ++ "] " ++ format, args) catch unreachable;
+    scheduler.taskSwitching(true);
 }
 
 ///
@@ -118,7 +121,7 @@ pub fn init(ser: Serial) void {
 ///
 /// The logging runtime tests that will test all logging levels.
 ///
-pub fn runtimeTests() void {
+fn runtimeTests() void {
     inline for (@typeInfo(Level).Enum.fields) |field| {
         const level = @field(Level, field.name);
         log(level, "Test " ++ field.name ++ " level\n", .{});
