@@ -27,6 +27,9 @@ pub const TestMode = enum {
     /// Run the panic runtime test.
     Panic,
 
+    /// Run the scheduler runtime test.
+    Scheduler,
+
     ///
     /// Return a string description for the test mode provided.
     ///
@@ -41,6 +44,7 @@ pub const TestMode = enum {
             .None => "Runs the OS normally (Default)",
             .Initialisation => "Initialisation runtime tests",
             .Panic => "Panic runtime tests",
+            .Scheduler => "Scheduler runtime tests",
         };
     }
 };
@@ -144,6 +148,35 @@ pub const RuntimeStep = struct {
     }
 
     ///
+    /// This tests the OS's scheduling by checking that we schedule a task that prints the success.
+    ///
+    /// Arguments:
+    ///     IN/OUT self: *RuntimeStep - Self.
+    ///
+    /// Return: bool
+    ///     Whether the test has passed or failed.
+    ///
+    fn test_scheduler(self: *RuntimeStep) bool {
+        var state: usize = 0;
+        while (true) {
+            const msg = self.get_msg() catch return false;
+            defer self.builder.allocator.free(msg);
+
+            std.debug.warn("{}\n", .{msg});
+
+            // Make sure `[INFO] Switched` then `[INFO] SUCCESS: Scheduler variables preserved` are logged in this order
+            if (std.mem.eql(u8, msg, "[INFO] Switched") and state == 0) {
+                state = 1;
+            } else if (std.mem.eql(u8, msg, "[INFO] SUCCESS: Scheduler variables preserved") and state == 1) {
+                state = 2;
+            }
+            if (state == 2) {
+                return true;
+            }
+        }
+    }
+
+    ///
     /// The make function that is called by the builder. This will create the qemu process with the
     /// stdout as a Pipe. Then create the read thread to read the logs from the qemu stdout. Then
     /// will call the test function to test a specifics part of the OS defined by the test mode.
@@ -204,7 +237,7 @@ pub const RuntimeStep = struct {
     fn read_logs(self: *RuntimeStep) void {
         const stream = self.os_proc.stdout.?.reader();
         // Line shouldn't be longer than this
-        const max_line_length: usize = 128;
+        const max_line_length: usize = 1024;
         while (true) {
             const line = stream.readUntilDelimiterAlloc(self.builder.allocator, '\n', max_line_length) catch |e| switch (e) {
                 error.EndOfStream => {
@@ -212,7 +245,10 @@ pub const RuntimeStep = struct {
                     // join the thread to exit nicely :)
                     return;
                 },
-                else => unreachable,
+                else => {
+                    std.debug.warn("Unexpected error: {}\n", .{e});
+                    unreachable;
+                },
             };
 
             // put line in the queue
@@ -270,6 +306,7 @@ pub const RuntimeStep = struct {
                 .None => print_logs,
                 .Initialisation => test_init,
                 .Panic => test_panic,
+                .Scheduler => test_scheduler,
             },
         };
         return runtime_step;

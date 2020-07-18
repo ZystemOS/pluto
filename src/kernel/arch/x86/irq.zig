@@ -26,7 +26,7 @@ pub const IrqError = error{
 const NUMBER_OF_ENTRIES: u16 = 16;
 
 /// The type of a IRQ handler. A function that takes a interrupt context and returns void.
-const IrqHandler = fn (*arch.InterruptContext) void;
+const IrqHandler = fn (*arch.CpuState) usize;
 
 // The offset from the interrupt number where the IRQs are.
 pub const IRQ_OFFSET: u16 = 32;
@@ -38,14 +38,16 @@ var irq_handlers: [NUMBER_OF_ENTRIES]?IrqHandler = [_]?IrqHandler{null} ** NUMBE
 /// The IRQ handler that each of the IRQs will call when a interrupt happens.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - Pointer to the interrupt context containing the contents
+///     IN ctx: *arch.CpuState - Pointer to the interrupt context containing the contents
 ///                                      of the register at the time of the interrupt.
 ///
-export fn irqHandler(ctx: *arch.InterruptContext) void {
+export fn irqHandler(ctx: *arch.CpuState) usize {
     // Get the IRQ index, by getting the interrupt number and subtracting the offset.
     if (ctx.int_num < IRQ_OFFSET) {
         panic(@errorReturnTrace(), "Not an IRQ number: {}\n", .{ctx.int_num});
     }
+
+    var ret_esp = @ptrToInt(ctx);
 
     const irq_offset = ctx.int_num - IRQ_OFFSET;
     if (isValidIrq(irq_offset)) {
@@ -54,7 +56,7 @@ export fn irqHandler(ctx: *arch.InterruptContext) void {
         if (irq_handlers[irq_num]) |handler| {
             // Make sure it isn't a spurious irq
             if (!pic.spuriousIrq(irq_num)) {
-                handler(ctx);
+                ret_esp = handler(ctx);
                 // Send the end of interrupt command
                 pic.sendEndOfInterrupt(irq_num);
             }
@@ -64,6 +66,7 @@ export fn irqHandler(ctx: *arch.InterruptContext) void {
     } else {
         panic(@errorReturnTrace(), "Invalid IRQ index: {}", .{irq_offset});
     }
+    return ret_esp;
 }
 
 ///
@@ -143,8 +146,12 @@ pub fn init() void {
 }
 
 fn testFunction0() callconv(.Naked) void {}
-fn testFunction1(ctx: *arch.InterruptContext) void {}
-fn testFunction2(ctx: *arch.InterruptContext) void {}
+fn testFunction1(ctx: *arch.CpuState) u32 {
+    return 0;
+}
+fn testFunction2(ctx: *arch.CpuState) u32 {
+    return 0;
+}
 
 test "openIrq" {
     idt.initTest();
@@ -264,7 +271,7 @@ fn rt_openedIdtEntries() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
     rt_unregisteredHandlers();
     rt_openedIdtEntries();
 }

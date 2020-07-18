@@ -1,9 +1,13 @@
-const arch = @import("arch.zig");
-const testing = @import("std").testing;
-const assert = @import("std").debug.assert;
+const std = @import("std");
+const builtin = @import("builtin");
+const is_test = builtin.is_test;
+const build_options = @import("build_options");
+const mock_path = build_options.arch_mock_path;
+const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const testing = std.testing;
+const expect = std.testing.expect;
 const isr = @import("isr.zig");
 const log = @import("../../log.zig");
-const build_options = @import("build_options");
 const panic = @import("../../panic.zig").panic;
 
 /// The isr number associated with syscalls
@@ -13,7 +17,7 @@ pub const INTERRUPT: u16 = 0x80;
 pub const NUM_HANDLERS: u16 = 256;
 
 /// A syscall handler
-pub const SyscallHandler = fn (ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32;
+pub const SyscallHandler = fn (ctx: *arch.CpuState, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32;
 
 /// Errors that syscall utility functions can throw
 pub const SyscallError = error{
@@ -44,10 +48,10 @@ pub fn isValidSyscall(syscall: u32) bool {
 /// warning is logged.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - The cpu context when the syscall was triggered. The
+///     IN ctx: *arch.CpuState - The cpu context when the syscall was triggered. The
 ///                                      syscall number is stored in eax.
 ///
-fn handle(ctx: *arch.InterruptContext) void {
+fn handle(ctx: *arch.CpuState) u32 {
     // The syscall number is put in eax
     const syscall = ctx.eax;
     if (isValidSyscall(syscall)) {
@@ -59,6 +63,7 @@ fn handle(ctx: *arch.InterruptContext) void {
     } else {
         log.logWarning("Syscall {} is invalid\n", .{syscall});
     }
+    return @ptrToInt(ctx);
 }
 
 ///
@@ -217,13 +222,13 @@ inline fn syscall5(syscall: u32, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg
 /// 3 => esi and 4 => edi.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - The interrupt context from which to get the argument
+///     IN ctx: *arch.CpuState - The interrupt context from which to get the argument
 ///     IN arg_idx: comptime u32 - The argument index to get. Between 0 and 4.
 ///
 /// Return: u32
 ///     The syscall argument from the given index.
 ///
-inline fn syscallArg(ctx: *arch.InterruptContext, comptime arg_idx: u32) u32 {
+inline fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) u32 {
     return switch (arg_idx) {
         0 => ctx.ebx,
         1 => ctx.ecx,
@@ -252,32 +257,32 @@ pub fn init() void {
 /// Tests
 var test_int: u32 = 0;
 
-fn testHandler0(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+fn testHandler0(ctx: *arch.CpuState, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
     test_int += 1;
     return 0;
 }
 
-fn testHandler1(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+fn testHandler1(ctx: *arch.CpuState, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
     test_int += arg1;
     return 1;
 }
 
-fn testHandler2(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+fn testHandler2(ctx: *arch.CpuState, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
     test_int += arg1 + arg2;
     return 2;
 }
 
-fn testHandler3(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+fn testHandler3(ctx: *arch.CpuState, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
     test_int += arg1 + arg2 + arg3;
     return 3;
 }
 
-fn testHandler4(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+fn testHandler4(ctx: *arch.CpuState, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
     test_int += arg1 + arg2 + arg3 + arg4;
     return 4;
 }
 
-fn testHandler5(ctx: *arch.InterruptContext, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
+fn testHandler5(ctx: *arch.CpuState, arg1: u32, arg2: u32, arg3: u32, arg4: u32, arg5: u32) u32 {
     test_int += arg1 + arg2 + arg3 + arg4 + arg5;
     return 5;
 }
@@ -287,7 +292,7 @@ test "registerSyscall returns SyscallExists" {
     registerSyscall(123, testHandler0) catch |err| {
         return;
     };
-    assert(false);
+    expect(false);
 }
 
 fn runtimeTests() void {

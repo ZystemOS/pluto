@@ -231,11 +231,12 @@ inline fn sendDataToCounter(counter: CounterSelect, data: u8) void {
 /// The interrupt handler for the PIT. This will increment a counter for now.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - Pointer to the interrupt context containing the contents
+///     IN ctx: *arch.CpuState - Pointer to the interrupt context containing the contents
 ///                                      of the register at the time of the interrupt.
 ///
-fn pitHandler(ctx: *arch.InterruptContext) void {
+fn pitHandler(ctx: *arch.CpuState) usize {
     ticks +%= 1;
+    return @ptrToInt(ctx);
 }
 
 ///
@@ -324,25 +325,17 @@ pub fn waitTicks(ticks_to_wait: u32) void {
         const wait_ticks2 = ticks_to_wait - wait_ticks1;
 
         while (ticks > wait_ticks1) {
-            arch.enableInterrupts();
             arch.halt();
-            arch.disableInterrupts();
         }
 
         while (ticks < wait_ticks2) {
-            arch.enableInterrupts();
             arch.halt();
-            arch.disableInterrupts();
         }
-        arch.enableInterrupts();
     } else {
         const wait_ticks = ticks + ticks_to_wait;
         while (ticks < wait_ticks) {
-            arch.enableInterrupts();
             arch.halt();
-            arch.disableInterrupts();
         }
-        arch.enableInterrupts();
     }
 }
 
@@ -635,7 +628,11 @@ fn rt_initCounter_0() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
+    // Interrupts aren't enabled yet, so for the runtime tests, enable it temporary
+    arch.enableInterrupts();
+    defer arch.disableInterrupts();
+
     rt_initCounter_0();
     rt_waitTicks();
     rt_waitTicks2();

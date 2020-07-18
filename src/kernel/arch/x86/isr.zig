@@ -23,7 +23,7 @@ pub const IsrError = error{
 };
 
 /// The type of a ISR handler. A function that takes a interrupt context and returns void.
-const IsrHandler = fn (*arch.InterruptContext) void;
+const IsrHandler = fn (*arch.CpuState) usize;
 
 /// The number of ISR entries.
 const NUMBER_OF_ENTRIES: u8 = 32;
@@ -137,32 +137,36 @@ var syscall_handler: ?IsrHandler = null;
 /// The exception handler that each of the exceptions will call when a exception happens.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - Pointer to the exception context containing the contents
+///     IN ctx: *arch.CpuState - Pointer to the exception context containing the contents
 ///                                      of the register at the time of the exception.
 ///
-export fn isrHandler(ctx: *arch.InterruptContext) void {
+export fn isrHandler(ctx: *arch.CpuState) usize {
     // Get the interrupt number
     const isr_num = ctx.int_num;
+
+    var ret_esp = @ptrToInt(ctx);
 
     if (isValidIsr(isr_num)) {
         if (isr_num == syscalls.INTERRUPT) {
             // A syscall, so use the syscall handler
             if (syscall_handler) |handler| {
-                handler(ctx);
+                ret_esp = handler(ctx);
             } else {
                 panic(@errorReturnTrace(), "Syscall handler not registered\n", .{});
             }
         } else {
             if (isr_handlers[isr_num]) |handler| {
                 // Regular ISR exception, if there is one registered.
-                handler(ctx);
+                ret_esp = handler(ctx);
             } else {
-                panic(@errorReturnTrace(), "ISR not registered to: {}-{}\n", .{ isr_num, exception_msg[isr_num] });
+                log.logInfo("State: {X}\n", .{ctx});
+                panic(@errorReturnTrace(), "ISR {} ({}) triggered with error code 0x{X} but not registered\n", .{ exception_msg[isr_num], isr_num, ctx.error_code });
             }
         }
     } else {
         panic(@errorReturnTrace(), "Invalid ISR index: {}\n", .{isr_num});
     }
+    return ret_esp;
 }
 
 ///
@@ -251,10 +255,18 @@ pub fn init() void {
 }
 
 fn testFunction0() callconv(.Naked) void {}
-fn testFunction1(ctx: *arch.InterruptContext) void {}
-fn testFunction2(ctx: *arch.InterruptContext) void {}
-fn testFunction3(ctx: *arch.InterruptContext) void {}
-fn testFunction4(ctx: *arch.InterruptContext) void {}
+fn testFunction1(ctx: *arch.CpuState) u32 {
+    return 0;
+}
+fn testFunction2(ctx: *arch.CpuState) u32 {
+    return 0;
+}
+fn testFunction3(ctx: *arch.CpuState) u32 {
+    return 0;
+}
+fn testFunction4(ctx: *arch.CpuState) u32 {
+    return 0;
+}
 
 test "openIsr" {
     idt.initTest();
@@ -397,7 +409,7 @@ fn rt_openedIdtEntries() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
     rt_unregisteredHandlers();
     rt_openedIdtEntries();
 }

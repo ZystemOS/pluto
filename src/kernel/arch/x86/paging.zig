@@ -1,9 +1,13 @@
 const std = @import("std");
-const expectEqual = std.testing.expectEqual;
-const expect = std.testing.expect;
+const testing = std.testing;
+const expectEqual = testing.expectEqual;
+const expect = testing.expect;
 const builtin = @import("builtin");
+const is_test = builtin.is_test;
 const panic = @import("../../panic.zig").panic;
-const arch = @import("arch.zig");
+const build_options = @import("build_options");
+const mock_path = build_options.arch_mock_path;
+const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
 const isr = @import("isr.zig");
 const MemProfile = @import("../../mem.zig").MemProfile;
 const tty = @import("../../tty.zig");
@@ -11,8 +15,6 @@ const log = @import("../../log.zig");
 const mem = @import("../../mem.zig");
 const vmm = @import("../../vmm.zig");
 const multiboot = @import("multiboot.zig");
-const build_options = @import("build_options");
-const testing = std.testing;
 
 /// An array of directory entries and page tables. Forms the first level of paging and covers the entire 4GB memory space.
 pub const Directory = packed struct {
@@ -361,27 +363,23 @@ pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (std.mem
 /// Called when a page fault occurs. This will log the CPU state and control registers.
 ///
 /// Arguments:
-///     IN state: *arch.InterruptContext - The CPU's state when the fault occurred.
+///     IN state: *arch.CpuState - The CPU's state when the fault occurred.
 ///
-fn pageFault(state: *arch.InterruptContext) void {
+fn pageFault(state: *arch.CpuState) u32 {
     log.logInfo("State: {X}\n", .{state});
-    var cr0: u32 = 0;
-    var cr2: u32 = 0;
-    var cr3: u32 = 0;
-    var cr4: u32 = 0;
-    asm volatile ("mov %%cr0, %[cr0]"
-        : [cr0] "=r" (cr0)
+    var cr0 = asm volatile ("mov %%cr0, %[cr0]"
+        : [cr0] "=r" (-> u32)
     );
-    asm volatile ("mov %%cr2, %[cr2]"
-        : [cr2] "=r" (cr2)
+    var cr2 = asm volatile ("mov %%cr2, %[cr2]"
+        : [cr2] "=r" (-> u32)
     );
-    asm volatile ("mov %%cr3, %[cr3]"
-        : [cr3] "=r" (cr3)
+    var cr3 = asm volatile ("mov %%cr3, %[cr3]"
+        : [cr3] "=r" (-> u32)
     );
-    asm volatile ("mov %%cr4, %[cr4]"
-        : [cr4] "=r" (cr4)
+    var cr4 = asm volatile ("mov %%cr4, %[cr4]"
+        : [cr4] "=r" (-> u32)
     );
-    log.logInfo("CR0: {X}, CR2: {X}, CR3: {X}, CR4: {X}\n\n", .{ cr0, cr2, cr3, cr4 });
+    log.logInfo("CR0: 0x{X}, CR2: 0x{X}, CR3: 0x{X}, CR4: 0x{X}\n", .{ cr0, cr2, cr3, cr4 });
     @panic("Page fault");
 }
 
@@ -551,10 +549,12 @@ extern var rt_fault_callback2: *u32;
 var faulted = false;
 var use_callback2 = false;
 
-fn rt_pageFault(ctx: *arch.InterruptContext) void {
+fn rt_pageFault(ctx: *arch.CpuState) u32 {
     faulted = true;
     // Return to the fault callback
     ctx.eip = @ptrToInt(&if (use_callback2) rt_fault_callback2 else rt_fault_callback);
+
+    return @ptrToInt(ctx);
 }
 
 fn rt_accessUnmappedMem(v_end: u32) void {
@@ -592,7 +592,7 @@ fn rt_accessMappedMem(v_end: u32) void {
     log.logInfo("Paging: Tested accessing mapped memory\n", .{});
 }
 
-fn runtimeTests(v_end: u32) void {
+pub fn runtimeTests(v_end: u32) void {
     rt_accessUnmappedMem(v_end);
     rt_accessMappedMem(v_end);
 }

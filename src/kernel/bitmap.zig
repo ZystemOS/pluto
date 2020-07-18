@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const testing = std.testing;
+const Allocator = std.mem.Allocator;
 
 ///
 /// A comptime bitmap that uses a specific type to store the entries. No allocators needed.
@@ -613,6 +614,7 @@ test "setFirstFree multiple bitmaps" {
     testing.expectEqual(bmp.bitmaps[0], Bitmap(u8).BITMAP_FULL);
     testing.expectEqual(bmp.bitmaps[1], 1);
 }
+
 test "setFirstFree" {
     var bmp = try Bitmap(u32).init(32, std.heap.page_allocator);
 

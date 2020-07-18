@@ -84,27 +84,31 @@ const GdtEntry = packed struct {
 };
 
 /// The TSS entry structure
-const TtsEntry = packed struct {
+const Tss = packed struct {
     /// Pointer to the previous TSS entry
-    prev_tss: u32,
+    prev_tss: u16,
+    reserved1: u16,
 
     /// Ring 0 32 bit stack pointer.
     esp0: u32,
 
     /// Ring 0 32 bit stack pointer.
-    ss0: u32,
+    ss0: u16,
+    reserved2: u16,
 
     /// Ring 1 32 bit stack pointer.
     esp1: u32,
 
     /// Ring 1 32 bit stack pointer.
-    ss1: u32,
+    ss1: u16,
+    reserved3: u16,
 
     /// Ring 2 32 bit stack pointer.
     esp2: u32,
 
     /// Ring 2 32 bit stack pointer.
-    ss2: u32,
+    ss2: u16,
+    reserved4: u16,
 
     /// The CR3 control register 3.
     cr3: u32,
@@ -140,25 +144,32 @@ const TtsEntry = packed struct {
     edi: u32,
 
     /// The extra segment.
-    es: u32,
+    es: u16,
+    reserved5: u16,
 
     /// The code segment.
-    cs: u32,
+    cs: u16,
+    reserved6: u16,
 
     /// The stack segment.
-    ss: u32,
+    ss: u16,
+    reserved7: u16,
 
     /// The data segment.
-    ds: u32,
+    ds: u16,
+    reserved8: u16,
 
     /// A extra segment FS.
-    fs: u32,
+    fs: u16,
+    reserved9: u16,
 
     /// A extra segment GS.
-    gs: u32,
+    gs: u16,
+    reserved10: u16,
 
     /// The local descriptor table register.
-    ldtr: u32,
+    ldtr: u16,
+    reserved11: u16,
 
     /// ?
     trap: u16,
@@ -177,8 +188,8 @@ pub const GdtPtr = packed struct {
     base: u32,
 };
 
-/// The total number of entries in the GTD: null, kernel code, kernel data, user code, user data
-/// and TSS
+/// The total number of entries in the GDT including: null, kernel code, kernel data, user code,
+/// user data and the TSS.
 const NUMBER_OF_ENTRIES: u16 = 0x06;
 
 /// The size of the GTD in bytes (minus 1).
@@ -315,24 +326,28 @@ pub const USER_DATA_OFFSET: u16 = 0x20;
 pub const TSS_OFFSET: u16 = 0x28;
 
 /// The GDT entry table of NUMBER_OF_ENTRIES entries.
-var gdt_entries: [NUMBER_OF_ENTRIES]GdtEntry = [_]GdtEntry{
+var gdt_entries: [NUMBER_OF_ENTRIES]GdtEntry = init: {
+    var gdt_entries_temp: [NUMBER_OF_ENTRIES]GdtEntry = undefined;
+
     // Null descriptor
-    makeEntry(0, 0, NULL_SEGMENT, NULL_FLAGS),
+    gdt_entries_temp[0] = makeGdtEntry(0, 0, NULL_SEGMENT, NULL_FLAGS);
 
-    // Kernel Code
-    makeEntry(0, 0xFFFFF, KERNEL_SEGMENT_CODE, PAGING_32_BIT),
+    // Kernel code descriptor
+    gdt_entries_temp[1] = makeGdtEntry(0, 0xFFFFF, KERNEL_SEGMENT_CODE, PAGING_32_BIT);
 
-    // Kernel Data
-    makeEntry(0, 0xFFFFF, KERNEL_SEGMENT_DATA, PAGING_32_BIT),
+    // Kernel data descriptor
+    gdt_entries_temp[2] = makeGdtEntry(0, 0xFFFFF, KERNEL_SEGMENT_DATA, PAGING_32_BIT);
 
-    // User Code
-    makeEntry(0, 0xFFFFF, USER_SEGMENT_CODE, PAGING_32_BIT),
+    // User code descriptor
+    gdt_entries_temp[3] = makeGdtEntry(0, 0xFFFFF, USER_SEGMENT_CODE, PAGING_32_BIT);
 
-    // User Data
-    makeEntry(0, 0xFFFFF, USER_SEGMENT_DATA, PAGING_32_BIT),
+    // User data descriptor
+    gdt_entries_temp[4] = makeGdtEntry(0, 0xFFFFF, USER_SEGMENT_DATA, PAGING_32_BIT);
 
-    // Fill in TSS at runtime
-    makeEntry(0, 0, NULL_SEGMENT, NULL_FLAGS),
+    // TSS descriptor, one each for each processor
+    // Will initialise the TSS at runtime
+    gdt_entries_temp[5] = makeGdtEntry(0, 0, NULL_SEGMENT, NULL_FLAGS);
+    break :init gdt_entries_temp;
 };
 
 /// The GDT pointer that the CPU is loaded with that contains the base address of the GDT and the
@@ -342,35 +357,12 @@ var gdt_ptr: GdtPtr = GdtPtr{
     .base = undefined,
 };
 
-/// The task state segment entry.
-var tss: TtsEntry = TtsEntry{
-    .prev_tss = 0,
-    .esp0 = 0,
-    .ss0 = KERNEL_DATA_OFFSET,
-    .esp1 = 0,
-    .ss1 = 0,
-    .esp2 = 0,
-    .ss2 = 0,
-    .cr3 = 0,
-    .eip = 0,
-    .eflags = 0,
-    .eax = 0,
-    .ecx = 0,
-    .edx = 0,
-    .ebx = 0,
-    .esp = 0,
-    .ebp = 0,
-    .esi = 0,
-    .edi = 0,
-    .es = 0,
-    .cs = 0,
-    .ss = 0,
-    .ds = 0,
-    .fs = 0,
-    .gs = 0,
-    .ldtr = 0,
-    .trap = 0,
-    .io_permissions_base_offset = @sizeOf(TtsEntry),
+/// The main task state segment entry.
+var main_tss_entry: Tss = init: {
+    var tss_temp = std.mem.zeroes(Tss);
+    tss_temp.ss0 = KERNEL_DATA_OFFSET;
+    tss_temp.io_permissions_base_offset = @sizeOf(Tss);
+    break :init tss_temp;
 };
 
 ///
@@ -386,11 +378,11 @@ var tss: TtsEntry = TtsEntry{
 ///     A new GDT entry with the give access and flag bits set with the base at 0x00000000 and
 ///     limit at 0xFFFFF.
 ///
-fn makeEntry(base: u32, limit: u20, access: AccessBits, flags: FlagBits) GdtEntry {
-    return GdtEntry{
+fn makeGdtEntry(base: u32, limit: u20, access: AccessBits, flags: FlagBits) GdtEntry {
+    return .{
         .limit_low = @truncate(u16, limit),
         .base_low = @truncate(u24, base),
-        .access = AccessBits{
+        .access = .{
             .accessed = access.accessed,
             .read_write = access.read_write,
             .direction_conforming = access.direction_conforming,
@@ -400,7 +392,7 @@ fn makeEntry(base: u32, limit: u20, access: AccessBits, flags: FlagBits) GdtEntr
             .present = access.present,
         },
         .limit_high = @truncate(u4, limit >> 16),
-        .flags = FlagBits{
+        .flags = .{
             .reserved_zero = flags.reserved_zero,
             .is_64_bit = flags.is_64_bit,
             .is_32_bit = flags.is_32_bit,
@@ -411,23 +403,13 @@ fn makeEntry(base: u32, limit: u20, access: AccessBits, flags: FlagBits) GdtEntr
 }
 
 ///
-/// Set the stack pointer in the TSS entry.
-///
-/// Arguments:
-///     IN esp0: u32 - The stack pointer.
-///
-pub fn setTssStack(esp0: u32) void {
-    tss.esp0 = esp0;
-}
-
-///
 /// Initialise the Global Descriptor table.
 ///
 pub fn init() void {
     log.logInfo("Init gdt\n", .{});
     defer log.logInfo("Done gdt\n", .{});
     // Initiate TSS
-    gdt_entries[TSS_INDEX] = makeEntry(@ptrToInt(&tss), @sizeOf(TtsEntry) - 1, TSS_SEGMENT, NULL_FLAGS);
+    gdt_entries[TSS_INDEX] = makeGdtEntry(@ptrToInt(&main_tss_entry), @sizeOf(Tss) - 1, TSS_SEGMENT, NULL_FLAGS);
 
     // Set the base address where all the GDT entries are.
     gdt_ptr.base = @ptrToInt(&gdt_entries[0]);
@@ -453,7 +435,7 @@ test "GDT entries" {
     expectEqual(@as(u32, 1), @sizeOf(AccessBits));
     expectEqual(@as(u32, 1), @sizeOf(FlagBits));
     expectEqual(@as(u32, 8), @sizeOf(GdtEntry));
-    expectEqual(@as(u32, 104), @sizeOf(TtsEntry));
+    expectEqual(@as(u32, 104), @sizeOf(Tss));
     expectEqual(@as(u32, 6), @sizeOf(GdtPtr));
 
     const null_entry = gdt_entries[NULL_INDEX];
@@ -476,45 +458,45 @@ test "GDT entries" {
 
     expectEqual(TABLE_SIZE, gdt_ptr.limit);
 
-    expectEqual(@as(u32, 0), tss.prev_tss);
-    expectEqual(@as(u32, 0), tss.esp0);
-    expectEqual(@as(u32, KERNEL_DATA_OFFSET), tss.ss0);
-    expectEqual(@as(u32, 0), tss.esp1);
-    expectEqual(@as(u32, 0), tss.ss1);
-    expectEqual(@as(u32, 0), tss.esp2);
-    expectEqual(@as(u32, 0), tss.ss2);
-    expectEqual(@as(u32, 0), tss.cr3);
-    expectEqual(@as(u32, 0), tss.eip);
-    expectEqual(@as(u32, 0), tss.eflags);
-    expectEqual(@as(u32, 0), tss.eax);
-    expectEqual(@as(u32, 0), tss.ecx);
-    expectEqual(@as(u32, 0), tss.edx);
-    expectEqual(@as(u32, 0), tss.ebx);
-    expectEqual(@as(u32, 0), tss.esp);
-    expectEqual(@as(u32, 0), tss.ebp);
-    expectEqual(@as(u32, 0), tss.esi);
-    expectEqual(@as(u32, 0), tss.edi);
-    expectEqual(@as(u32, 0), tss.es);
-    expectEqual(@as(u32, 0), tss.cs);
-    expectEqual(@as(u32, 0), tss.ss);
-    expectEqual(@as(u32, 0), tss.ds);
-    expectEqual(@as(u32, 0), tss.fs);
-    expectEqual(@as(u32, 0), tss.gs);
-    expectEqual(@as(u32, 0), tss.ldtr);
-    expectEqual(@as(u16, 0), tss.trap);
+    expectEqual(@as(u32, 0), main_tss_entry.prev_tss);
+    expectEqual(@as(u32, 0), main_tss_entry.esp0);
+    expectEqual(@as(u32, KERNEL_DATA_OFFSET), main_tss_entry.ss0);
+    expectEqual(@as(u32, 0), main_tss_entry.esp1);
+    expectEqual(@as(u32, 0), main_tss_entry.ss1);
+    expectEqual(@as(u32, 0), main_tss_entry.esp2);
+    expectEqual(@as(u32, 0), main_tss_entry.ss2);
+    expectEqual(@as(u32, 0), main_tss_entry.cr3);
+    expectEqual(@as(u32, 0), main_tss_entry.eip);
+    expectEqual(@as(u32, 0), main_tss_entry.eflags);
+    expectEqual(@as(u32, 0), main_tss_entry.eax);
+    expectEqual(@as(u32, 0), main_tss_entry.ecx);
+    expectEqual(@as(u32, 0), main_tss_entry.edx);
+    expectEqual(@as(u32, 0), main_tss_entry.ebx);
+    expectEqual(@as(u32, 0), main_tss_entry.esp);
+    expectEqual(@as(u32, 0), main_tss_entry.ebp);
+    expectEqual(@as(u32, 0), main_tss_entry.esi);
+    expectEqual(@as(u32, 0), main_tss_entry.edi);
+    expectEqual(@as(u32, 0), main_tss_entry.es);
+    expectEqual(@as(u32, 0), main_tss_entry.cs);
+    expectEqual(@as(u32, 0), main_tss_entry.ss);
+    expectEqual(@as(u32, 0), main_tss_entry.ds);
+    expectEqual(@as(u32, 0), main_tss_entry.fs);
+    expectEqual(@as(u32, 0), main_tss_entry.gs);
+    expectEqual(@as(u32, 0), main_tss_entry.ldtr);
+    expectEqual(@as(u16, 0), main_tss_entry.trap);
 
-    // Size of TtsEntry will fit in a u16 as 104 < 65535 (2^16)
-    expectEqual(@as(u16, @sizeOf(TtsEntry)), tss.io_permissions_base_offset);
+    // Size of Tss will fit in a u16 as 104 < 65535 (2^16)
+    expectEqual(@as(u16, @sizeOf(Tss)), main_tss_entry.io_permissions_base_offset);
 }
 
-test "makeEntry NULL" {
-    const actual = makeEntry(0, 0, NULL_SEGMENT, NULL_FLAGS);
+test "makeGdtEntry NULL" {
+    const actual = makeGdtEntry(0, 0, NULL_SEGMENT, NULL_FLAGS);
 
     const expected: u64 = 0;
     expectEqual(expected, @bitCast(u64, actual));
 }
 
-test "makeEntry alternating bit pattern" {
+test "makeGdtEntry alternating bit pattern" {
     const alt_access = AccessBits{
         .accessed = 1,
         .read_write = 0,
@@ -536,104 +518,10 @@ test "makeEntry alternating bit pattern" {
 
     expectEqual(@as(u4, 0b0101), @bitCast(u4, alt_flag));
 
-    const actual = makeEntry(0b01010101010101010101010101010101, 0b01010101010101010101, alt_access, alt_flag);
+    const actual = makeGdtEntry(0b01010101010101010101010101010101, 0b01010101010101010101, alt_access, alt_flag);
 
     const expected: u64 = 0b0101010101010101010101010101010101010101010101010101010101010101;
     expectEqual(expected, @bitCast(u64, actual));
-}
-
-test "setTssStack" {
-    // Pre-testing
-    expectEqual(@as(u32, 0), tss.prev_tss);
-    expectEqual(@as(u32, 0), tss.esp0);
-    expectEqual(@as(u32, KERNEL_DATA_OFFSET), tss.ss0);
-    expectEqual(@as(u32, 0), tss.esp1);
-    expectEqual(@as(u32, 0), tss.ss1);
-    expectEqual(@as(u32, 0), tss.esp2);
-    expectEqual(@as(u32, 0), tss.ss2);
-    expectEqual(@as(u32, 0), tss.cr3);
-    expectEqual(@as(u32, 0), tss.eip);
-    expectEqual(@as(u32, 0), tss.eflags);
-    expectEqual(@as(u32, 0), tss.eax);
-    expectEqual(@as(u32, 0), tss.ecx);
-    expectEqual(@as(u32, 0), tss.edx);
-    expectEqual(@as(u32, 0), tss.ebx);
-    expectEqual(@as(u32, 0), tss.esp);
-    expectEqual(@as(u32, 0), tss.ebp);
-    expectEqual(@as(u32, 0), tss.esi);
-    expectEqual(@as(u32, 0), tss.edi);
-    expectEqual(@as(u32, 0), tss.es);
-    expectEqual(@as(u32, 0), tss.cs);
-    expectEqual(@as(u32, 0), tss.ss);
-    expectEqual(@as(u32, 0), tss.ds);
-    expectEqual(@as(u32, 0), tss.fs);
-    expectEqual(@as(u32, 0), tss.gs);
-    expectEqual(@as(u32, 0), tss.ldtr);
-    expectEqual(@as(u16, 0), tss.trap);
-    expectEqual(@as(u16, @sizeOf(TtsEntry)), tss.io_permissions_base_offset);
-
-    // Call function
-    setTssStack(100);
-
-    // Post-testing
-    expectEqual(@as(u32, 0), tss.prev_tss);
-    expectEqual(@as(u32, 100), tss.esp0);
-    expectEqual(@as(u32, KERNEL_DATA_OFFSET), tss.ss0);
-    expectEqual(@as(u32, 0), tss.esp1);
-    expectEqual(@as(u32, 0), tss.ss1);
-    expectEqual(@as(u32, 0), tss.esp2);
-    expectEqual(@as(u32, 0), tss.ss2);
-    expectEqual(@as(u32, 0), tss.cr3);
-    expectEqual(@as(u32, 0), tss.eip);
-    expectEqual(@as(u32, 0), tss.eflags);
-    expectEqual(@as(u32, 0), tss.eax);
-    expectEqual(@as(u32, 0), tss.ecx);
-    expectEqual(@as(u32, 0), tss.edx);
-    expectEqual(@as(u32, 0), tss.ebx);
-    expectEqual(@as(u32, 0), tss.esp);
-    expectEqual(@as(u32, 0), tss.ebp);
-    expectEqual(@as(u32, 0), tss.esi);
-    expectEqual(@as(u32, 0), tss.edi);
-    expectEqual(@as(u32, 0), tss.es);
-    expectEqual(@as(u32, 0), tss.cs);
-    expectEqual(@as(u32, 0), tss.ss);
-    expectEqual(@as(u32, 0), tss.ds);
-    expectEqual(@as(u32, 0), tss.fs);
-    expectEqual(@as(u32, 0), tss.gs);
-    expectEqual(@as(u32, 0), tss.ldtr);
-    expectEqual(@as(u16, 0), tss.trap);
-    expectEqual(@as(u16, @sizeOf(TtsEntry)), tss.io_permissions_base_offset);
-
-    // Clean up
-    setTssStack(0);
-
-    expectEqual(@as(u32, 0), tss.prev_tss);
-    expectEqual(@as(u32, 0), tss.esp0);
-    expectEqual(@as(u32, KERNEL_DATA_OFFSET), tss.ss0);
-    expectEqual(@as(u32, 0), tss.esp1);
-    expectEqual(@as(u32, 0), tss.ss1);
-    expectEqual(@as(u32, 0), tss.esp2);
-    expectEqual(@as(u32, 0), tss.ss2);
-    expectEqual(@as(u32, 0), tss.cr3);
-    expectEqual(@as(u32, 0), tss.eip);
-    expectEqual(@as(u32, 0), tss.eflags);
-    expectEqual(@as(u32, 0), tss.eax);
-    expectEqual(@as(u32, 0), tss.ecx);
-    expectEqual(@as(u32, 0), tss.edx);
-    expectEqual(@as(u32, 0), tss.ebx);
-    expectEqual(@as(u32, 0), tss.esp);
-    expectEqual(@as(u32, 0), tss.ebp);
-    expectEqual(@as(u32, 0), tss.esi);
-    expectEqual(@as(u32, 0), tss.edi);
-    expectEqual(@as(u32, 0), tss.es);
-    expectEqual(@as(u32, 0), tss.cs);
-    expectEqual(@as(u32, 0), tss.ss);
-    expectEqual(@as(u32, 0), tss.ds);
-    expectEqual(@as(u32, 0), tss.fs);
-    expectEqual(@as(u32, 0), tss.gs);
-    expectEqual(@as(u32, 0), tss.ldtr);
-    expectEqual(@as(u16, 0), tss.trap);
-    expectEqual(@as(u16, @sizeOf(TtsEntry)), tss.io_permissions_base_offset);
 }
 
 test "init" {
@@ -650,8 +538,8 @@ test "init" {
 
     // Post testing
     const tss_entry = gdt_entries[TSS_INDEX];
-    const tss_limit = @sizeOf(TtsEntry) - 1;
-    const tss_addr = @ptrToInt(&tss);
+    const tss_limit = @sizeOf(Tss) - 1;
+    const tss_addr = @ptrToInt(&main_tss_entry);
 
     var expected: u64 = 0;
     expected |= @as(u64, @truncate(u16, tss_limit));
@@ -665,7 +553,7 @@ test "init" {
 
     // Reset
     gdt_ptr.base = 0;
-    gdt_entries[TSS_INDEX] = makeEntry(0, 0, NULL_SEGMENT, NULL_FLAGS);
+    gdt_entries[TSS_INDEX] = makeGdtEntry(0, 0, NULL_SEGMENT, NULL_FLAGS);
 }
 
 ///
@@ -686,6 +574,6 @@ fn rt_loadedGDTSuccess() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
     rt_loadedGDTSuccess();
 }

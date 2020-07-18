@@ -830,6 +830,6 @@ fn rt_picAllMasked() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
     rt_picAllMasked();
 }
