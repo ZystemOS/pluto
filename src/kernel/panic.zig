@@ -5,6 +5,7 @@ const arch = @import("arch.zig").internals;
 const log = @import("log.zig");
 const multiboot = @import("multiboot.zig");
 const mem = @import("mem.zig");
+const build_options = @import("build_options");
 const ArrayList = std.ArrayList;
 const testing = std.testing;
 
@@ -15,7 +16,7 @@ const PanicError = error{
     InvalidSymbolFile,
 };
 
-/// An entry within a symbol map. Corresponds to one entry in a symbole file
+/// An entry within a symbol map. Corresponds to one entry in a symbol file
 const MapEntry = struct {
     /// The address that the entry corresponds to
     addr: usize,
@@ -59,7 +60,7 @@ const SymbolMap = struct {
     /// Error: std.mem.Allocator.Error
     ///      * - See ArrayList.append
     ///
-    pub fn add(self: *SymbolMap, name: []const u8, addr: u32) !void {
+    pub fn add(self: *SymbolMap, name: []const u8, addr: usize) !void {
         try self.addEntry(MapEntry{ .addr = addr, .func_name = name });
     }
 
@@ -77,11 +78,11 @@ const SymbolMap = struct {
     ///     The function name associated with that program address, or null if one wasn't found.
     ///
     pub fn search(self: *const SymbolMap, addr: usize) ?[]const u8 {
-        if (self.symbols.len == 0)
+        if (self.symbols.items.len == 0)
             return null;
         // Find the first element whose address is greater than addr
         var previous_name: ?[]const u8 = null;
-        for (self.symbols.toSliceConst()) |entry| {
+        for (self.symbols.items) |entry| {
             if (entry.addr > addr)
                 return previous_name;
             previous_name = entry.func_name;
@@ -104,7 +105,7 @@ fn logTraceAddress(addr: usize) void {
     log.logError("{x}: {}\n", .{ addr, str });
 }
 
-pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var) noreturn {
+pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
     log.logError("Kernel panic: " ++ format ++ "\n", args);
     if (trace) |trc| {
@@ -116,7 +117,7 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var
     } else {
         const first_ret_addr = @returnAddress();
         var last_addr: u64 = 0;
-        var it = std.debug.StackIterator.init(first_ret_addr);
+        var it = std.debug.StackIterator.init(first_ret_addr, null);
         while (it.next()) |ret_addr| {
             if (ret_addr != last_addr) logTraceAddress(ret_addr);
             last_addr = ret_addr;
@@ -130,7 +131,7 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: var
 /// whitespace character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated after all
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
 ///         characters have been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -166,7 +167,9 @@ fn parseAddr(ptr: *[*]const u8, end: *const u8) !usize {
 ///     PanicError.InvalidSymbolFile: The address given is greater than or equal to the end address.
 ///
 fn parseChar(ptr: [*]const u8, end: *const u8) PanicError!u8 {
-    if (@ptrToInt(ptr) >= @ptrToInt(end)) return PanicError.InvalidSymbolFile;
+    if (@ptrToInt(ptr) >= @ptrToInt(end)) {
+        return PanicError.InvalidSymbolFile;
+    }
     return ptr[0];
 }
 
@@ -219,7 +222,7 @@ fn parseNonWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
 /// character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated after all
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
 ///         characters have been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -242,7 +245,7 @@ fn parseName(ptr: *[*]const u8, end: *const u8) PanicError![]const u8 {
 /// in the format of '\d+\w+[a-zA-Z0-9]+'. Must be terminated by a whitespace character.
 ///
 /// Arguments:
-///     INOUT ptr: *[*]const u8 - The address at which to start looking, updated once after the
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated once after the
 ///         address has been consumed and once again after the name has been consumed.
 ///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
 ///         be found before this.
@@ -278,17 +281,18 @@ fn parseMapEntry(start: *[*]const u8, end: *const u8) !MapEntry {
 ///
 pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !void {
     log.logInfo("Init panic\n", .{});
-    defer log.logInfo("Done\n", .{});
+    defer log.logInfo("Done panic\n", .{});
+
     // Exit if we haven't loaded all debug modules
-    if (mem_profile.boot_modules.len < 1)
+    if (mem_profile.modules.len < 1) {
         return;
-    var kmap_start: u32 = 0;
-    var kmap_end: u32 = 0;
-    for (mem_profile.boot_modules) |module| {
-        const mod_start = mem.physToVirt(module.mod_start);
-        const mod_end = mem.physToVirt(module.mod_end) - 1;
-        const mod_str_ptr = mem.physToVirt(@intToPtr([*:0]u8, module.cmdline));
-        if (std.mem.eql(u8, std.mem.toSlice(u8, mod_str_ptr), "kernel.map")) {
+    }
+    var kmap_start: usize = 0;
+    var kmap_end: usize = 0;
+    for (mem_profile.modules) |module| {
+        const mod_start = module.region.start;
+        const mod_end = module.region.end - 1;
+        if (std.mem.eql(u8, module.name, "kernel.map")) {
             kmap_start = mod_start;
             kmap_end = mod_end;
             break;
@@ -296,18 +300,23 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
     }
     // Don't try to load the symbols if there was no symbol map file. This is a valid state so just
     // exit early
-    if (kmap_start == 0 or kmap_end == 0)
+    if (kmap_start == 0 or kmap_end == 0) {
         return;
+    }
 
     var syms = SymbolMap.init(allocator);
     errdefer syms.deinit();
-    var file_index = kmap_start;
     var kmap_ptr = @intToPtr([*]u8, kmap_start);
     while (@ptrToInt(kmap_ptr) < kmap_end - 1) {
         const entry = try parseMapEntry(&kmap_ptr, @intToPtr(*const u8, kmap_end));
         try syms.addEntry(entry);
     }
     symbol_map = syms;
+
+    switch (build_options.test_mode) {
+        .Panic => runtimeTests(),
+        else => {},
+    }
 }
 
 test "parseChar" {
@@ -422,7 +431,7 @@ test "parseMapEntry fails without a name" {
 }
 
 test "SymbolMap" {
-    var allocator = std.heap.direct_allocator;
+    var allocator = std.heap.page_allocator;
     var map = SymbolMap.init(allocator);
     try map.add("abc"[0..], 123);
     try map.addEntry(MapEntry{ .func_name = "def"[0..], .addr = 456 });
@@ -442,7 +451,13 @@ test "SymbolMap" {
     testing.expectEqual(map.search(2345), "jkl");
 }
 
+///
+/// Runtime test for panic. This will trigger a integer overflow.
+///
 pub fn runtimeTests() void {
+    @setRuntimeSafety(true);
     var x: u8 = 255;
     x += 1;
+    // If we get here, then a panic was not triggered so fail
+    panic(@errorReturnTrace(), "FAILURE: No integer overflow\n", .{});
 }

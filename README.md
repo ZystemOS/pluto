@@ -28,35 +28,52 @@ zig build
 ```Shell
 zig build run
 ```
+
 or if you want to wait for a gdb connection:
+
 ```Shell
 zig build debug-run
 ```
 
 ## Debug
 
-Launch a gdb instance and connect to qemu.
+Launch a gdb-multiarch instance and connect to qemu.
 
 ```Shell
 zig build debug
 ```
 
-## Test
+## Unit testing
 
-Run the unit tests or runtime tests.
+Run the unit tests.
 
 ```Shell
 zig build test
 ```
 
+## Runtime testing
+
+Run the runtime tests.
+
+```Shell
+zig build rt-test -Dtest-mode=<MODE>
+```
+
+Available test modes:
+
+* `None`: This is the default, this will run the OS normally.
+* `Initialisation`: Run the OS's initialisation runtime tests to ensure the OS is properly set up.
+* `Panic`: Run the panic runtime test.
+
 ## Options
 
-* `-Drt-test=`: Boolean (default `false`).
-  * **build**: Build with runtime testing enabled. Makes the kernel bigger and slower but tests important functionality.
-  * **test**: Run the runtime testing script instead of the unittests. Checks for the expected log statements and fails if any are missing.
 * `-D[build-mode]=`: Boolean (default `false`).
   * **build**: Build a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
   * **test**: Test a certain build mode (*release-safe*, *release-fast*, *release-small*). Don't set in order to use the *debug* build mode.
+* `-Dtarget=`: String (default `i386-freestanding`). The standard target options for building with zig. Currently supported targets:
+  * `i386-freestanding`
+* `-Ddisable-display`: Boolean (default `false`)
+  * This disables the display output of QEMU.
 
 ## Contribution
 

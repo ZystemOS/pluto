@@ -4,7 +4,7 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
-
+const panic = @import("../../panic.zig").panic;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const gdt = if (is_test) @import(mock_path ++ "gdt_mock.zig") else @import("gdt.zig");
@@ -101,7 +101,7 @@ var idt_ptr: IdtPtr = IdtPtr{
     .base = 0,
 };
 
-/// The IDT entry table of NUMBER_OF_ENTRIES entries. Initially all zero'ed.
+/// The IDT entry table of NUMBER_OF_ENTRIES entries. Initially all zeroed.
 var idt_entries: [NUMBER_OF_ENTRIES]IdtEntry = [_]IdtEntry{IdtEntry{
     .base_low = 0,
     .selector = 0,
@@ -172,7 +172,7 @@ pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
         return IdtError.IdtEntryExists;
     }
 
-    idt_entries[index] = makeEntry(@intCast(u32, @ptrToInt(handler)), gdt.KERNEL_CODE_OFFSET, INTERRUPT_GATE, PRIVILEGE_RING_0);
+    idt_entries[index] = makeEntry(@ptrToInt(handler), gdt.KERNEL_CODE_OFFSET, INTERRUPT_GATE, PRIVILEGE_RING_0);
 }
 
 ///
@@ -180,13 +180,16 @@ pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
 ///
 pub fn init() void {
     log.logInfo("Init idt\n", .{});
+    defer log.logInfo("Done idt\n", .{});
 
-    idt_ptr.base = @intCast(u32, @ptrToInt(&idt_entries));
+    idt_ptr.base = @ptrToInt(&idt_entries);
 
     arch.lidt(&idt_ptr);
-    log.logInfo("Done\n", .{});
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
 fn testHandler0() callconv(.Naked) void {}
@@ -194,7 +197,7 @@ fn testHandler1() callconv(.Naked) void {}
 
 fn mock_lidt(ptr: *const IdtPtr) void {
     expectEqual(TABLE_SIZE, ptr.limit);
-    expectEqual(@intCast(u32, @ptrToInt(&idt_entries[0])), ptr.base);
+    expectEqual(@ptrToInt(&idt_entries[0]), ptr.base);
 }
 
 test "IDT entries" {
@@ -244,8 +247,8 @@ test "openInterruptGate" {
     openInterruptGate(index, testHandler0) catch unreachable;
     expectError(IdtError.IdtEntryExists, openInterruptGate(index, testHandler0));
 
-    const test_fn_0_addr = @intCast(u32, @ptrToInt(testHandler0));
-    const test_fn_1_addr = @intCast(u32, @ptrToInt(testHandler1));
+    const test_fn_0_addr = @ptrToInt(testHandler0);
+    const test_fn_1_addr = @ptrToInt(testHandler1);
 
     const expected_entry0 = IdtEntry{
         .base_low = @truncate(u16, test_fn_0_addr),
@@ -313,7 +316,7 @@ test "init" {
     init();
 
     // Post testing
-    expectEqual(@intCast(u32, @ptrToInt(&idt_entries)), idt_ptr.base);
+    expectEqual(@ptrToInt(&idt_entries), idt_ptr.base);
 
     // Reset
     idt_ptr.base = 0;
@@ -325,14 +328,18 @@ test "init" {
 ///
 fn rt_loadedIDTSuccess() void {
     const loaded_idt = arch.sidt();
-    expect(idt_ptr.limit == loaded_idt.limit);
-    expect(idt_ptr.base == loaded_idt.base);
+    if (idt_ptr.limit != loaded_idt.limit) {
+        panic(@errorReturnTrace(), "FAILURE: IDT not loaded properly: 0x{X} != 0x{X}\n", .{ idt_ptr.limit, loaded_idt.limit });
+    }
+    if (idt_ptr.base != loaded_idt.base) {
+        panic(@errorReturnTrace(), "FAILURE: IDT not loaded properly: 0x{X} != {X}\n", .{ idt_ptr.base, loaded_idt.base });
+    }
     log.logInfo("IDT: Tested loading IDT\n", .{});
 }
 
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
     rt_loadedIDTSuccess();
 }

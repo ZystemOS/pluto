@@ -231,11 +231,12 @@ inline fn sendDataToCounter(counter: CounterSelect, data: u8) void {
 /// The interrupt handler for the PIT. This will increment a counter for now.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - Pointer to the interrupt context containing the contents
+///     IN ctx: *arch.CpuState - Pointer to the interrupt context containing the contents
 ///                                      of the register at the time of the interrupt.
 ///
-fn pitHandler(ctx: *arch.InterruptContext) void {
+fn pitHandler(ctx: *arch.CpuState) usize {
     ticks +%= 1;
+    return @ptrToInt(ctx);
 }
 
 ///
@@ -324,25 +325,17 @@ pub fn waitTicks(ticks_to_wait: u32) void {
         const wait_ticks2 = ticks_to_wait - wait_ticks1;
 
         while (ticks > wait_ticks1) {
-            arch.enableInterrupts();
             arch.halt();
-            arch.disableInterrupts();
         }
 
         while (ticks < wait_ticks2) {
-            arch.enableInterrupts();
             arch.halt();
-            arch.disableInterrupts();
         }
-        arch.enableInterrupts();
     } else {
         const wait_ticks = ticks + ticks_to_wait;
         while (ticks < wait_ticks) {
-            arch.enableInterrupts();
             arch.halt();
-            arch.disableInterrupts();
         }
-        arch.enableInterrupts();
     }
 }
 
@@ -371,6 +364,8 @@ pub fn getFrequency() u32 {
 ///
 pub fn init() void {
     log.logInfo("Init pit\n", .{});
+    defer log.logInfo("Done pit\n", .{});
+
     // Set up counter 0 at 10000hz in a square wave mode counting in binary
     const freq: u32 = 10000;
     setupCounter(CounterSelect.Counter0, freq, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY) catch |e| {
@@ -389,9 +384,10 @@ pub fn init() void {
         },
     };
 
-    log.logInfo("Done\n", .{});
-
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
 test "sendCommand" {
@@ -551,7 +547,7 @@ fn rt_waitTicks() void {
     const difference = getTicks() - waiting;
 
     if (previous_count + epsilon < difference or previous_count > difference + epsilon) {
-        panic(@errorReturnTrace(), "Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
+        panic(@errorReturnTrace(), "FAILURE: Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
     }
 
     log.logInfo("PIT: Tested wait ticks\n", .{});
@@ -575,13 +571,13 @@ fn rt_waitTicks2() void {
     const difference = getTicks() + 15 - waiting;
 
     if (previous_count + epsilon < difference or previous_count > difference + epsilon) {
-        panic(@errorReturnTrace(), "Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
+        panic(@errorReturnTrace(), "FAILURE: Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
     }
-
-    log.logInfo("PIT: Tested wait ticks 2\n", .{});
 
     // Reset ticks
     ticks = 0;
+
+    log.logInfo("PIT: Tested wait ticks 2\n", .{});
 }
 
 ///
@@ -593,7 +589,7 @@ fn rt_initCounter_0() void {
     const expected_hz: u32 = 10027;
 
     if (time_ns != expected_ns or time_under_1_ns != expected_ps or getFrequency() != expected_hz) {
-        panic(@errorReturnTrace(), "Frequency not set properly. Hz: {}!={}, ns: {}!={}, ps: {}!= {}\n", .{
+        panic(@errorReturnTrace(), "FAILURE: Frequency not set properly. Hz: {}!={}, ns: {}!={}, ps: {}!= {}\n", .{
             getFrequency(),
             expected_hz,
             time_ns,
@@ -611,19 +607,19 @@ fn rt_initCounter_0() void {
             irq_exists = true;
         },
         error.InvalidIrq => {
-            panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} is invalid", .{pic.IRQ_PIT});
+            panic(@errorReturnTrace(), "FAILURE: IRQ for PIT, IRQ number: {} is invalid", .{pic.IRQ_PIT});
         },
     };
 
     if (!irq_exists) {
-        panic(@errorReturnTrace(), "IRQ for PIT doesn't exists\n", .{});
+        panic(@errorReturnTrace(), "FAILURE: IRQ for PIT doesn't exists\n", .{});
     }
 
     const expected_mode = OCW_READ_LOAD_DATA | OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_SELECT_COUNTER_0 | OCW_BINARY_COUNT_BINARY;
     const actual_mode = readBackCommand(CounterSelect.Counter0);
 
     if (expected_mode != actual_mode) {
-        panic(@errorReturnTrace(), "Operating mode don't not set properly. Found: {}, expecting: {}\n", .{ actual_mode, expected_mode });
+        panic(@errorReturnTrace(), "FAILURE: Operating mode don't not set properly. Found: {}, expecting: {}\n", .{ actual_mode, expected_mode });
     }
 
     log.logInfo("PIT: Tested init\n", .{});
@@ -632,7 +628,11 @@ fn rt_initCounter_0() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
+    // Interrupts aren't enabled yet, so for the runtime tests, enable it temporary
+    arch.enableInterrupts();
+    defer arch.disableInterrupts();
+
     rt_initCounter_0();
     rt_waitTicks();
     rt_waitTicks2();

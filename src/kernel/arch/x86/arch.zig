@@ -1,22 +1,54 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
+const cmos = @import("cmos.zig");
 const gdt = @import("gdt.zig");
 const idt = @import("idt.zig");
-const pic = @import("pic.zig");
 const irq = @import("irq.zig");
 const isr = @import("isr.zig");
-const pit = @import("pit.zig");
 const paging = @import("paging.zig");
+const pic = @import("pic.zig");
+const pit = @import("pit.zig");
+const rtc = @import("rtc.zig");
+const serial = @import("serial.zig");
 const syscalls = @import("syscalls.zig");
+const tty = @import("tty.zig");
+const vga = @import("vga.zig");
 const mem = @import("../../mem.zig");
-const multiboot = @import("../../multiboot.zig");
+const multiboot = @import("multiboot.zig");
+const vmm = @import("../../vmm.zig");
+const log = @import("../../log.zig");
+const Serial = @import("../../serial.zig").Serial;
+const panic = @import("../../panic.zig").panic;
+const TTY = @import("../../tty.zig").TTY;
 const MemProfile = mem.MemProfile;
+
+/// The virtual end of the kernel code.
+extern var KERNEL_VADDR_END: *u32;
+
+/// The virtual start of the kernel code.
+extern var KERNEL_VADDR_START: *u32;
+
+/// The physical end of the kernel code.
+extern var KERNEL_PHYSADDR_END: *u32;
+
+/// The physical start of the kernel code.
+extern var KERNEL_PHYSADDR_START: *u32;
+
+/// The boot-time offset that the virtual addresses are from the physical addresses.
+extern var KERNEL_ADDR_OFFSET: *u32;
+
+/// The virtual address of the top limit of the stack.
+extern var KERNEL_STACK_START: *u32;
+
+/// The virtual address of the base of the stack.
+extern var KERNEL_STACK_END: *u32;
 
 /// The interrupt context that is given to a interrupt handler. It contains most of the registers
 /// and the interrupt number and error code (if there is one).
-pub const InterruptContext = struct {
+pub const CpuState = packed struct {
     // Extra segments
+    ss: u32,
     gs: u32,
     fs: u32,
     es: u32,
@@ -43,8 +75,29 @@ pub const InterruptContext = struct {
     cs: u32,
     eflags: u32,
     user_esp: u32,
-    ss: u32,
+    user_ss: u32,
 };
+
+/// x86's boot payload is the multiboot info passed by grub
+pub const BootPayload = *multiboot.multiboot_info_t;
+
+/// The type of the payload passed to a virtual memory mapper.
+/// For x86 it's the page directory that should be mapped.
+pub const VmmPayload = *paging.Directory;
+
+/// The payload used in the kernel virtual memory manager.
+/// For x86 it's the kernel's page directory.
+pub const KERNEL_VMM_PAYLOAD = &paging.kernel_directory;
+
+/// The architecture's virtual memory mapper.
+/// For x86, it simply forwards the calls to the paging subsystem.
+pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = vmm.Mapper(VmmPayload){ .mapFn = paging.map, .unmapFn = paging.unmap };
+
+/// The size of each allocatable block of memory, normally set to the page size.
+pub const MEMORY_BLOCK_SIZE: usize = paging.PAGE_SIZE_4KB;
+
+/// The default stack size of a task. Currently this is set to a page size.
+pub const STACK_SIZE: u32 = MEMORY_BLOCK_SIZE / @sizeOf(u32);
 
 ///
 /// Assembly to write to a given port with a byte of data.
@@ -75,6 +128,13 @@ pub fn inb(port: u16) u8 {
         : [result] "={al}" (-> u8)
         : [port] "N{dx}" (port)
     );
+}
+
+///
+/// Force the CPU to wait for an I/O operation to compete. Use port 0x80 as this is unused.
+///
+pub fn ioWait() void {
+    outb(0x80, 0);
 }
 
 ///
@@ -189,10 +249,9 @@ pub fn halt() void {
 /// Wait the kernel but still can handle interrupts.
 ///
 pub fn spinWait() noreturn {
+    enableInterrupts();
     while (true) {
-        enableInterrupts();
         halt();
-        disableInterrupts();
     }
 }
 
@@ -207,18 +266,199 @@ pub fn haltNoInterrupts() noreturn {
 }
 
 ///
+/// Write a byte to serial port com1. Used by the serial initialiser
+///
+/// Arguments:
+///     IN byte: u8 - The byte to write
+///
+fn writeSerialCom1(byte: u8) void {
+    serial.write(byte, serial.Port.COM1);
+}
+
+///
+/// Initialise serial communication using port COM1 and construct a Serial instance
+///
+/// Arguments:
+///     IN boot_payload: arch.BootPayload - The payload passed at boot. Not currently used by x86
+///
+/// Return: serial.Serial
+///     The Serial instance constructed with the function used to write bytes
+///
+pub fn initSerial(boot_payload: BootPayload) Serial {
+    serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
+        panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
+    };
+    return Serial{
+        .write = writeSerialCom1,
+    };
+}
+
+///
+/// Initialise the TTY and construct a TTY instance
+///
+/// Arguments:
+///     IN boot_payload: BootPayload - The payload passed to the kernel on boot
+///
+/// Return: tty.TTY
+///     The TTY instance constructed with the information required by the rest of the kernel
+///
+pub fn initTTY(boot_payload: BootPayload) TTY {
+    return .{
+        .print = tty.writeString,
+        .setCursor = tty.setCursor,
+        .cols = vga.WIDTH,
+        .rows = vga.HEIGHT,
+        .clear = tty.clearScreen,
+    };
+}
+
+///
+/// Initialise the system's memory. Populates a memory profile with boot modules from grub, the amount of available memory, the reserved regions of virtual and physical memory as well as the start and end of the kernel code
+///
+/// Arguments:
+///     IN mb_info: *multiboot.multiboot_info_t - The multiboot info passed by grub
+///
+/// Return: mem.MemProfile
+///     The constructed memory profile
+///
+/// Error: Allocator.Error
+///     Allocator.Error.OutOfMemory - There wasn't enough memory in the allocated created to populate the memory profile, consider increasing mem.FIXED_ALLOC_SIZE
+///
+pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
+    log.logInfo("Init mem\n", .{});
+    defer log.logInfo("Done mem\n", .{});
+
+    log.logDebug("KERNEL_ADDR_OFFSET:    0x{X}\n", .{@ptrToInt(&KERNEL_ADDR_OFFSET)});
+    log.logDebug("KERNEL_STACK_START:    0x{X}\n", .{@ptrToInt(&KERNEL_STACK_START)});
+    log.logDebug("KERNEL_STACK_END:      0x{X}\n", .{@ptrToInt(&KERNEL_STACK_END)});
+    log.logDebug("KERNEL_VADDR_START:    0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_START)});
+    log.logDebug("KERNEL_VADDR_END:      0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_END)});
+    log.logDebug("KERNEL_PHYSADDR_START: 0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_START)});
+    log.logDebug("KERNEL_PHYSADDR_END:   0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_END)});
+
+    const mods_count = mb_info.mods_count;
+    mem.ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
+    const mmap_addr = mb_info.mmap_addr;
+    const num_mmap_entries = mb_info.mmap_length / @sizeOf(multiboot.multiboot_memory_map_t);
+    const vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END);
+
+    var allocator = std.heap.FixedBufferAllocator.init(vaddr_end[0..mem.FIXED_ALLOC_SIZE]);
+    var reserved_physical_mem = std.ArrayList(mem.Range).init(&allocator.allocator);
+    var reserved_virtual_mem = std.ArrayList(mem.Map).init(&allocator.allocator);
+    const mem_map = @intToPtr([*]multiboot.multiboot_memory_map_t, mmap_addr)[0..num_mmap_entries];
+
+    // Reserve the unavailable sections from the multiboot memory map
+    for (mem_map) |entry| {
+        if (entry.@"type" != multiboot.MULTIBOOT_MEMORY_AVAILABLE) {
+            // If addr + len is greater than maxInt(usize) just ignore whatever comes after maxInt(usize) since it can't be addressed anyway
+            const end: usize = if (entry.addr > std.math.maxInt(usize) - entry.len) std.math.maxInt(usize) else @intCast(usize, entry.addr + entry.len);
+            try reserved_physical_mem.append(.{ .start = @intCast(usize, entry.addr), .end = end });
+        }
+    }
+
+    // Map the multiboot info struct itself
+    const mb_region = mem.Range{
+        .start = @ptrToInt(mb_info),
+        .end = @ptrToInt(mb_info) + @sizeOf(multiboot.multiboot_info_t),
+    };
+    const mb_physical = mem.Range{ .start = mem.virtToPhys(mb_region.start), .end = mem.virtToPhys(mb_region.end) };
+    try reserved_virtual_mem.append(.{ .virtual = mb_region, .physical = mb_physical });
+
+    // Map the tty buffer
+    const tty_addr = mem.virtToPhys(tty.getVideoBufferAddress());
+    const tty_region = mem.Range{
+        .start = tty_addr,
+        .end = tty_addr + 32 * 1024,
+    };
+    try reserved_virtual_mem.append(.{
+        .physical = tty_region,
+        .virtual = .{
+            .start = mem.physToVirt(tty_region.start),
+            .end = mem.physToVirt(tty_region.end),
+        },
+    });
+
+    // Map the boot modules
+    const boot_modules = @intToPtr([*]multiboot.multiboot_mod_list, mem.physToVirt(mb_info.mods_addr))[0..mods_count];
+    var modules = std.ArrayList(mem.Module).init(&allocator.allocator);
+    for (boot_modules) |module| {
+        const virtual = mem.Range{ .start = mem.physToVirt(module.mod_start), .end = mem.physToVirt(module.mod_end) };
+        const physical = mem.Range{ .start = module.mod_start, .end = module.mod_end };
+        try modules.append(.{ .region = virtual, .name = std.mem.span(mem.physToVirt(@intToPtr([*:0]u8, module.cmdline))) });
+        try reserved_virtual_mem.append(.{ .physical = physical, .virtual = virtual });
+    }
+
+    return MemProfile{
+        .vaddr_end = vaddr_end,
+        .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
+        .physaddr_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END),
+        .physaddr_start = @ptrCast([*]u8, &KERNEL_PHYSADDR_START),
+        // Total memory available including the initial 1MiB that grub doesn't include
+        .mem_kb = mb_info.mem_upper + mb_info.mem_lower + 1024,
+        .modules = modules.items,
+        .physical_reserved = reserved_physical_mem.items,
+        .virtual_reserved = reserved_virtual_mem.items,
+        .fixed_allocator = allocator,
+    };
+}
+
+///
+/// Initialise a 32bit kernel stack used for creating a task.
+/// Currently only support fn () noreturn functions for the entry point.
+///
+/// Arguments:
+///     IN entry_point: usize    - The pointer to the entry point of the function. Functions only
+///                                supported is fn () noreturn
+///     IN allocator: *Allocator - The allocator use for allocating a stack.
+///
+/// Return: struct { stack: []u32, pointer: usize }
+///     The stack and stack pointer with the stack initialised as a 32bit kernel stack.
+///
+/// Error: Allocator.Error
+///     OutOfMemory - Unable to allocate space for the stack.
+///
+pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!struct { stack: []u32, pointer: usize } {
+    // TODO Will need to add the exit point
+    // Set up everything as a kernel task
+    var stack = try allocator.alloc(u32, STACK_SIZE);
+    stack[STACK_SIZE - 18] = gdt.KERNEL_DATA_OFFSET; // ss
+    stack[STACK_SIZE - 17] = gdt.KERNEL_DATA_OFFSET; // gs
+    stack[STACK_SIZE - 16] = gdt.KERNEL_DATA_OFFSET; // fs
+    stack[STACK_SIZE - 15] = gdt.KERNEL_DATA_OFFSET; // es
+    stack[STACK_SIZE - 14] = gdt.KERNEL_DATA_OFFSET; // ds
+
+    stack[STACK_SIZE - 13] = 0; // edi
+    stack[STACK_SIZE - 12] = 0; // esi
+    // End of the stack
+    stack[STACK_SIZE - 11] = @ptrToInt(&stack[STACK_SIZE - 1]); // ebp
+    stack[STACK_SIZE - 10] = 0; // esp (temp) this won't be popped by popa bc intel is dump XD
+
+    stack[STACK_SIZE - 9] = 0; // ebx
+    stack[STACK_SIZE - 8] = 0; // edx
+    stack[STACK_SIZE - 7] = 0; // ecx
+    stack[STACK_SIZE - 6] = 0; // eax
+
+    stack[STACK_SIZE - 5] = 0; // int_num
+    stack[STACK_SIZE - 4] = 0; // error_code
+
+    stack[STACK_SIZE - 3] = entry_point; // eip
+    stack[STACK_SIZE - 2] = gdt.KERNEL_CODE_OFFSET; // cs
+    stack[STACK_SIZE - 1] = 0x202; // eflags
+
+    const ret = .{ .stack = stack, .pointer = @ptrToInt(&stack[STACK_SIZE - 18]) };
+    return ret;
+}
+
+///
 /// Initialise the architecture
 ///
 /// Arguments:
+///     IN boot_payload: BootPayload      - The multiboot information from the GRUB bootloader.
 ///     IN mem_profile: *const MemProfile - The memory profile of the computer. Used to set up
 ///                                         paging.
 ///     IN allocator: *Allocator          - The allocator use to handle memory.
-///     IN comptime options: type         - The build options that is passed to the kernel to be
-///                                         used for run time testing.
 ///
-pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *Allocator) void {
-    disableInterrupts();
-
+pub fn init(boot_payload: BootPayload, mem_profile: *const MemProfile, allocator: *Allocator) void {
     gdt.init();
     idt.init();
 
@@ -226,22 +466,19 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
     isr.init();
     irq.init();
 
-    pit.init();
+    paging.init(boot_payload, mem_profile, allocator);
 
-    paging.init(mb_info, mem_profile, allocator);
+    pit.init();
+    rtc.init();
 
     syscalls.init();
 
-    enableInterrupts();
+    // Initialise the VGA and TTY here since their tests belong the architecture and so should be a part of the
+    // arch init test messages
+    vga.init();
+    tty.init();
 }
 
 test "" {
-    _ = @import("gdt.zig");
-    _ = @import("idt.zig");
-    _ = @import("pic.zig");
-    _ = @import("isr.zig");
-    _ = @import("irq.zig");
-    _ = @import("pit.zig");
-    _ = @import("syscalls.zig");
-    _ = @import("paging.zig");
+    std.meta.refAllDecls(@This());
 }

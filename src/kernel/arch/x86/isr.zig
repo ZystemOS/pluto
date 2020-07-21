@@ -23,7 +23,7 @@ pub const IsrError = error{
 };
 
 /// The type of a ISR handler. A function that takes a interrupt context and returns void.
-const IsrHandler = fn (*arch.InterruptContext) void;
+const IsrHandler = fn (*arch.CpuState) usize;
 
 /// The number of ISR entries.
 const NUMBER_OF_ENTRIES: u8 = 32;
@@ -130,39 +130,43 @@ pub const SECURITY: u8 = 30;
 /// The of exception handlers initialised to null. Need to open a ISR for these to be valid.
 var isr_handlers: [NUMBER_OF_ENTRIES]?IsrHandler = [_]?IsrHandler{null} ** NUMBER_OF_ENTRIES;
 
-/// The syscall hander.
+/// The syscall handler.
 var syscall_handler: ?IsrHandler = null;
 
 ///
 /// The exception handler that each of the exceptions will call when a exception happens.
 ///
 /// Arguments:
-///     IN ctx: *arch.InterruptContext - Pointer to the exception context containing the contents
+///     IN ctx: *arch.CpuState - Pointer to the exception context containing the contents
 ///                                      of the register at the time of the exception.
 ///
-export fn isrHandler(ctx: *arch.InterruptContext) void {
+export fn isrHandler(ctx: *arch.CpuState) usize {
     // Get the interrupt number
     const isr_num = ctx.int_num;
+
+    var ret_esp = @ptrToInt(ctx);
 
     if (isValidIsr(isr_num)) {
         if (isr_num == syscalls.INTERRUPT) {
             // A syscall, so use the syscall handler
             if (syscall_handler) |handler| {
-                handler(ctx);
+                ret_esp = handler(ctx);
             } else {
                 panic(@errorReturnTrace(), "Syscall handler not registered\n", .{});
             }
         } else {
             if (isr_handlers[isr_num]) |handler| {
                 // Regular ISR exception, if there is one registered.
-                handler(ctx);
+                ret_esp = handler(ctx);
             } else {
-                panic(@errorReturnTrace(), "ISR not registered to: {}-{}\n", .{ isr_num, exception_msg[isr_num] });
+                log.logInfo("State: {X}\n", .{ctx});
+                panic(@errorReturnTrace(), "ISR {} ({}) triggered with error code 0x{X} but not registered\n", .{ exception_msg[isr_num], isr_num, ctx.error_code });
             }
         }
     } else {
         panic(@errorReturnTrace(), "Invalid ISR index: {}\n", .{isr_num});
     }
+    return ret_esp;
 }
 
 ///
@@ -188,7 +192,7 @@ fn openIsr(index: u8, handler: idt.InterruptHandler) void {
 ///     IN isr_num: u16 - The isr number to check
 ///
 /// Return: bool
-///     Whether a ISR hander index if valid.
+///     Whether a ISR handler index is valid.
 ///
 pub fn isValidIsr(isr_num: u32) bool {
     return isr_num < NUMBER_OF_ENTRIES or isr_num == syscalls.INTERRUPT;
@@ -235,6 +239,7 @@ pub fn registerIsr(isr_num: u16, handler: IsrHandler) IsrError!void {
 ///
 pub fn init() void {
     log.logInfo("Init isr\n", .{});
+    defer log.logInfo("Done isr\n", .{});
 
     comptime var i = 0;
     inline while (i < 32) : (i += 1) {
@@ -243,16 +248,25 @@ pub fn init() void {
 
     openIsr(syscalls.INTERRUPT, interrupts.getInterruptStub(syscalls.INTERRUPT));
 
-    log.logInfo("Done\n", .{});
-
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
 fn testFunction0() callconv(.Naked) void {}
-fn testFunction1(ctx: *arch.InterruptContext) void {}
-fn testFunction2(ctx: *arch.InterruptContext) void {}
-fn testFunction3(ctx: *arch.InterruptContext) void {}
-fn testFunction4(ctx: *arch.InterruptContext) void {}
+fn testFunction1(ctx: *arch.CpuState) u32 {
+    return 0;
+}
+fn testFunction2(ctx: *arch.CpuState) u32 {
+    return 0;
+}
+fn testFunction3(ctx: *arch.CpuState) u32 {
+    return 0;
+}
+fn testFunction4(ctx: *arch.CpuState) u32 {
+    return 0;
+}
 
 test "openIsr" {
     idt.initTest();
@@ -357,18 +371,18 @@ test "registerIsr invalid isr index" {
 }
 
 ///
-/// Test that all handers are null at initialisation.
+/// Test that all handlers are null at initialisation.
 ///
 fn rt_unregisteredHandlers() void {
     // Ensure all ISR are not registered yet
     for (isr_handlers) |h, i| {
         if (h) |_| {
-            panic(@errorReturnTrace(), "Handler found for ISR: {}-{}\n", .{ i, h });
+            panic(@errorReturnTrace(), "FAILURE: Handler found for ISR: {}-{}\n", .{ i, h });
         }
     }
 
     if (syscall_handler) |h| {
-        panic(@errorReturnTrace(), "Pre-testing failed for syscall: {}\n", .{h});
+        panic(@errorReturnTrace(), "FAILURE: Pre-testing failed for syscall: {}\n", .{h});
     }
 
     log.logInfo("ISR: Tested registered handlers\n", .{});
@@ -384,7 +398,7 @@ fn rt_openedIdtEntries() void {
     for (idt_entries) |entry, i| {
         if (isValidIsr(i)) {
             if (!idt.isIdtOpen(entry)) {
-                panic(@errorReturnTrace(), "IDT entry for {} is not open\n", .{i});
+                panic(@errorReturnTrace(), "FAILURE: IDT entry for {} is not open\n", .{i});
             }
         }
     }
@@ -395,7 +409,7 @@ fn rt_openedIdtEntries() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
     rt_unregisteredHandlers();
     rt_openedIdtEntries();
 }

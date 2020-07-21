@@ -433,30 +433,45 @@ pub fn clearMask(irq_num: u8) void {
 ///
 pub fn init() void {
     log.logInfo("Init pic\n", .{});
+    defer log.logInfo("Done pic\n", .{});
 
     // Initiate
     sendCommandMaster(ICW1_INITIALISATION | ICW1_EXPECT_ICW4);
+    arch.ioWait();
     sendCommandSlave(ICW1_INITIALISATION | ICW1_EXPECT_ICW4);
+    arch.ioWait();
 
     // Offsets
     sendDataMaster(ICW2_MASTER_REMAP_OFFSET);
+    arch.ioWait();
     sendDataSlave(ICW2_SLAVE_REMAP_OFFSET);
+    arch.ioWait();
 
     // IRQ lines
     sendDataMaster(ICW3_MASTER_IRQ_MAP_FROM_SLAVE);
+    arch.ioWait();
     sendDataSlave(ICW3_SLAVE_IRQ_MAP_TO_MASTER);
+    arch.ioWait();
 
     // 80x86 mode
     sendDataMaster(ICW4_80x86_MODE);
+    arch.ioWait();
     sendDataSlave(ICW4_80x86_MODE);
+    arch.ioWait();
 
     // Mask all interrupts
     sendDataMaster(0xFF);
+    arch.ioWait();
     sendDataSlave(0xFF);
+    arch.ioWait();
 
-    log.logInfo("Done\n", .{});
+    // Clear the IRQ for the slave
+    clearMask(IRQ_CASCADE_FOR_SLAVE);
 
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
 test "sendCommandMaster" {
@@ -763,6 +778,8 @@ test "init" {
     arch.initTest();
     defer arch.freeTest();
 
+    arch.addRepeatFunction("ioWait", arch.mock_ioWait);
+
     // Just a long list of OUT instructions setting up the PIC
     arch.addTestParams("outb", .{
         MASTER_COMMAND_REG,
@@ -785,7 +802,11 @@ test "init" {
         @as(u8, 0xFF),
         SLAVE_DATA_REG,
         @as(u8, 0xFF),
+        MASTER_DATA_REG,
+        @as(u8, 0xFB),
     });
+
+    arch.addTestParams("inb", .{ MASTER_DATA_REG, @as(u8, 0xFF) });
 
     init();
 }
@@ -794,12 +815,13 @@ test "init" {
 /// Test that all the PIC masks are set so no interrupts can fire.
 ///
 fn rt_picAllMasked() void {
-    if (readDataMaster() != 0xFF) {
-        panic(@errorReturnTrace(), "Master masks are not set, found: {}\n", .{readDataMaster()});
+    // The master will have interrupt 2 clear because this is the link to the slave (third bit)
+    if (readDataMaster() != 0xFB) {
+        panic(@errorReturnTrace(), "FAILURE: Master masks are not set, found: {}\n", .{readDataMaster()});
     }
 
     if (readDataSlave() != 0xFF) {
-        panic(@errorReturnTrace(), "Slave masks are not set, found: {}\n", .{readDataSlave()});
+        panic(@errorReturnTrace(), "FAILURE: Slave masks are not set, found: {}\n", .{readDataSlave()});
     }
 
     log.logInfo("PIC: Tested masking\n", .{});
@@ -808,6 +830,6 @@ fn rt_picAllMasked() void {
 ///
 /// Run all the runtime tests.
 ///
-fn runtimeTests() void {
+pub fn runtimeTests() void {
     rt_picAllMasked();
 }

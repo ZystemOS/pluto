@@ -1,6 +1,10 @@
 name: CI
 
-on: [push]
+on:
+  push:
+    branches: "*"
+  pull_request:
+    branches: "*"
 
 jobs:
   test:
@@ -8,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        build_mode: ["", -Drelease-fast=true, -Drelease-safe=true, -Drelease-small=true]
+        build_mode: ["", -Drelease-fast, -Drelease-safe, -Drelease-small]
 
     steps:
     - uses: actions/checkout@v1
@@ -19,15 +23,19 @@ jobs:
         wget $(curl -s 'https://ziglang.org/download/index.json' | python3 -c "import sys, json; print(json.load(sys.stdin)['master']['x86_64-linux']['tarball'])")
         sudo apt-get install mtools
         tar -xvf zig*
-    - name: Build kernel
-      run: zig*/zig build ${{ matrix.build_mode }}
-    - name: Run unit tests
-      run: zig*/zig build test ${{ matrix.build_mode }}
     - name: Install qemu
       run: |
         sudo apt-get update
         sudo apt-get install qemu qemu-system --fix-missing
-    - name: Run runtime tests
-      run: zig*/zig build test -Drt-test=true ${{ matrix.build_mode }}
     - name: Check formatting
       run: zig*/zig fmt --check src
+    - name: Build kernel
+      run: zig*/zig build ${{ matrix.build_mode }}
+    - name: Run unit tests
+      run: zig*/zig build test ${{ matrix.build_mode }}
+    - name: Run runtime test - Initialisation
+      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
+    - name: Run runtime test - Panic
+      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
+    - name: Run runtime test - Scheduler
+      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}

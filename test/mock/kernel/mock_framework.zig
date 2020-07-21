@@ -1,12 +1,15 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const StringHashMap = std.StringHashMap;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
-const GlobalAllocator = std.debug.global_allocator;
+const GlobalAllocator = std.testing.allocator;
 const TailQueue = std.TailQueue;
 const warn = std.debug.warn;
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
+const cmos = @import("cmos_mock.zig");
+const task = @import("task_mock.zig");
 
 ///
 /// The enumeration of types that the mocking framework supports. These include basic types like u8
@@ -18,9 +21,18 @@ const DataElementType = enum {
     U8,
     U16,
     U32,
-    PTR_CONST_GdtPtr,
-    PTR_CONST_IdtPtr,
+    USIZE,
+    PTR_ALLOCATOR,
+    ECMOSSTATUSREGISTER,
+    ECMOSRTCREGISTER,
+    GDTPTR,
+    IDTPTR,
+    IDTENTRY,
+    PTR_CONST_GDTPTR,
+    PTR_CONST_IDTPTR,
     ERROR_IDTERROR_VOID,
+    ERROR_MEM_PTRTASK,
+    PTR_TASK,
     EFN_OVOID,
     NFN_OVOID,
     FN_OVOID,
@@ -29,21 +41,35 @@ const DataElementType = enum {
     FN_IU8_OBOOL,
     FN_IU8_OVOID,
     FN_IU16_OVOID,
+    FN_IUSIZE_OVOID,
     FN_IU16_OU8,
     FN_IU4_IU4_OU8,
     FN_IU8_IU8_OU16,
     FN_IU16_IU8_OVOID,
     FN_IU16_IU16_OVOID,
+    FN_IECMOSSTATUSREGISTER_IBOOL_OU8,
+    FN_IECMOSSTATUSREGISTER_IU8_IBOOL_OVOID,
+    FN_IECMOSRTCREGISTER_OU8,
     FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
     FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
     FN_IPTRCONSTGDTPTR_OVOID,
     FN_IPTRCONSTIDTPTR_OVOID,
+    FN_OGDTPTR,
+    FN_OIDTPTR,
+    FN_IIDTENTRY_OBOOL,
+    FN_IPTRTask_IUSIZE_OVOID,
+    FN_IPTRTASK_IPTRALLOCATOR_OVOID,
+    FN_IFNOVOID_OMEMERRORPTRTASK,
+    FN_IFNOVOID_IPTRALLOCATOR_OMEMERRORPTRTASK,
 };
 
 ///
 /// A tagged union of all the data elements that the mocking framework can work with. This can be
 /// expanded to add new types. This is needed as need a list of data that all have different types,
 /// so this wraps the data into a union, (which is of one type) so can have a list of them.
+/// When https://github.com/ziglang/zig/issues/383 anf https://github.com/ziglang/zig/issues/2907
+/// is done, can programitaclly create types for this. Can use a compile time block that loops
+/// through the available basic types and create function types so don't have a long list.
 ///
 const DataElement = union(DataElementType) {
     BOOL: bool,
@@ -51,26 +77,46 @@ const DataElement = union(DataElementType) {
     U8: u8,
     U16: u16,
     U32: u32,
-    PTR_CONST_GdtPtr: *const gdt.GdtPtr,
-    PTR_CONST_IdtPtr: *const idt.IdtPtr,
+    USIZE: usize,
+    PTR_ALLOCATOR: *std.mem.Allocator,
+    ECMOSSTATUSREGISTER: cmos.StatusRegister,
+    ECMOSRTCREGISTER: cmos.RtcRegister,
+    GDTPTR: gdt.GdtPtr,
+    IDTPTR: idt.IdtPtr,
+    IDTENTRY: idt.IdtEntry,
+    PTR_CONST_GDTPTR: *const gdt.GdtPtr,
+    PTR_CONST_IDTPTR: *const idt.IdtPtr,
     ERROR_IDTERROR_VOID: idt.IdtError!void,
-    EFN_OVOID: extern fn () void,
+    ERROR_MEM_PTRTASK: std.mem.Allocator.Error!*task.Task,
+    PTR_TASK: *task.Task,
+    EFN_OVOID: fn () callconv(.C) void,
     NFN_OVOID: fn () callconv(.Naked) void,
     FN_OVOID: fn () void,
     FN_OUSIZE: fn () usize,
     FN_OU16: fn () u16,
     FN_IU8_OBOOL: fn (u8) bool,
     FN_IU8_OVOID: fn (u8) void,
+    FN_IUSIZE_OVOID: fn (usize) void,
     FN_IU16_OVOID: fn (u16) void,
     FN_IU16_OU8: fn (u16) u8,
     FN_IU4_IU4_OU8: fn (u4, u4) u8,
     FN_IU8_IU8_OU16: fn (u8, u8) u16,
     FN_IU16_IU8_OVOID: fn (u16, u8) void,
     FN_IU16_IU16_OVOID: fn (u16, u16) void,
-    FN_IU8_IEFNOVOID_OERRORIDTERRORVOID: fn (u8, extern fn () void) idt.IdtError!void,
+    FN_IECMOSSTATUSREGISTER_IBOOL_OU8: fn (cmos.StatusRegister, bool) u8,
+    FN_IECMOSSTATUSREGISTER_IU8_IBOOL_OVOID: fn (cmos.StatusRegister, u8, bool) void,
+    FN_IECMOSRTCREGISTER_OU8: fn (cmos.RtcRegister) u8,
+    FN_IU8_IEFNOVOID_OERRORIDTERRORVOID: fn (u8, fn () callconv(.C) void) idt.IdtError!void,
     FN_IU8_INFNOVOID_OERRORIDTERRORVOID: fn (u8, fn () callconv(.Naked) void) idt.IdtError!void,
     FN_IPTRCONSTGDTPTR_OVOID: fn (*const gdt.GdtPtr) void,
     FN_IPTRCONSTIDTPTR_OVOID: fn (*const idt.IdtPtr) void,
+    FN_OGDTPTR: fn () gdt.GdtPtr,
+    FN_OIDTPTR: fn () idt.IdtPtr,
+    FN_IIDTENTRY_OBOOL: fn (idt.IdtEntry) bool,
+    FN_IPTRTask_IUSIZE_OVOID: fn (*task.Task, usize) void,
+    FN_IPTRTASK_IPTRALLOCATOR_OVOID: fn (*task.Task, *std.mem.Allocator) void,
+    FN_IFNOVOID_OMEMERRORPTRTASK: fn (fn () void) std.mem.Allocator.Error!*task.Task,
+    FN_IFNOVOID_IPTRALLOCATOR_OMEMERRORPTRTASK: fn (fn () void, *std.mem.Allocator) std.mem.Allocator.Error!*task.Task,
 };
 
 ///
@@ -139,38 +185,58 @@ fn Mock() type {
         /// to have a list of different types.
         ///
         /// Arguments:
-        ///     IN arg: var - The data, this can be a function or basic type value.
+        ///     IN arg: anytype - The data, this can be a function or basic type value.
         ///
         /// Return: DataElement
         ///     A DataElement with the data wrapped.
         ///
-        fn createDataElement(arg: var) DataElement {
+        fn createDataElement(arg: anytype) DataElement {
             return switch (@TypeOf(arg)) {
                 bool => DataElement{ .BOOL = arg },
                 u4 => DataElement{ .U4 = arg },
                 u8 => DataElement{ .U8 = arg },
                 u16 => DataElement{ .U16 = arg },
                 u32 => DataElement{ .U32 = arg },
-                *const gdt.GdtPtr => DataElement{ .PTR_CONST_GdtPtr = arg },
-                *const idt.IdtPtr => DataElement{ .PTR_CONST_IdtPtr = arg },
+                usize => DataElement{ .USIZE = arg },
+                *std.mem.Allocator => DataElement{ .PTR_ALLOCATOR = arg },
+                cmos.StatusRegister => DataElement{ .ECMOSSTATUSREGISTER = arg },
+                cmos.RtcRegister => DataElement{ .ECMOSRTCREGISTER = arg },
+                gdt.GdtPtr => DataElement{ .GDTPTR = arg },
+                idt.IdtPtr => DataElement{ .IDTPTR = arg },
+                idt.IdtEntry => DataElement{ .IDTENTRY = arg },
+                *const gdt.GdtPtr => DataElement{ .PTR_CONST_GDTPTR = arg },
+                *const idt.IdtPtr => DataElement{ .PTR_CONST_IDTPTR = arg },
                 idt.IdtError!void => DataElement{ .ERROR_IDTERROR_VOID = arg },
-                extern fn () void => DataElement{ .EFN_OVOID = arg },
+                std.mem.Allocator.Error!*task.Task => DataElement{ .ERROR_MEM_PTRTASK = arg },
+                *task.Task => DataElement{ .PTR_TASK = arg },
+                fn () callconv(.C) void => DataElement{ .EFN_OVOID = arg },
                 fn () callconv(.Naked) void => DataElement{ .NFN_OVOID = arg },
                 fn () void => DataElement{ .FN_OVOID = arg },
                 fn () usize => DataElement{ .FN_OUSIZE = arg },
                 fn () u16 => DataElement{ .FN_OU16 = arg },
                 fn (u8) bool => DataElement{ .FN_IU8_OBOOL = arg },
                 fn (u8) void => DataElement{ .FN_IU8_OVOID = arg },
+                fn (usize) void => DataElement{ .FN_IUSIZE_OVOID = arg },
                 fn (u16) void => DataElement{ .FN_IU16_OVOID = arg },
                 fn (u16) u8 => DataElement{ .FN_IU16_OU8 = arg },
                 fn (u4, u4) u8 => DataElement{ .FN_IU4_IU4_OU8 = arg },
                 fn (u8, u8) u16 => DataElement{ .FN_IU8_IU8_OU16 = arg },
                 fn (u16, u8) void => DataElement{ .FN_IU16_IU8_OVOID = arg },
                 fn (u16, u16) void => DataElement{ .FN_IU16_IU16_OVOID = arg },
+                fn (cmos.StatusRegister, bool) u8 => DataElement{ .FN_IECMOSSTATUSREGISTER_IBOOL_OU8 = arg },
+                fn (cmos.StatusRegister, u8, bool) void => DataElement{ .FN_IECMOSSTATUSREGISTER_IU8_IBOOL_OVOID = arg },
+                fn (cmos.RtcRegister) u8 => DataElement{ .FN_IECMOSRTCREGISTER_OU8 = arg },
                 fn (*const gdt.GdtPtr) void => DataElement{ .FN_IPTRCONSTGDTPTR_OVOID = arg },
+                fn () gdt.GdtPtr => DataElement{ .FN_OGDTPTR = arg },
                 fn (*const idt.IdtPtr) void => DataElement{ .FN_IPTRCONSTIDTPTR_OVOID = arg },
-                fn (u8, extern fn () void) idt.IdtError!void => DataElement{ .FN_IU8_IEFNOVOID_OERRORIDTERRORVOID = arg },
+                fn () idt.IdtPtr => DataElement{ .FN_OIDTPTR = arg },
+                fn (u8, fn () callconv(.C) void) idt.IdtError!void => DataElement{ .FN_IU8_IEFNOVOID_OERRORIDTERRORVOID = arg },
                 fn (u8, fn () callconv(.Naked) void) idt.IdtError!void => DataElement{ .FN_IU8_INFNOVOID_OERRORIDTERRORVOID = arg },
+                fn (idt.IdtEntry) bool => DataElement{ .FN_IIDTENTRY_OBOOL = arg },
+                fn (*task.Task, usize) void => DataElement{ .FN_IPTRTask_IUSIZE_OVOID = arg },
+                fn (*task.Task, *std.mem.Allocator) void => DataElement{ .FN_IPTRTASK_IPTRALLOCATOR_OVOID = arg },
+                fn (fn () void) std.mem.Allocator.Error!*task.Task => DataElement{ .FN_IFNOVOID_OMEMERRORPTRTASK = arg },
+                fn (fn () void, *std.mem.Allocator) std.mem.Allocator.Error!*task.Task => DataElement{ .FN_IFNOVOID_IPTRALLOCATOR_OMEMERRORPTRTASK = arg },
                 else => @compileError("Type not supported: " ++ @typeName(@TypeOf(arg))),
             };
         }
@@ -191,25 +257,46 @@ fn Mock() type {
                 u8 => DataElementType.U8,
                 u16 => DataElementType.U16,
                 u32 => DataElementType.U32,
-                *const gdt.GdtPtr => DataElement.PTR_CONST_GdtPtr,
-                *const idt.IdtPtr => DataElement.PTR_CONST_IdtPtr,
-                idt.IdtError!void => DataElement.ERROR_IDTERROR_VOID,
-                extern fn () void => DataElementType.EFN_OVOID,
+                usize => DataElementType.USIZE,
+                *std.mem.Allocator => DataElementType.PTR_ALLOCATOR,
+                cmos.StatusRegister => DataElementType.ECMOSSTATUSREGISTER,
+                cmos.RtcRegister => DataElementType.ECMOSRTCREGISTER,
+                gdt.GdtPtr => DataElementType.GDTPTR,
+                idt.IdtPtr => DataElementType.IDTPTR,
+                idt.IdtEntry => DataElementType.IDTENTRY,
+                *const gdt.GdtPtr => DataElementType.PTR_CONST_GDTPTR,
+                *const idt.IdtPtr => DataElementType.PTR_CONST_IDTPTR,
+                idt.IdtError!void => DataElementType.ERROR_IDTERROR_VOID,
+                std.mem.Allocator.Error!*task.Task => DataElementType.ERROR_MEM_PTRTASK,
+                *task.Task => DataElementType.PTR_TASK,
+                fn () callconv(.C) void => DataElementType.EFN_OVOID,
                 fn () callconv(.Naked) void => DataElementType.NFN_OVOID,
                 fn () void => DataElementType.FN_OVOID,
+                fn () usize => DataElementType.FN_OUSIZE,
                 fn () u16 => DataElementType.FN_OU16,
                 fn (u8) bool => DataElementType.FN_IU8_OBOOL,
                 fn (u8) void => DataElementType.FN_IU8_OVOID,
                 fn (u16) void => DataElementType.FN_IU16_OVOID,
+                fn (usize) void => DataElementType.FN_IUSIZE_OVOID,
                 fn (u16) u8 => DataElementType.FN_IU16_OU8,
                 fn (u4, u4) u8 => DataElementType.FN_IU4_IU4_OU8,
                 fn (u8, u8) u16 => DataElementType.FN_IU8_IU8_OU16,
                 fn (u16, u8) void => DataElementType.FN_IU16_IU8_OVOID,
                 fn (u16, u16) void => DataElementType.FN_IU16_IU16_OVOID,
+                fn (cmos.StatusRegister, bool) u8 => DataElementType.FN_IECMOSSTATUSREGISTER_IBOOL_OU8,
+                fn (cmos.StatusRegister, u8, bool) void => DataElementType.FN_IECMOSSTATUSREGISTER_IU8_IBOOL_OVOID,
+                fn (cmos.RtcRegister) u8 => DataElementType.FN_IECMOSRTCREGISTER_OU8,
                 fn (*const gdt.GdtPtr) void => DataElementType.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => DataElementType.FN_IPTRCONSTIDTPTR_OVOID,
-                fn (u8, extern fn () void) idt.IdtError!void => DataElementType.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
+                fn () gdt.GdtPtr => DataElementType.FN_OGDTPTR,
+                fn () idt.IdtPtr => DataElementType.FN_OIDTPTR,
+                fn (u8, fn () callconv(.C) void) idt.IdtError!void => DataElementType.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
                 fn (u8, fn () callconv(.Naked) void) idt.IdtError!void => DataElementType.FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
+                fn (idt.IdtEntry) bool => DataElementType.FN_IIDTENTRY_OBOOL,
+                fn (*task.Task, usize) void => DataElementType.FN_IPTRTask_IUSIZE_OVOID,
+                fn (*task.Task, *std.mem.Allocator) void => DataElementType.FN_IPTRTASK_IPTRALLOCATOR_OVOID,
+                fn (fn () void) std.mem.Allocator.Error!*task.Task => DataElementType.FN_IFNOVOID_OMEMERRORPTRTASK,
+                fn (fn () void, *std.mem.Allocator) std.mem.Allocator.Error!*task.Task => DataElementType.FN_IFNOVOID_IPTRALLOCATOR_OMEMERRORPTRTASK,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
@@ -232,25 +319,46 @@ fn Mock() type {
                 u8 => element.U8,
                 u16 => element.U16,
                 u32 => element.U32,
-                *const gdt.GdtPtr => element.PTR_CONST_GdtPtr,
-                *const idt.IdtPtr => element.PTR_CONST_IdtPtr,
+                usize => element.USIZE,
+                *std.mem.Allocator => element.PTR_ALLOCATOR,
+                cmos.StatusRegister => element.ECMOSSTATUSREGISTER,
+                gdt.GdtPtr => element.GDTPTR,
+                idt.IdtPtr => element.IDTPTR,
+                idt.IdtEntry => element.IDTENTRY,
+                cmos.RtcRegister => element.ECMOSRTCREGISTER,
+                *const gdt.GdtPtr => element.PTR_CONST_GDTPTR,
+                *const idt.IdtPtr => element.PTR_CONST_IDTPTR,
                 idt.IdtError!void => element.ERROR_IDTERROR_VOID,
-                extern fn () void => element.EFN_OVOID,
+                std.mem.Allocator.Error!*task.Task => element.ERROR_MEM_PTRTASK,
+                *task.Task => element.PTR_TASK,
+                fn () callconv(.C) void => element.EFN_OVOID,
                 fn () callconv(.Naked) void => element.NFN_OVOID,
                 fn () void => element.FN_OVOID,
+                fn () usize => element.FN_OUSIZE,
                 fn () u16 => element.FN_OU16,
                 fn (u8) bool => element.FN_IU8_OBOOL,
                 fn (u8) void => element.FN_IU8_OVOID,
                 fn (u16) void => element.FN_IU16_OVOID,
+                fn (usize) void => element.FN_IUSIZE_OVOID,
                 fn (u16) u8 => element.FN_IU16_OU8,
                 fn (u4, u4) u8 => element.FN_IU4_IU4_OU8,
                 fn (u8, u8) u16 => element.FN_IU8_IU8_OU16,
                 fn (u16, u8) void => element.FN_IU16_IU8_OVOID,
                 fn (u16, u16) void => element.FN_IU16_IU16_OVOID,
+                fn (cmos.StatusRegister, bool) u8 => element.FN_IECMOSSTATUSREGISTER_IBOOL_OU8,
+                fn (cmos.StatusRegister, u8, bool) void => element.FN_IECMOSSTATUSREGISTER_IU8_IBOOL_OVOID,
+                fn (cmos.RtcRegister) u8 => element.FN_IECMOSRTCREGISTER_OU8,
                 fn (*const gdt.GdtPtr) void => element.FN_IPTRCONSTGDTPTR_OVOID,
                 fn (*const idt.IdtPtr) void => element.FN_IPTRCONSTIDTPTR_OVOID,
-                fn (u8, extern fn () void) idt.IdtError!void => element.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
+                fn (u8, fn () callconv(.C) void) idt.IdtError!void => element.FN_IU8_IEFNOVOID_OERRORIDTERRORVOID,
                 fn (u8, fn () callconv(.Naked) void) idt.IdtError!void => element.FN_IU8_INFNOVOID_OERRORIDTERRORVOID,
+                fn () gdt.GdtPtr => element.FN_OGDTPTR,
+                fn () idt.IdtPtr => element.FN_OIDTPTR,
+                fn (idt.IdtEntry) bool => element.FN_IIDTENTRY_OBOOL,
+                fn (*task.Task, usize) void => element.FN_IPTRTask_IUSIZE_OVOID,
+                fn (*task.Task, *std.mem.Allocator) void => element.FN_IPTRTASK_IPTRALLOCATOR_OVOID,
+                fn (fn () void) std.mem.Allocator.Error!*task.Task => element.FN_IFNOVOID_OMEMERRORPTRTASK,
+                fn (fn () void, *std.mem.Allocator) std.mem.Allocator.Error!*task.Task => element.FN_IFNOVOID_IPTRALLOCATOR_OMEMERRORPTRTASK,
                 else => @compileError("Type not supported: " ++ @typeName(T)),
             };
         }
@@ -261,17 +369,17 @@ fn Mock() type {
         ///
         /// Arguments:
         ///     IN RetType: type   - The return type of the function.
-        ///     IN params: arglist - The argument list for the function.
+        ///     IN params: anytype     - The argument list for the function.
         ///
         /// Return: type
         ///     A function type that represents the return type and its arguments.
         ///
-        fn getFunctionType(comptime RetType: type, params: var) type {
+        fn getFunctionType(comptime RetType: type, params: anytype) type {
             return switch (params.len) {
                 0 => fn () RetType,
                 1 => fn (@TypeOf(params[0])) RetType,
                 2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
+                else => @compileError("Couldn't generate function type for " ++ len ++ " parameters\n"),
             };
         }
 
@@ -342,17 +450,17 @@ fn Mock() type {
         ///     IN/OUT self: *Self         - Self. This is the mocking object to be modified to add
         ///                                  the test data.
         ///     IN fun_name: []const u8    - The function name to add the test parameters to.
-        ///     IN data: var               - The data to add.
+        ///     IN data: anytype               - The data to add.
         ///     IN action_type: ActionType - The action type to add.
         ///
-        pub fn addAction(self: *Self, comptime fun_name: []const u8, data: var, action_type: ActionType) void {
+        pub fn addAction(self: *Self, comptime fun_name: []const u8, data: anytype, action_type: ActionType) void {
             // Add a new mapping if one doesn't exist.
             if (!self.named_actions.contains(fun_name)) {
-                expect(self.named_actions.put(fun_name, TailQueue(Action).init()) catch unreachable == null);
+                self.named_actions.put(fun_name, TailQueue(Action).init()) catch unreachable;
             }
 
             // Get the function mapping to add the parameter to.
-            if (self.named_actions.get(fun_name)) |actions_kv| {
+            if (self.named_actions.getEntry(fun_name)) |actions_kv| {
                 var action_list = actions_kv.value;
                 const action = Action{
                     .action = action_type,
@@ -377,13 +485,13 @@ fn Mock() type {
         ///                               perform a action.
         ///     IN fun_name: []const u8 - The function name to act on.
         ///     IN RetType: type        - The return type of the function being mocked.
-        ///     IN params: arglist      - The list of parameters of the mocked function.
+        ///     IN params: anytype          - The list of parameters of the mocked function.
         ///
         /// Return: RetType
         ///     The return value of the mocked function. This can be void.
         ///
-        pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: var) RetType {
-            if (self.named_actions.get(fun_name)) |kv_actions_list| {
+        pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: anytype) RetType {
+            if (self.named_actions.getEntry(fun_name)) |kv_actions_list| {
                 var action_list = kv_actions_list.value;
                 // Peak the first action to test the action type
                 if (action_list.first) |action_node| {
@@ -418,11 +526,18 @@ fn Mock() type {
                             // Waiting for this:
                             // error: compiler bug: unable to call var args function at compile time. https://github.com/ziglang/zig/issues/313
                             // to be resolved
+
+                            comptime const param_len = [1]u8{switch (params.len) {
+                                0...9 => params.len + @as(u8, '0'),
+                                else => unreachable,
+                            }};
+
                             const expected_function = switch (params.len) {
                                 0 => fn () RetType,
                                 1 => fn (@TypeOf(params[0])) RetType,
                                 2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                                else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
+                                3 => fn (@TypeOf(params[0]), @TypeOf(params[1]), @TypeOf(params[2])) RetType,
+                                else => @compileError("Couldn't generate function type for " ++ param_len ++ " parameters\n"),
                             };
 
                             // Get the corresponding DataElementType
@@ -438,11 +553,12 @@ fn Mock() type {
                             action_list.destroyNode(test_node, GlobalAllocator);
 
                             // The data element will contain the function to call
-                            var r = switch (params.len) {
+                            const r = switch (params.len) {
                                 0 => actual_function(),
                                 1 => actual_function(params[0]),
                                 2 => actual_function(params[0], params[1]),
-                                else => @compileError(params.len ++ " or more parameters not supported"),
+                                3 => actual_function(params[0], params[1], params[2]),
+                                else => @compileError(param_len ++ " or more parameters not supported"),
                             };
 
                             break :ret r;
@@ -451,11 +567,18 @@ fn Mock() type {
                             // Do the same for ActionType.ConsumeFunctionCall but instead of
                             // popping the function, just peak
                             const test_element = action.data;
+
+                            comptime const param_len = [1]u8{switch (params.len) {
+                                0...9 => params.len + @as(u8, '0'),
+                                else => unreachable,
+                            }};
+
                             const expected_function = switch (params.len) {
                                 0 => fn () RetType,
                                 1 => fn (@TypeOf(params[0])) RetType,
                                 2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                                else => @compileError("Couldn't generate function type for " ++ params.len ++ "parameters\n"),
+                                3 => fn (@TypeOf(params[0]), @TypeOf(params[1]), @TypeOf(params[2])) RetType,
+                                else => @compileError("Couldn't generate function type for " ++ param_len ++ " parameters\n"),
                             };
 
                             // Get the corresponding DataElementType
@@ -472,7 +595,8 @@ fn Mock() type {
                                 0 => actual_function(),
                                 1 => actual_function(params[0]),
                                 2 => actual_function(params[0], params[1]),
-                                else => @compileError(params.len ++ " or more parameters not supported"),
+                                3 => actual_function(params[0], params[1], params[2]),
+                                else => @compileError(param_len ++ " or more parameters not supported"),
                             };
 
                             break :ret r;
@@ -553,7 +677,7 @@ fn getMockObject() *Mock() {
     if (mock) |*m| {
         return m;
     } else {
-        warn("MOCK object doesn't exists, please initiate this test\n", .{});
+        warn("MOCK object doesn't exists, please initialise this test\n", .{});
         expect(false);
         unreachable;
     }
@@ -594,9 +718,9 @@ pub fn freeTest() void {
 ///     IN/OUT self: *Self      - Self. This is the mocking object to be modified to add
 ///                               the test parameters.
 ///     IN fun_name: []const u8 - The function name to add the test parameters to.
-///     IN params: arglist      - The parameters to add.
+///     IN params: anytype          - The parameters to add.
 ///
-pub fn addTestParams(comptime fun_name: []const u8, params: var) void {
+pub fn addTestParams(comptime fun_name: []const u8, params: anytype) void {
     var mock_obj = getMockObject();
     comptime var i = 0;
     inline while (i < params.len) : (i += 1) {
@@ -610,9 +734,9 @@ pub fn addTestParams(comptime fun_name: []const u8, params: var) void {
 ///
 /// Arguments:
 ///     IN fun_name: []const u8 - The function name to add the function to.
-///     IN function: var        - The function to add.
+///     IN function: anytype        - The function to add.
 ///
-pub fn addConsumeFunction(comptime fun_name: []const u8, function: var) void {
+pub fn addConsumeFunction(comptime fun_name: []const u8, function: anytype) void {
     getMockObject().addAction(fun_name, function, ActionType.ConsumeFunctionCall);
 }
 
@@ -622,9 +746,9 @@ pub fn addConsumeFunction(comptime fun_name: []const u8, function: var) void {
 ///
 /// Arguments:
 ///     IN fun_name: []const u8 - The function name to add the function to.
-///     IN function: var        - The function to add.
+///     IN function: anytype        - The function to add.
 ///
-pub fn addRepeatFunction(comptime fun_name: []const u8, function: var) void {
+pub fn addRepeatFunction(comptime fun_name: []const u8, function: anytype) void {
     getMockObject().addAction(fun_name, function, ActionType.RepeatFunctionCall);
 }
 
@@ -634,11 +758,11 @@ pub fn addRepeatFunction(comptime fun_name: []const u8, function: var) void {
 /// Arguments:
 ///     IN fun_name: []const u8 - The function name to act on.
 ///     IN RetType: type        - The return type of the function being mocked.
-///     IN params: arglist      - The list of parameters of the mocked function.
+///     IN params: anytype          - The list of parameters of the mocked function.
 ///
 /// Return: RetType
 ///     The return value of the mocked function. This can be void.
 ///
-pub fn performAction(comptime fun_name: []const u8, comptime RetType: type, params: var) RetType {
+pub fn performAction(comptime fun_name: []const u8, comptime RetType: type, params: anytype) RetType {
     return getMockObject().performAction(fun_name, RetType, params);
 }

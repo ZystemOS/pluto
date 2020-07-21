@@ -3,10 +3,9 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
-const arch = @import("arch.zig").internals;
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
-const panic = @import("panic.zig").panic;
+const arch = if (is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const log = if (is_test) @import(build_options.arch_mock_path ++ "log_mock.zig") else @import("../../log.zig");
+const panic = @import("../../panic.zig").panic;
 
 /// The port address for the VGA register selection.
 const PORT_ADDRESS: u16 = 0x03D4;
@@ -145,7 +144,6 @@ inline fn sendData(data: u8) void {
 inline fn getData() u8 {
     return arch.inb(PORT_DATA);
 }
-
 ///
 /// Set the VGA register port to write to and sending data to that VGA register port.
 ///
@@ -287,6 +285,7 @@ pub fn setCursorShape(shape: CursorShape) void {
 ///
 pub fn init() void {
     log.logInfo("Init vga\n", .{});
+    defer log.logInfo("Done vga\n", .{});
 
     // Set the maximum scan line to 0x0F
     sendPortData(REG_MAXIMUM_SCAN_LINE, CURSOR_SCANLINE_END);
@@ -294,9 +293,10 @@ pub fn init() void {
     // Set by default the underline cursor
     setCursorShape(CursorShape.UNDERLINE);
 
-    log.logInfo("Done\n", .{});
-
-    if (build_options.rt_test) runtimeTests();
+    switch (build_options.test_mode) {
+        .Initialisation => runtimeTests(),
+        else => {},
+    }
 }
 
 test "entryColour" {
@@ -534,7 +534,7 @@ fn rt_correctMaxScanLine() void {
     const max_scan_line = getPortData(REG_MAXIMUM_SCAN_LINE);
 
     if (max_scan_line != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Max scan line not {}, found {}\n", .{ CURSOR_SCANLINE_END, max_scan_line });
+        panic(@errorReturnTrace(), "FAILURE: Max scan line not {}, found {}\n", .{ CURSOR_SCANLINE_END, max_scan_line });
     }
 
     log.logInfo("VGA: Tested max scan line\n", .{});
@@ -546,14 +546,14 @@ fn rt_correctMaxScanLine() void {
 fn rt_correctCursorShape() void {
     // Check the global variables are correct
     if (cursor_scanline_start != CURSOR_SCANLINE_MIDDLE or cursor_scanline_end != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Global cursor scanline incorrect. Start: {}, end: {}\n", .{ cursor_scanline_start, cursor_scanline_end });
+        panic(@errorReturnTrace(), "FAILURE: Global cursor scanline incorrect. Start: {}, end: {}\n", .{ cursor_scanline_start, cursor_scanline_end });
     }
 
     const cursor_start = getPortData(REG_CURSOR_START);
     const cursor_end = getPortData(REG_CURSOR_END);
 
     if (cursor_start != CURSOR_SCANLINE_MIDDLE or cursor_end != CURSOR_SCANLINE_END) {
-        panic(@errorReturnTrace(), "Cursor scanline are incorrect. Start: {}, end: {}\n", .{ cursor_start, cursor_end });
+        panic(@errorReturnTrace(), "FAILURE: Cursor scanline are incorrect. Start: {}, end: {}\n", .{ cursor_start, cursor_end });
     }
 
     log.logInfo("VGA: Tested cursor shape\n", .{});
@@ -582,7 +582,7 @@ fn rt_setCursorGetCursor() void {
     const actual_y_loc = @truncate(u8, actual_linear_loc / WIDTH);
 
     if (x != actual_x_loc or y != actual_y_loc) {
-        panic(@errorReturnTrace(), "VGA cursor not the same: a_x: {}, a_y: {}, e_x: {}, e_y: {}\n", .{ x, y, actual_x_loc, actual_y_loc });
+        panic(@errorReturnTrace(), "FAILURE: VGA cursor not the same: a_x: {}, a_y: {}, e_x: {}, e_y: {}\n", .{ x, y, actual_x_loc, actual_y_loc });
     }
 
     // Restore the previous x and y
