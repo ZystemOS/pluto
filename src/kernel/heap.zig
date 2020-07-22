@@ -201,7 +201,7 @@ const FreeListAllocator = struct {
         if (new_size == old_mem.len) return new_size;
 
         const end = @ptrToInt(old_mem.ptr) + old_mem.len;
-        const real_size = if (size_alignment > 1) std.mem.alignForward(new_size, size_alignment) else new_size;
+        const real_size = if (size_alignment > 1) std.mem.alignAllocLen(old_mem.len, new_size, size_alignment) else new_size;
 
         // Try to find the buffer's neighbour (if it's free) and the previous free node
         // We'll be stealing some of the free neighbour's space when expanding or joining up with it when shrinking
@@ -312,7 +312,7 @@ const FreeListAllocator = struct {
 
         // Get the real size being allocated, which is the aligned size or the size of a header (whichever is largest)
         // The size must be at least the size of a header so that it can be freed properly
-        const real_size = std.math.max(if (size_alignment > 1) std.mem.alignForward(size, size_alignment) else size, @sizeOf(Header));
+        const real_size = std.math.max(if (size_alignment > 1) std.mem.alignAllocLen(size, size, size_alignment) else size, @sizeOf(Header));
 
         var free_header = self.first_free;
         var prev: ?*Header = null;
@@ -387,7 +387,7 @@ const FreeListAllocator = struct {
             }
             self.registerFreeHeader(prev, header.next_free);
 
-            return @intToPtr([*]u8, @ptrToInt(header))[0..std.mem.alignForward(size, if (size_alignment > 1) size_alignment else 1)];
+            return @intToPtr([*]u8, @ptrToInt(header))[0..std.mem.alignAllocLen(size, size, if (size_alignment > 1) size_alignment else 1)];
         }
 
         return Allocator.Error.OutOfMemory;
