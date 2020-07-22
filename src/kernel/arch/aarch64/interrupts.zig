@@ -65,6 +65,7 @@ const ExceptionClass = enum(u6) {
 };
 
 export fn exceptionHandler() noreturn {
+    arch.turnOnLed();
     const exception_entry_offset = @truncate(u32, lr() & 0x780);
     var elr_elx: usize = undefined;
     var esr_elx: usize = undefined;
@@ -119,14 +120,16 @@ export fn exceptionHandler() noreturn {
         log.logError("this exception has not been seen previously in development - please update aarch64/interrupts.zig\n", .{});
     }
     log.logError("details\n", .{});
-    log.logError("    elr_el{} 0x{x}\n", .{ currentExceptionLevel(), elr_elx });
-    log.logError("    esr_el{} 0x{x}: {}, 32 bit instruction {}, iss 0x{x}\n", .{ currentExceptionLevel(), esr_elx, esr_elx_class, esr_elx_instruction_is_32_bits, esr_elx_iss });
-    log.logError("    exception entry offset 0x{x} {} {}\n", .{ exception_entry_offset, @intToEnum(ExceptionTakenFrom, @truncate(u2, exception_entry_offset >> 9)), @intToEnum(ExceptionCategory, @truncate(u2, exception_entry_offset >> 7)) });
-    log.logError("    far_el{} 0x{x}\n", .{ currentExceptionLevel(), far_elx });
-    log.logError("    sctlr_el{} 0x{x}\n", .{ currentExceptionLevel(), sctlr_elx });
-    log.logError("    spsr_el{} 0x{x}\n", .{ currentExceptionLevel(), spsr_elx });
-    log.logError("    vbar_el{} 0x{x}\n", .{ currentExceptionLevel(), vbar_elx });
-    while (true) {}
+    if (arch.is_qemu) {
+        log.logError("    elr_el{} 0x{x}\n", .{ currentExceptionLevel(), elr_elx });
+        log.logError("    esr_el{} 0x{x}: {}, 32 bit instruction {}, iss 0x{x}\n", .{ currentExceptionLevel(), esr_elx, esr_elx_class, esr_elx_instruction_is_32_bits, esr_elx_iss });
+        log.logError("    exception entry offset 0x{x} {} {}\n", .{ exception_entry_offset, @intToEnum(ExceptionTakenFrom, @truncate(u2, exception_entry_offset >> 9)), @intToEnum(ExceptionCategory, @truncate(u2, exception_entry_offset >> 7)) });
+        log.logError("    far_el{} 0x{x}\n", .{ currentExceptionLevel(), far_elx });
+        log.logError("    sctlr_el{} 0x{x}\n", .{ currentExceptionLevel(), sctlr_elx });
+        log.logError("    spsr_el{} 0x{x}\n", .{ currentExceptionLevel(), spsr_elx });
+        log.logError("    vbar_el{} 0x{x}\n", .{ currentExceptionLevel(), vbar_elx });
+    }
+    arch.spinLed(25);
 }
 
 inline fn lr() usize {

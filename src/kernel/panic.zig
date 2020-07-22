@@ -107,6 +107,7 @@ fn logTraceAddress(addr: usize) void {
 
 pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
+    arch.turnOnLed();
     log.logError("Kernel panic: " ++ format ++ "\n", args);
     if (trace) |trc| {
         var last_addr: u64 = 0;

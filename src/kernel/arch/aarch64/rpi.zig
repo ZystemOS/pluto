@@ -11,12 +11,12 @@ pub const RaspberryPiBoard = enum {
         };
     }
 
-    pub fn mmioAddress(self: @This()) usize {
-        return switch (self) {
-            .RaspberryPi3 => 0x3F000000,
-            .RaspberryPi4 => 0xFE000000,
-        };
-    }
+    //  pub fn mmioAddress(self: @This()) usize {
+    //      return switch (self) {
+    //          .RaspberryPi3 => 0x3F000000,
+    //          .RaspberryPi4 => 0xFE000000,
+    //      };
+    //  }
 
     pub fn memoryKB(self: @This()) usize {
         return switch (self) {
