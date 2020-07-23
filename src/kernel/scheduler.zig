@@ -7,7 +7,6 @@ const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
 const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("panic.zig").panic;
 const task = if (is_test) @import(mock_path ++ "task_mock.zig") else @import("task.zig");
 const Task = task.Task;
@@ -117,8 +116,8 @@ pub fn scheduleTask(new_task: *Task, allocator: *Allocator) Allocator.Error!void
 ///
 pub fn init(allocator: *Allocator) Allocator.Error!void {
     // TODO: Maybe move the task init here?
-    log.logInfo("Init scheduler\n", .{});
-    defer log.logInfo("Done scheduler\n", .{});
+    std.log.info(.scheduler, "Init\n", .{});
+    defer std.log.info(.scheduler, "Done\n", .{});
 
     // Init the task list for round robin
     tasks = TailQueue(*Task).init();
@@ -289,7 +288,7 @@ var is_set: *volatile bool = undefined;
 /// The test task function.
 ///
 fn task_function() noreturn {
-    log.logInfo("Switched\n", .{});
+    std.log.info(.scheduler, "Switched\n", .{});
     is_set.* = false;
     while (true) {}
 }
@@ -344,7 +343,7 @@ fn rt_variable_preserved(allocator: *Allocator) void {
         panic(@errorReturnTrace(), "FAILED: z not 3, but: {}\n", .{z});
     }
 
-    log.logInfo("SUCCESS: Scheduler variables preserved\n", .{});
+    std.log.info(.scheduler, "SUCCESS: Scheduler variables preserved\n", .{});
 }
 
 ///

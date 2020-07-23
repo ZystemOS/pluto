@@ -6,7 +6,6 @@ const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("ar
 const MemProfile = (if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig")).MemProfile;
 const testing = std.testing;
 const panic = @import("panic.zig").panic;
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
 const Bitmap = @import("bitmap.zig").Bitmap;
 
 const PmmBitmap = Bitmap(u32);
@@ -98,8 +97,8 @@ pub fn blocksFree() usize {
 ///     IN allocator: *std.mem.Allocator - The allocator to use to allocate the bitmaps.
 ///
 pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
-    log.logInfo("Init pmm\n", .{});
-    defer log.logInfo("Done pmm\n", .{});
+    std.log.info(.pmm, "Init\n", .{});
+    defer std.log.info(.pmm, "Done\n", .{});
 
     bitmap = PmmBitmap.init(mem.mem_kb * 1024 / BLOCK_SIZE, allocator) catch @panic("Bitmap allocation failed");
 
@@ -226,5 +225,5 @@ fn runtimeTests(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
     for (alloc_list.items) |alloced| {
         free(alloced) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed freeing allocation in PMM rt test: {}", .{e});
     }
-    log.logInfo("PMM: Tested allocation\n", .{});
+    std.log.info(.pmm, "Tested allocation\n", .{});
 }

@@ -6,7 +6,6 @@ const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
 const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("../../panic.zig").panic;
 
 // ----------
@@ -432,8 +431,8 @@ pub fn clearMask(irq_num: u8) void {
 /// by Intel up to 0x1F. So this will move the IRQs from 0x00-0x0F to 0x20-0x2F.
 ///
 pub fn init() void {
-    log.logInfo("Init pic\n", .{});
-    defer log.logInfo("Done pic\n", .{});
+    std.log.info(.pic, "Init\n", .{});
+    defer std.log.info(.pic, "Done\n", .{});
 
     // Initiate
     sendCommandMaster(ICW1_INITIALISATION | ICW1_EXPECT_ICW4);
@@ -824,7 +823,7 @@ fn rt_picAllMasked() void {
         panic(@errorReturnTrace(), "FAILURE: Slave masks are not set, found: {}\n", .{readDataSlave()});
     }
 
-    log.logInfo("PIC: Tested masking\n", .{});
+    std.log.info(.pic, "Tested masking\n", .{});
 }
 
 ///

@@ -9,7 +9,6 @@ const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const gdt = if (is_test) @import(mock_path ++ "gdt_mock.zig") else @import("gdt.zig");
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
 
 /// The structure that contains all the information that each IDT entry needs.
 pub const IdtEntry = packed struct {
@@ -179,8 +178,8 @@ pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
 /// Initialise the Interrupt descriptor table
 ///
 pub fn init() void {
-    log.logInfo("Init idt\n", .{});
-    defer log.logInfo("Done idt\n", .{});
+    std.log.info(.idt, "Init\n", .{});
+    defer std.log.info(.idt, "Done\n", .{});
 
     idt_ptr.base = @ptrToInt(&idt_entries);
 
@@ -334,7 +333,7 @@ fn rt_loadedIDTSuccess() void {
     if (idt_ptr.base != loaded_idt.base) {
         panic(@errorReturnTrace(), "FAILURE: IDT not loaded properly: 0x{X} != {X}\n", .{ idt_ptr.base, loaded_idt.base });
     }
-    log.logInfo("IDT: Tested loading IDT\n", .{});
+    std.log.info(.idt, " Tested loading IDT\n", .{});
 }
 
 ///

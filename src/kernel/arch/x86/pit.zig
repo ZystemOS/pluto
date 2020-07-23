@@ -11,7 +11,6 @@ const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("ar
 const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("../../panic.zig").panic;
 const irq = @import("irq.zig");
 const pic = @import("pic.zig");
-const log = @import("../../log.zig");
 
 /// The enum for selecting the counter
 const CounterSelect = enum {
@@ -363,8 +362,8 @@ pub fn getFrequency() u32 {
 /// Initialise the PIT with a handler to IRQ 0.
 ///
 pub fn init() void {
-    log.logInfo("Init pit\n", .{});
-    defer log.logInfo("Done pit\n", .{});
+    std.log.info(.pit, "Init\n", .{});
+    defer std.log.info(.pit, "Done\n", .{});
 
     // Set up counter 0 at 10000hz in a square wave mode counting in binary
     const freq: u32 = 10000;
@@ -372,7 +371,7 @@ pub fn init() void {
         panic(@errorReturnTrace(), "Invalid frequency: {}\n", .{freq});
     };
 
-    log.logDebug("Set frequency at: {}Hz, real frequency: {}Hz\n", .{ freq, getFrequency() });
+    std.log.debug(.pit, "Set frequency at: {}Hz, real frequency: {}Hz\n", .{ freq, getFrequency() });
 
     // Installs 'pitHandler' to IRQ0 (pic.IRQ_PIT)
     irq.registerIrq(pic.IRQ_PIT, pitHandler) catch |err| switch (err) {
@@ -550,7 +549,7 @@ fn rt_waitTicks() void {
         panic(@errorReturnTrace(), "FAILURE: Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
     }
 
-    log.logInfo("PIT: Tested wait ticks\n", .{});
+    std.log.info(.pit, "Tested wait ticks\n", .{});
 }
 
 ///
@@ -577,7 +576,7 @@ fn rt_waitTicks2() void {
     // Reset ticks
     ticks = 0;
 
-    log.logInfo("PIT: Tested wait ticks 2\n", .{});
+    std.log.info(.pit, "Tested wait ticks 2\n", .{});
 }
 
 ///
@@ -622,7 +621,7 @@ fn rt_initCounter_0() void {
         panic(@errorReturnTrace(), "FAILURE: Operating mode don't not set properly. Found: {}, expecting: {}\n", .{ actual_mode, expected_mode });
     }
 
-    log.logInfo("PIT: Tested init\n", .{});
+    std.log.info(.pit, "Tested init\n", .{});
 }
 
 ///

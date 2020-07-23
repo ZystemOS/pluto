@@ -7,7 +7,6 @@ const bitmap = @import("bitmap.zig");
 const pmm = @import("pmm.zig");
 const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
 const tty = @import("tty.zig");
-const log = @import("log.zig");
 const panic = @import("panic.zig").panic;
 const arch = @import("arch.zig").internals;
 
@@ -349,8 +348,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
 ///     std.mem.Allocator.Error.OutOfMemory - The allocator cannot allocate the memory required
 ///
 pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) std.mem.Allocator.Error!VirtualMemoryManager(arch.VmmPayload) {
-    log.logInfo("Init vmm\n", .{});
-    defer log.logInfo("Done vmm\n", .{});
+    std.log.info(.tty, "Init\n", .{});
+    defer std.log.info(.tty, "Done\n", .{});
 
     var vmm = try VirtualMemoryManager(arch.VmmPayload).init(@ptrToInt(&KERNEL_ADDR_OFFSET), 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
 
@@ -598,5 +597,5 @@ fn runtimeTests(comptime Payload: type, vmm: VirtualMemoryManager(Payload), mem_
         }
     }
 
-    log.logInfo("VMM: Tested allocations\n", .{});
+    std.log.info(.tty, "Tested allocations\n", .{});
 }

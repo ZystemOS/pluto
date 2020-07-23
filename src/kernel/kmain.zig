@@ -6,7 +6,7 @@ const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const tty = @import("tty.zig");
 const vga = @import("vga.zig");
-const log = @import("log.zig");
+const log_root = @import("log.zig");
 const pmm = @import("pmm.zig");
 const serial = @import("serial.zig");
 const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
@@ -45,10 +45,21 @@ pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn
     panic_root.panic(error_return_trace, "{}", .{msg});
 }
 
+pub const log_level: std.log.Level = .debug;
+// Define root.log to override the std implementation
+pub fn log(
+    comptime level: std.log.Level,
+    comptime scope: @TypeOf(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    log_root.log(level, "(" ++ @tagName(scope) ++ "): " ++ format, args);
+}
+
 export fn kmain(boot_payload: arch.BootPayload) void {
     const serial_stream = serial.init(boot_payload);
 
-    log.init(serial_stream);
+    log_root.init(serial_stream);
 
     const mem_profile = arch.initMem(boot_payload) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise memory profile: {}", .{e});
     var fixed_allocator = mem_profile.fixed_allocator;
@@ -60,9 +71,9 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     pmm.init(&mem_profile, &fixed_allocator.allocator);
     kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
 
-    log.logInfo("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+    std.log.info(.kmain, "Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
     arch.init(boot_payload, &mem_profile, &fixed_allocator.allocator);
-    log.logInfo("Arch init done\n", .{});
+    std.log.info(.kmain, "Arch init done\n", .{});
 
     // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
     var heap_size = mem_profile.mem_kb / 10 * 1024;
@@ -81,12 +92,12 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     };
 
     // Initialisation is finished, now does other stuff
-    log.logInfo("Init done\n", .{});
+    std.log.info(.kmain, "Init\n", .{});
 
     // Main initialisation finished so can enable interrupts
     arch.enableInterrupts();
 
-    log.logInfo("Creating init2\n", .{});
+    std.log.info(.kmain, "Creating init2\n", .{});
 
     // Create a init2 task
     var idle_task = task.Task.create(initStage2, &kernel_heap.allocator) catch |e| {
@@ -121,7 +132,7 @@ fn initStage2() noreturn {
 
     switch (build_options.test_mode) {
         .Initialisation => {
-            log.logInfo("SUCCESS\n", .{});
+            std.log.info(.kmain, "SUCCESS\n", .{});
         },
         else => {},
     }
