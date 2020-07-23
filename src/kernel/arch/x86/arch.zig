@@ -24,6 +24,7 @@ const Serial = @import("../../serial.zig").Serial;
 const panic = @import("../../panic.zig").panic;
 const TTY = @import("../../tty.zig").TTY;
 const Keyboard = @import("../../keyboard.zig").Keyboard;
+const Task = @import("../../task.zig").Task;
 const MemProfile = mem.MemProfile;
 
 /// The type of a device.
@@ -53,8 +54,9 @@ extern var KERNEL_STACK_END: *u32;
 /// The interrupt context that is given to a interrupt handler. It contains most of the registers
 /// and the interrupt number and error code (if there is one).
 pub const CpuState = packed struct {
+    // Page directory
+    cr3: usize,
     // Extra segments
-    ss: u32,
     gs: u32,
     fs: u32,
     es: u32,
@@ -101,9 +103,6 @@ pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = vmm.Mapper(VmmPayload){ .mapFn = 
 
 /// The size of each allocatable block of memory, normally set to the page size.
 pub const MEMORY_BLOCK_SIZE: usize = paging.PAGE_SIZE_4KB;
-
-/// The default stack size of a task. Currently this is set to a page size.
-pub const STACK_SIZE: u32 = MEMORY_BLOCK_SIZE / @sizeOf(u32);
 
 ///
 /// Assembly that reads data from a given port and returns its value.
@@ -499,50 +498,71 @@ pub fn initKeyboard(allocator: *Allocator) Allocator.Error!*Keyboard {
 }
 
 ///
-/// Initialise a 32bit kernel stack used for creating a task.
+/// Initialise a stack used for creating a task.
 /// Currently only support fn () noreturn functions for the entry point.
 ///
 /// Arguments:
+///     IN task: *Task           - The task to be initialised. The function will only modify whatever
+///                                is required by the architecture. In the case of x86, it will put
+///                                the initial CpuState on the kernel stack.
 ///     IN entry_point: usize    - The pointer to the entry point of the function. Functions only
 ///                                supported is fn () noreturn
 ///     IN allocator: *Allocator - The allocator use for allocating a stack.
 ///
-/// Return: struct { stack: []u32, pointer: usize }
-///     The stack and stack pointer with the stack initialised as a 32bit kernel stack.
-///
 /// Error: Allocator.Error
 ///     OutOfMemory - Unable to allocate space for the stack.
 ///
-pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!struct { stack: []u32, pointer: usize } {
+pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocator.Error!void {
+    const data_offset = if (task.kernel) gdt.KERNEL_DATA_OFFSET else gdt.USER_DATA_OFFSET | 0b11;
+    // Setting the bottom two bits of the code offset designates that this is a ring 3 task
+    const code_offset = if (task.kernel) gdt.KERNEL_CODE_OFFSET else gdt.USER_CODE_OFFSET | 0b11;
+    // Ring switches push and pop two extra values on interrupt: user_esp and user_ss
+    const kernel_stack_bottom = if (task.kernel) task.kernel_stack.len - 18 else task.kernel_stack.len - 20;
+
+    var stack = &task.kernel_stack;
+
     // TODO Will need to add the exit point
     // Set up everything as a kernel task
-    var stack = try allocator.alloc(u32, STACK_SIZE);
-    stack[STACK_SIZE - 18] = gdt.KERNEL_DATA_OFFSET; // ss
-    stack[STACK_SIZE - 17] = gdt.KERNEL_DATA_OFFSET; // gs
-    stack[STACK_SIZE - 16] = gdt.KERNEL_DATA_OFFSET; // fs
-    stack[STACK_SIZE - 15] = gdt.KERNEL_DATA_OFFSET; // es
-    stack[STACK_SIZE - 14] = gdt.KERNEL_DATA_OFFSET; // ds
+    stack.*[kernel_stack_bottom] = mem.virtToPhys(@ptrToInt(&paging.kernel_directory));
+    stack.*[kernel_stack_bottom + 1] = data_offset; // gs
+    stack.*[kernel_stack_bottom + 2] = data_offset; // fs
+    stack.*[kernel_stack_bottom + 3] = data_offset; // es
+    stack.*[kernel_stack_bottom + 4] = data_offset; // ds
 
-    stack[STACK_SIZE - 13] = 0; // edi
-    stack[STACK_SIZE - 12] = 0; // esi
+    stack.*[kernel_stack_bottom + 5] = 0; // edi
+    stack.*[kernel_stack_bottom + 6] = 0; // esi
     // End of the stack
-    stack[STACK_SIZE - 11] = @ptrToInt(&stack[STACK_SIZE - 1]); // ebp
-    stack[STACK_SIZE - 10] = 0; // esp (temp) this won't be popped by popa bc intel is dump XD
+    stack.*[kernel_stack_bottom + 7] = @ptrToInt(&stack.*[stack.len - 1]); // ebp
+    stack.*[kernel_stack_bottom + 8] = 0; // esp (temp) this won't be popped by popa bc intel is dump XD
 
-    stack[STACK_SIZE - 9] = 0; // ebx
-    stack[STACK_SIZE - 8] = 0; // edx
-    stack[STACK_SIZE - 7] = 0; // ecx
-    stack[STACK_SIZE - 6] = 0; // eax
+    stack.*[kernel_stack_bottom + 9] = 0; // ebx
+    stack.*[kernel_stack_bottom + 10] = 0; // edx
+    stack.*[kernel_stack_bottom + 11] = 0; // ecx
+    stack.*[kernel_stack_bottom + 12] = 0; // eax
 
-    stack[STACK_SIZE - 5] = 0; // int_num
-    stack[STACK_SIZE - 4] = 0; // error_code
+    stack.*[kernel_stack_bottom + 13] = 0; // int_num
+    stack.*[kernel_stack_bottom + 14] = 0; // error_code
 
-    stack[STACK_SIZE - 3] = entry_point; // eip
-    stack[STACK_SIZE - 2] = gdt.KERNEL_CODE_OFFSET; // cs
-    stack[STACK_SIZE - 1] = 0x202; // eflags
+    stack.*[kernel_stack_bottom + 15] = entry_point; // eip
+    stack.*[kernel_stack_bottom + 16] = code_offset; // cs
+    stack.*[kernel_stack_bottom + 17] = 0x202; // eflags
 
-    const ret = .{ .stack = stack, .pointer = @ptrToInt(&stack[STACK_SIZE - 18]) };
-    return ret;
+    if (!task.kernel) {
+        // Put the extra values on the kernel stack needed when chaning privilege levels
+        stack.*[kernel_stack_bottom + 18] = @ptrToInt(&task.user_stack[task.user_stack.len - 1]); // user_esp
+        stack.*[kernel_stack_bottom + 19] = data_offset; // user_ss
+
+        if (!builtin.is_test) {
+            // Create a new page directory for the user task by mirroring the kernel directory
+            // We need kernel mem mapped so we don't get a page fault when entering kernel code from an interrupt
+            task.vmm.payload = &(try allocator.allocAdvanced(paging.Directory, paging.PAGE_SIZE_4KB, 1, .exact))[0];
+            task.vmm.payload.* = paging.kernel_directory.copy();
+            stack.*[kernel_stack_bottom] = vmm.kernel_vmm.virtToPhys(@ptrToInt(task.vmm.payload)) catch |e| {
+                panic(@errorReturnTrace(), "Failed to get the physical address of the user task's page directory: {}\n", .{e});
+            };
+        }
+    }
+    task.stack_pointer = @ptrToInt(&stack.*[kernel_stack_bottom]);
 }
 
 pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
@@ -575,6 +595,19 @@ pub fn init(mem_profile: *const MemProfile) void {
     // arch init test messages
     vga.init();
     tty.init();
+}
+
+///
+/// Check the state of the user task used for runtime testing for the expected values. These should mirror those in test/user_program.s
+///
+/// Arguments:
+///     IN ctx: *const CpuState - The task's saved state
+///
+/// Return: bool
+///     True if the expected values were found, else false
+///
+pub fn runtimeTestCheckUserTaskState(ctx: *const CpuState) bool {
+    return ctx.eax == 0xCAFE and ctx.ebx == 0xBEEF;
 }
 
 test "" {

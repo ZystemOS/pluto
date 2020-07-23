@@ -78,10 +78,22 @@ pub fn build(b: *Builder) !void {
     var ramdisk_files_al = ArrayList([]const u8).init(b.allocator);
     defer ramdisk_files_al.deinit();
 
-    // Add some test files for the ramdisk runtime tests
     if (test_mode == .Initialisation) {
+        // Add some test files for the ramdisk runtime tests
         try ramdisk_files_al.append("test/ramdisk_test1.txt");
         try ramdisk_files_al.append("test/ramdisk_test2.txt");
+    } else if (test_mode == .Scheduler) {
+        // Add some test files for the user mode runtime tests
+        const user_program = b.addAssemble("user_program", "test/user_program.s");
+        user_program.setOutputDir(b.cache_root);
+        user_program.setTarget(target);
+        user_program.setBuildMode(build_mode);
+        user_program.strip = true;
+
+        const copy_user_program = b.addSystemCommand(&[_][]const u8{ "objcopy", "-O", "binary", "zig-cache/user_program.o", "zig-cache/user_program" });
+        copy_user_program.step.dependOn(&user_program.step);
+        try ramdisk_files_al.append("zig-cache/user_program");
+        exec.step.dependOn(&copy_user_program.step);
     }
 
     const ramdisk_step = RamdiskStep.create(b, target, ramdisk_files_al.toOwnedSlice(), ramdisk_path);

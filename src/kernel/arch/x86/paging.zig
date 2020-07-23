@@ -42,6 +42,19 @@ pub const Directory = packed struct {
             }
         }
     }
+
+    ///
+    /// Copy the page directory. Changes to one copy will not affect the other
+    ///
+    /// Arguments:
+    ///     IN self: *const Directory - The directory to copy
+    ///
+    /// Return: Directory
+    ///     The copy
+    ///
+    pub fn copy(self: *const Directory) Directory {
+        return self.*;
+    }
 };
 
 /// An array of table entries. Forms the second level of paging and covers a 4MB memory space.
@@ -596,6 +609,26 @@ test "map and unmap" {
         const table = dir.tables[entry_idx] orelse unreachable;
         checkDirEntry(entry, virt, virt + PAGE_SIZE_4MB, phys, attrs, table, false);
     }
+}
+
+test "copy" {
+    // Create a dummy page dir
+    var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = std.testing.allocator };
+    dir.entries[0] = 123;
+    dir.entries[56] = 794;
+    var table0 = Table{ .entries = [_]TableEntry{654} ** ENTRIES_PER_TABLE };
+    var table56 = Table{ .entries = [_]TableEntry{987} ** ENTRIES_PER_TABLE };
+    dir.tables[0] = &table0;
+    dir.tables[56] = &table56;
+    var dir2 = dir.copy();
+    const dir_slice = @ptrCast([*]const u8, &dir)[0..@sizeOf(Directory)];
+    const dir2_slice = @ptrCast([*]const u8, &dir2)[0..@sizeOf(Directory)];
+    testing.expectEqualSlices(u8, dir_slice, dir2_slice);
+
+    // Changes to one should not affect the other
+    dir2.tables[1] = &table0;
+    dir.tables[0] = &table56;
+    testing.expect(!std.mem.eql(u8, dir_slice, dir2_slice));
 }
 
 // The labels to jump to after attempting to cause a page fault. This is needed as we don't want to cause an

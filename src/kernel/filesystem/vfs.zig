@@ -753,7 +753,6 @@ test "traversePath" {
     testing.expectEqual(child4_linked, child3);
     var child5 = try traversePath("/child4", false, .CREATE_SYMLINK, .{ .symlink_target = "/child2" });
     var child5_linked = try traversePath("/child4/child3.txt", true, .NO_CREATION, .{});
-    std.debug.warn("child5_linked {}, child4_linked {}\n", .{ child5_linked, child4_linked });
     testing.expectEqual(child5_linked, child4_linked);
     child4_linked.File.close();
     child5_linked.File.close();

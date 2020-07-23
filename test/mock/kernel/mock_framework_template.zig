@@ -146,6 +146,7 @@ fn Mock() type {
                 1 => fn (fields[0].field_type) RetType,
                 2 => fn (fields[0].field_type, fields[1].field_type) RetType,
                 3 => fn (fields[0].field_type, fields[1].field_type, fields[2].field_type) RetType,
+                4 => fn (fields[0].field_type, fields[1].field_type, fields[2].field_type, fields[3].field_type) RetType,
                 else => @compileError("More than 3 parameters not supported"),
             };
         }
@@ -167,6 +168,7 @@ fn Mock() type {
                 1 => function_type(params[0]),
                 2 => function_type(params[0], params[1]),
                 3 => function_type(params[0], params[1], params[2]),
+                4 => function_type(params[0], params[1], params[2], params[3]),
                 // Should get to this as `getFunctionType` will catch this
                 else => @compileError("More than 3 parameters not supported"),
             };
