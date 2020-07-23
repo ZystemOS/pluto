@@ -218,6 +218,28 @@ fn parseNonWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
 }
 
 ///
+/// Parse until a newline character. Must be terminated by a newline character before the end
+/// address.
+///
+/// Arguments:
+///     IN ptr: [*]const u8 - The address at which to start looking.
+///     IN end: *const u8 - The end address at which to start looking. A newline character must
+///         be found before this.
+///
+/// Return: [*]const u8
+///     ptr plus the number of non-newline characters consumed.
+///
+/// Error: PanicError
+///     PanicError.InvalidSymbolFile: A terminating newline character wasn't found before the end
+///         address.
+///
+fn parseNonNewLine(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
+    var i: u32 = 0;
+    while ((try parseChar(ptr + i, end)) != '\n') : (i += 1) {}
+    return ptr + i;
+}
+
+///
 /// Parse a name from the pointer up until the end pointer. Must be terminated by a whitespace
 /// character.
 ///
@@ -235,7 +257,7 @@ fn parseNonWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
 ///
 fn parseName(ptr: *[*]const u8, end: *const u8) PanicError![]const u8 {
     const name_start = ptr.*;
-    ptr.* = try parseNonWhitespace(ptr.*, end);
+    ptr.* = try parseNonNewLine(ptr.*, end);
     const len = @ptrToInt(ptr.*) - @ptrToInt(name_start);
     return name_start[0..len];
 }
@@ -321,78 +343,98 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !
 
 test "parseChar" {
     const str: []const u8 = "plutoisthebest";
-    const end = @ptrCast(*const u8, str.ptr + 14);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var char = try parseChar(str.ptr, end);
     testing.expectEqual(char, 'p');
     char = try parseChar(str.ptr + 1, end);
     testing.expectEqual(char, 'l');
-    testing.expectError(PanicError.InvalidSymbolFile, parseChar(str.ptr + 14, end));
+    testing.expectError(PanicError.InvalidSymbolFile, parseChar(str.ptr + str.len, end));
 }
 
 test "parseWhitespace" {
     const str: []const u8 = "    a";
-    const end = @ptrCast(*const u8, str.ptr + 5);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = try parseWhitespace(str.ptr, end);
     testing.expectEqual(@ptrToInt(str.ptr) + 4, @ptrToInt(ptr));
 }
 
 test "parseWhitespace fails without a terminating whitespace" {
     const str: []const u8 = "   ";
-    const end = @ptrCast(*const u8, str.ptr + 3);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     testing.expectError(PanicError.InvalidSymbolFile, parseWhitespace(str.ptr, end));
 }
 
 test "parseNonWhitespace" {
     const str: []const u8 = "ab ";
-    const end = @ptrCast(*const u8, str.ptr + 3);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = try parseNonWhitespace(str.ptr, end);
     testing.expectEqual(@ptrToInt(str.ptr) + 2, @ptrToInt(ptr));
 }
 
 test "parseNonWhitespace fails without a terminating whitespace" {
     const str: []const u8 = "abc";
-    const end = @ptrCast(*const u8, str.ptr + 3);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     testing.expectError(PanicError.InvalidSymbolFile, parseNonWhitespace(str.ptr, end));
+}
+
+test "parseNonNewLine" {
+    const str: []const u8 = "ab\n";
+    const end = @ptrCast(*const u8, str.ptr + str.len);
+    var ptr = try parseNonNewLine(str.ptr, end);
+    testing.expectEqual(@ptrToInt(str.ptr) + 2, @ptrToInt(ptr));
+}
+
+test "parseNonNewLine fails without a terminating newline" {
+    const str: []const u8 = "abc";
+    const end = @ptrCast(*const u8, str.ptr + str.len);
+    testing.expectError(PanicError.InvalidSymbolFile, parseNonNewLine(str.ptr, end));
 }
 
 test "parseAddr" {
     const str: []const u8 = "1a2b3c4d ";
-    const end = @ptrCast(*const u8, str.ptr + 9);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
     testing.expectEqual(try parseAddr(&ptr, end), 0x1a2b3c4d);
 }
 
 test "parseAddr fails without a terminating whitespace" {
     const str: []const u8 = "1a2b3c4d";
-    const end = @ptrCast(*const u8, str.ptr + 9);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
     testing.expectError(PanicError.InvalidSymbolFile, parseAddr(&ptr, end));
 }
 
 test "parseAddr fails with an invalid integer" {
     const str: []const u8 = "1g2t ";
-    const end = @ptrCast(*const u8, str.ptr + 5);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
     testing.expectError(error.InvalidCharacter, parseAddr(&ptr, end));
 }
 
 test "parseName" {
-    const str: []const u8 = "func_name ";
-    const end = @ptrCast(*const u8, str.ptr + 10);
+    const str: []const u8 = "func_name\n";
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
     testing.expectEqualSlices(u8, try parseName(&ptr, end), "func_name");
 }
 
-test "parseName fails without a terminating whitespace" {
+test "parseName with spaces" {
+    const str: []const u8 = "func_name(*const type   )\n";
+    const end = @ptrCast(*const u8, str.ptr + str.len);
+    var ptr = str.ptr;
+    testing.expectEqualSlices(u8, try parseName(&ptr, end), "func_name(*const type   )");
+}
+
+test "parseName fails without a terminating newline" {
     const str: []const u8 = "func_name";
-    const end = @ptrCast(*const u8, str.ptr + 9);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
     testing.expectError(PanicError.InvalidSymbolFile, parseName(&ptr, end));
 }
 
 test "parseMapEntry" {
     const str: []const u8 = "1a2b3c4d func_name\n5e6f7a8b func_name2\n";
-    const end = @ptrCast(*const u8, str.ptr + 39);
+    const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
 
     var actual = try parseMapEntry(&ptr, end);
@@ -406,7 +448,7 @@ test "parseMapEntry" {
     testing.expectEqualSlices(u8, actual.func_name, expected.func_name);
 }
 
-test "parseMapEntry fails without a terminating whitespace" {
+test "parseMapEntry fails without a terminating newline" {
     const str: []const u8 = "1a2b3c4d func_name";
     var ptr = str.ptr;
     testing.expectError(PanicError.InvalidSymbolFile, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr + 18)));
