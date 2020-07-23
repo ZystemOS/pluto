@@ -6,7 +6,6 @@ const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
 const panic = @import("panic.zig").panic;
 
 const FreeListAllocator = struct {
@@ -18,7 +17,7 @@ const FreeListAllocator = struct {
         const Self = @Self();
 
         ///
-        /// Intitialise the header for a free allocation node
+        /// Initialise the header for a free allocation node
         ///
         /// Arguments:
         ///     IN size: usize - The node's size, not including the size of the header itself
@@ -41,7 +40,7 @@ const FreeListAllocator = struct {
     /// Initialise an empty and free FreeListAllocator
     ///
     /// Arguments:
-    ///     IN start: usize - The starting address for all alloctions
+    ///     IN start: usize - The starting address for all allocations
     ///     IN size: usize - The size of the region of memory to allocate within. Must be greater than @sizeOf(Header)
     ///
     /// Return: FreeListAllocator
@@ -83,7 +82,7 @@ const FreeListAllocator = struct {
     ///
     /// Arguments:
     ///     IN self: *FreeListAllocator - The FreeListAllocator to modify
-    ///     IN previos: ?*Header - The previous free node or null if there wasn't one. If null, self.first_free will be set to header, else previous.next_free will be set to header
+    ///     IN previous: ?*Header - The previous free node or null if there wasn't one. If null, self.first_free will be set to header, else previous.next_free will be set to header
     ///     IN header: ?*Header - The header being pointed to. This will be the new value of self.first_free or previous.next_free
     ///
     fn registerFreeHeader(self: *FreeListAllocator, previous: ?*Header, header: ?*Header) void {
@@ -425,8 +424,6 @@ const FreeListAllocator = struct {
         testing.expectEqual(header.next_free, null);
         testing.expectEqual(free_list.first_free, header);
 
-        std.debug.warn("", .{});
-
         // 64 bytes aligned to 4 bytes
         const alloc1 = try alloc(allocator, 64, 4, 0);
         const alloc1_addr = @ptrToInt(alloc1.ptr);
@@ -564,8 +561,8 @@ const FreeListAllocator = struct {
 ///     Allocator.Error.OutOfMemory - heap_vmm's allocator didn't have enough memory available to fulfill the request
 ///
 pub fn init(comptime vmm_payload: type, heap_vmm: *vmm.VirtualMemoryManager(vmm_payload), attributes: vmm.Attributes, heap_size: usize) (FreeListAllocator.Error || Allocator.Error)!FreeListAllocator {
-    log.logInfo("Init heap\n", .{});
-    defer log.logInfo("Done heap\n", .{});
+    std.log.info(.heap, "Init\n", .{});
+    defer std.log.info(.heap, "Done\n", .{});
     var heap_start = (try heap_vmm.alloc(heap_size / vmm.BLOCK_SIZE, attributes)) orelse panic(null, "Not enough contiguous virtual memory blocks to allocate to kernel heap\n", .{});
     // This free call cannot error as it is guaranteed to have been allocated above
     errdefer heap_vmm.free(heap_start) catch unreachable;

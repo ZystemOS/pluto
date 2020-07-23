@@ -2,7 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const tty = @import("tty.zig");
 const arch = @import("arch.zig").internals;
-const log = @import("log.zig");
 const multiboot = @import("multiboot.zig");
 const mem = @import("mem.zig");
 const build_options = @import("build_options");
@@ -102,12 +101,12 @@ var symbol_map: ?SymbolMap = null;
 ///
 fn logTraceAddress(addr: usize) void {
     const str = if (symbol_map) |syms| syms.search(addr) orelse "?????" else "(no symbols available)";
-    log.logError("{x}: {}\n", .{ addr, str });
+    std.log.emerg(.panic, "{x}: {}\n", .{ addr, str });
 }
 
 pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
-    log.logError("Kernel panic: " ++ format ++ "\n", args);
+    std.log.emerg(.panic, "Kernel panic: " ++ format ++ "\n", args);
     if (trace) |trc| {
         var last_addr: u64 = 0;
         for (trc.instruction_addresses) |ret_addr| {
@@ -302,8 +301,8 @@ fn parseMapEntry(start: *[*]const u8, end: *const u8) !MapEntry {
 ///     std.fmt.ParseUnsignedError: See parseMapEntry.
 ///
 pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !void {
-    log.logInfo("Init panic\n", .{});
-    defer log.logInfo("Done panic\n", .{});
+    std.log.info(.panic, "Init\n", .{});
+    defer std.log.info(.panic, "Done\n", .{});
 
     // Exit if we haven't loaded all debug modules
     if (mem_profile.modules.len < 1) {

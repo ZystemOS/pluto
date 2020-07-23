@@ -10,7 +10,6 @@ const syscalls = @import("syscalls.zig");
 const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("../../panic.zig").panic;
 const idt = if (is_test) @import(mock_path ++ "idt_mock.zig") else @import("idt.zig");
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
 const interrupts = @import("interrupts.zig");
 
 /// The error set for the ISR. This will be from installing a ISR handler.
@@ -159,7 +158,7 @@ export fn isrHandler(ctx: *arch.CpuState) usize {
                 // Regular ISR exception, if there is one registered.
                 ret_esp = handler(ctx);
             } else {
-                log.logInfo("State: {X}\n", .{ctx});
+                std.log.info(.isr, "State: {X}\n", .{ctx});
                 panic(@errorReturnTrace(), "ISR {} ({}) triggered with error code 0x{X} but not registered\n", .{ exception_msg[isr_num], isr_num, ctx.error_code });
             }
         }
@@ -238,8 +237,8 @@ pub fn registerIsr(isr_num: u16, handler: IsrHandler) IsrError!void {
 /// Initialise the exception and opening up all the IDT interrupt gates for each exception.
 ///
 pub fn init() void {
-    log.logInfo("Init isr\n", .{});
-    defer log.logInfo("Done isr\n", .{});
+    std.log.info(.isr, "Init\n", .{});
+    defer std.log.info(.isr, "Done\n", .{});
 
     comptime var i = 0;
     inline while (i < 32) : (i += 1) {
@@ -385,7 +384,7 @@ fn rt_unregisteredHandlers() void {
         panic(@errorReturnTrace(), "FAILURE: Pre-testing failed for syscall: {}\n", .{h});
     }
 
-    log.logInfo("ISR: Tested registered handlers\n", .{});
+    std.log.info(.isr, "Tested registered handlers\n", .{});
 }
 
 ///
@@ -403,7 +402,7 @@ fn rt_openedIdtEntries() void {
         }
     }
 
-    log.logInfo("ISR: Tested opened IDT entries\n", .{});
+    std.log.info(.isr, "Tested opened IDT entries\n", .{});
 }
 
 ///

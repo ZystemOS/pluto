@@ -1,6 +1,5 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
-const log = @import("log.zig");
 
 pub const Module = struct {
     /// The region of memory occupied by the module

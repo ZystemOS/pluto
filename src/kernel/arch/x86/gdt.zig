@@ -7,7 +7,6 @@ const panic = @import("../../panic.zig").panic;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
 
 /// The access bits for a GDT entry.
 const AccessBits = packed struct {
@@ -406,8 +405,8 @@ fn makeGdtEntry(base: u32, limit: u20, access: AccessBits, flags: FlagBits) GdtE
 /// Initialise the Global Descriptor table.
 ///
 pub fn init() void {
-    log.logInfo("Init gdt\n", .{});
-    defer log.logInfo("Done gdt\n", .{});
+    std.log.info(.gdt, "Init\n", .{});
+    defer std.log.info(.gdt, "Done\n", .{});
     // Initiate TSS
     gdt_entries[TSS_INDEX] = makeGdtEntry(@ptrToInt(&main_tss_entry), @sizeOf(Tss) - 1, TSS_SEGMENT, NULL_FLAGS);
 
@@ -568,7 +567,7 @@ fn rt_loadedGDTSuccess() void {
     if (gdt_ptr.base != loaded_gdt.base) {
         panic(@errorReturnTrace(), "FAILURE: GDT not loaded properly: 0x{X} != {X}\n", .{ gdt_ptr.base, loaded_gdt.base });
     }
-    log.logInfo("GDT: Tested loading GDT\n", .{});
+    std.log.info(.gdt, "Tested loading GDT\n", .{});
 }
 
 ///

@@ -9,7 +9,6 @@ const panic = @import("../../panic.zig").panic;
 const mock_path = build_options.arch_mock_path;
 const idt = if (is_test) @import(mock_path ++ "idt_mock.zig") else @import("idt.zig");
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("../../log.zig");
 const pic = if (is_test) @import(mock_path ++ "pic_mock.zig") else @import("pic.zig");
 const interrupts = @import("interrupts.zig");
 
@@ -131,8 +130,8 @@ pub fn registerIrq(irq_num: u8, handler: IrqHandler) IrqError!void {
 /// the IDT interrupt gates for each IRQ.
 ///
 pub fn init() void {
-    log.logInfo("Init irq\n", .{});
-    defer log.logInfo("Done irq\n", .{});
+    std.log.info(.irq, "Init\n", .{});
+    defer std.log.info(.irq, "Done\n", .{});
 
     comptime var i = IRQ_OFFSET;
     inline while (i < IRQ_OFFSET + 16) : (i += 1) {
@@ -247,7 +246,7 @@ fn rt_unregisteredHandlers() void {
         }
     }
 
-    log.logInfo("IRQ: Tested registered handlers\n", .{});
+    std.log.info(.irq, "Tested registered handlers\n", .{});
 }
 
 ///
@@ -265,7 +264,7 @@ fn rt_openedIdtEntries() void {
         }
     }
 
-    log.logInfo("IRQ: Tested opened IDT entries\n", .{});
+    std.log.info(.irq, "Tested opened IDT entries\n", .{});
 }
 
 ///

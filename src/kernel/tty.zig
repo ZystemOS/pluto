@@ -3,7 +3,6 @@ const fmt = std.fmt;
 const Allocator = std.mem.Allocator;
 const build_options = @import("build_options");
 const arch = @import("arch.zig").internals;
-const log = @import("log.zig");
 const panic = @import("panic.zig").panic;
 
 /// The OutStream for the format function
@@ -52,7 +51,7 @@ fn printCallback(ctx: void, str: []const u8) !usize {
 pub fn print(comptime format: []const u8, args: anytype) void {
     // Printing can't error because of the scrolling, if it does, we have a big problem
     fmt.format(OutStream{ .context = {} }, format, args) catch |e| {
-        log.logError("TTY: Error printing. Error: {}\n", .{e});
+        std.log.emerg(.tty, "Error printing. Error: {}\n", .{e});
     };
 }
 
@@ -102,8 +101,8 @@ pub fn clear() void {
 ///     IN boot_payload: arch.BootPayload - The payload passed to the kernel on boot
 ///
 pub fn init(alloc: *Allocator, boot_payload: arch.BootPayload) void {
-    log.logInfo("Init tty\n", .{});
-    defer log.logInfo("Done tty\n", .{});
+    std.log.info(.tty, "Init\n", .{});
+    defer std.log.info(.tty, "Done\n", .{});
     tty = arch.initTTY(boot_payload);
     allocator = alloc;
 }

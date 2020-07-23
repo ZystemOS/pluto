@@ -6,7 +6,6 @@ const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
-const log = if (is_test) @import(mock_path ++ "log_mock.zig") else @import("log.zig");
 const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("panic.zig").panic;
 const ComptimeBitmap = @import("bitmap.zig").ComptimeBitmap;
 const Allocator = std.mem.Allocator;

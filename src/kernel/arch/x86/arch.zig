@@ -17,7 +17,6 @@ const vga = @import("vga.zig");
 const mem = @import("../../mem.zig");
 const multiboot = @import("multiboot.zig");
 const vmm = @import("../../vmm.zig");
-const log = @import("../../log.zig");
 const Serial = @import("../../serial.zig").Serial;
 const panic = @import("../../panic.zig").panic;
 const TTY = @import("../../tty.zig").TTY;
@@ -325,16 +324,16 @@ pub fn initTTY(boot_payload: BootPayload) TTY {
 ///     Allocator.Error.OutOfMemory - There wasn't enough memory in the allocated created to populate the memory profile, consider increasing mem.FIXED_ALLOC_SIZE
 ///
 pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
-    log.logInfo("Init mem\n", .{});
-    defer log.logInfo("Done mem\n", .{});
+    std.log.info(.arch_x86, "Init\n", .{});
+    defer std.log.info(.arch_x86, "Done\n", .{});
 
-    log.logDebug("KERNEL_ADDR_OFFSET:    0x{X}\n", .{@ptrToInt(&KERNEL_ADDR_OFFSET)});
-    log.logDebug("KERNEL_STACK_START:    0x{X}\n", .{@ptrToInt(&KERNEL_STACK_START)});
-    log.logDebug("KERNEL_STACK_END:      0x{X}\n", .{@ptrToInt(&KERNEL_STACK_END)});
-    log.logDebug("KERNEL_VADDR_START:    0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_START)});
-    log.logDebug("KERNEL_VADDR_END:      0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_END)});
-    log.logDebug("KERNEL_PHYSADDR_START: 0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_START)});
-    log.logDebug("KERNEL_PHYSADDR_END:   0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_END)});
+    std.log.debug(.arch_x86, "KERNEL_ADDR_OFFSET:    0x{X}\n", .{@ptrToInt(&KERNEL_ADDR_OFFSET)});
+    std.log.debug(.arch_x86, "KERNEL_STACK_START:    0x{X}\n", .{@ptrToInt(&KERNEL_STACK_START)});
+    std.log.debug(.arch_x86, "KERNEL_STACK_END:      0x{X}\n", .{@ptrToInt(&KERNEL_STACK_END)});
+    std.log.debug(.arch_x86, "KERNEL_VADDR_START:    0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_START)});
+    std.log.debug(.arch_x86, "KERNEL_VADDR_END:      0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_END)});
+    std.log.debug(.arch_x86, "KERNEL_PHYSADDR_START: 0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_START)});
+    std.log.debug(.arch_x86, "KERNEL_PHYSADDR_END:   0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_END)});
 
     const mods_count = mb_info.mods_count;
     mem.ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);

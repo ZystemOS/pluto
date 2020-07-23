@@ -7,7 +7,6 @@ const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("ar
 const testing = std.testing;
 const expect = std.testing.expect;
 const isr = @import("isr.zig");
-const log = @import("../../log.zig");
 const panic = @import("../../panic.zig").panic;
 
 /// The isr number associated with syscalls
@@ -58,10 +57,10 @@ fn handle(ctx: *arch.CpuState) u32 {
         if (handlers[syscall]) |handler| {
             ctx.eax = handler(ctx, syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
         } else {
-            log.logWarning("Syscall {} triggered but not registered\n", .{syscall});
+            std.log.warn(.syscall, "Syscall {} triggered but not registered\n", .{syscall});
         }
     } else {
-        log.logWarning("Syscall {} is invalid\n", .{syscall});
+        std.log.warn(.syscall, "Syscall {} is invalid\n", .{syscall});
     }
     return @ptrToInt(ctx);
 }
@@ -243,8 +242,8 @@ inline fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) u32 {
 /// Initialise syscalls. Registers the isr associated with INTERRUPT.
 ///
 pub fn init() void {
-    log.logInfo("Init syscalls\n", .{});
-    defer log.logInfo("Done syscalls\n", .{});
+    std.log.info(.syscall, "Init\n", .{});
+    defer std.log.info(.syscall, "Done\n", .{});
 
     isr.registerIsr(INTERRUPT, handle) catch unreachable;
 
@@ -331,5 +330,5 @@ fn runtimeTests() void {
         panic(@errorReturnTrace(), "FAILURE syscall5\n", .{});
     }
 
-    log.logInfo("Syscall: Tested all args\n", .{});
+    std.log.info(.syscall, "Tested all args\n", .{});
 }

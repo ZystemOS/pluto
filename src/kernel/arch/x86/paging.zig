@@ -11,7 +11,6 @@ const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("ar
 const isr = @import("isr.zig");
 const MemProfile = @import("../../mem.zig").MemProfile;
 const tty = @import("../../tty.zig");
-const log = @import("../../log.zig");
 const mem = @import("../../mem.zig");
 const vmm = @import("../../vmm.zig");
 const multiboot = @import("multiboot.zig");
@@ -366,7 +365,7 @@ pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (std.mem
 ///     IN state: *arch.CpuState - The CPU's state when the fault occurred.
 ///
 fn pageFault(state: *arch.CpuState) u32 {
-    log.logInfo("State: {X}\n", .{state});
+    std.log.info(.paging, "State: {X}\n", .{state});
     var cr0 = asm volatile ("mov %%cr0, %[cr0]"
         : [cr0] "=r" (-> u32)
     );
@@ -379,7 +378,7 @@ fn pageFault(state: *arch.CpuState) u32 {
     var cr4 = asm volatile ("mov %%cr4, %[cr4]"
         : [cr4] "=r" (-> u32)
     );
-    log.logInfo("CR0: 0x{X}, CR2: 0x{X}, CR3: 0x{X}, CR4: 0x{X}\n", .{ cr0, cr2, cr3, cr4 });
+    std.log.info(.paging, "CR0: 0x{X}, CR2: 0x{X}, CR3: 0x{X}, CR4: 0x{X}\n", .{ cr0, cr2, cr3, cr4 });
     @panic("Page fault");
 }
 
@@ -391,8 +390,8 @@ fn pageFault(state: *arch.CpuState) u32 {
 ///     IN allocator: *std.mem.Allocator - The allocator to use
 ///
 pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
-    log.logInfo("Init paging\n", .{});
-    defer log.logInfo("Done paging\n", .{});
+    std.log.info(.paging, "Init\n", .{});
+    defer std.log.info(.paging, "Done\n", .{});
 
     isr.registerIsr(isr.PAGE_FAULT, if (build_options.test_mode == .Initialisation) rt_pageFault else pageFault) catch |e| {
         panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", .{e});
@@ -564,7 +563,7 @@ fn rt_accessUnmappedMem(v_end: u32) void {
     var ptr = @intToPtr(*u8, v_end);
     var value = ptr.*;
     // Need this as in release builds the above is optimised out so it needs to be use
-    log.logError("FAILURE: Value: {}\n", .{value});
+    std.log.emerg(.paging, "FAILURE: Value: {}\n", .{value});
     // This is the label that we return to after processing the page fault
     asm volatile (
         \\.global rt_fault_callback
@@ -573,7 +572,7 @@ fn rt_accessUnmappedMem(v_end: u32) void {
     if (!faulted) {
         panic(@errorReturnTrace(), "FAILURE: Paging should have faulted\n", .{});
     }
-    log.logInfo("Paging: Tested accessing unmapped memory\n", .{});
+    std.log.info(.paging, "Tested accessing unmapped memory\n", .{});
 }
 
 fn rt_accessMappedMem(v_end: u32) void {
@@ -589,7 +588,7 @@ fn rt_accessMappedMem(v_end: u32) void {
     if (faulted) {
         panic(@errorReturnTrace(), "FAILURE: Paging shouldn't have faulted\n", .{});
     }
-    log.logInfo("Paging: Tested accessing mapped memory\n", .{});
+    std.log.info(.paging, "Tested accessing mapped memory\n", .{});
 }
 
 pub fn runtimeTests(v_end: u32) void {
