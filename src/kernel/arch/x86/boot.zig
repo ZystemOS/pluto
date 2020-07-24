@@ -101,6 +101,7 @@ export fn start_higher_half() callconv(.Naked) noreturn {
     asm volatile (
         \\.extern KERNEL_STACK_END
         \\mov $KERNEL_STACK_END, %%esp
+        \\sub $32, %%esp
         \\mov %%esp, %%ebp
     );
 

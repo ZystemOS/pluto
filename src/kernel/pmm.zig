@@ -7,6 +7,7 @@ const MemProfile = (if (is_test) @import(mock_path ++ "mem_mock.zig") else @impo
 const testing = std.testing;
 const panic = @import("panic.zig").panic;
 const Bitmap = @import("bitmap.zig").Bitmap;
+const Allocator = std.mem.Allocator;
 
 const PmmBitmap = Bitmap(u32);
 
@@ -94,16 +95,18 @@ pub fn blocksFree() usize {
 ///
 /// Arguments:
 ///     IN mem: *const MemProfile - The system's memory profile.
-///     IN allocator: *std.mem.Allocator - The allocator to use to allocate the bitmaps.
+///     IN allocator: *Allocator - The allocator to use to allocate the bitmaps.
 ///
-pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
+pub fn init(mem_profile: *const MemProfile, allocator: *Allocator) void {
     std.log.info(.pmm, "Init\n", .{});
     defer std.log.info(.pmm, "Done\n", .{});
 
-    bitmap = PmmBitmap.init(mem.mem_kb * 1024 / BLOCK_SIZE, allocator) catch @panic("Bitmap allocation failed");
+    bitmap = PmmBitmap.init(mem_profile.mem_kb * 1024 / BLOCK_SIZE, allocator) catch |e| {
+        panic(@errorReturnTrace(), "Bitmap allocation failed: {}\n", .{e});
+    };
 
     // Occupy the regions of memory that the memory map describes as reserved
-    for (mem.physical_reserved) |entry| {
+    for (mem_profile.physical_reserved) |entry| {
         var addr = std.mem.alignBackward(entry.start, BLOCK_SIZE);
         var end = entry.end - 1;
         // If the end address can be aligned without overflowing then align it
@@ -120,7 +123,7 @@ pub fn init(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
     }
 
     switch (build_options.test_mode) {
-        .Initialisation => runtimeTests(mem, allocator),
+        .Initialisation => runtimeTests(mem_profile, allocator),
         else => {},
     }
 }
@@ -200,10 +203,10 @@ test "setAddr and isSet" {
 /// Allocate all blocks and make sure they don't overlap with any reserved addresses.
 ///
 /// Arguments:
-///     IN mem: *const MemProfile - The memory profile to check for reserved memory regions.
-///     IN/OUT allocator: *std.mem.Allocator - The allocator to use when needing to create intermediate structures used for testing
+///     IN mem_profile: *const MemProfile - The memory profile to check for reserved memory regions.
+///     IN/OUT allocator: *Allocator - The allocator to use when needing to create intermediate structures used for testing
 ///
-fn runtimeTests(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
+fn runtimeTests(mem_profile: *const MemProfile, allocator: *Allocator) void {
     // Make sure that occupied memory can't be allocated
     var prev_alloc: usize = std.math.maxInt(usize);
     var alloc_list = std.ArrayList(usize).init(allocator);
@@ -213,17 +216,21 @@ fn runtimeTests(mem: *const MemProfile, allocator: *std.mem.Allocator) void {
             panic(null, "FAILURE: PMM allocated the same address twice: 0x{x}", .{alloced});
         }
         prev_alloc = alloced;
-        for (mem.physical_reserved) |entry| {
+        for (mem_profile.physical_reserved) |entry| {
             var addr = std.mem.alignBackward(@intCast(usize, entry.start), BLOCK_SIZE);
             if (addr == alloced) {
                 panic(null, "FAILURE: PMM allocated an address that should be reserved by the memory map: 0x{x}", .{addr});
             }
         }
-        alloc_list.append(alloced) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed to add PMM allocation to list: {}", .{e});
+        alloc_list.append(alloced) catch |e| {
+            panic(@errorReturnTrace(), "FAILURE: Failed to add PMM allocation to list: {}", .{e});
+        };
     }
     // Clean up
     for (alloc_list.items) |alloced| {
-        free(alloced) catch |e| panic(@errorReturnTrace(), "FAILURE: Failed freeing allocation in PMM rt test: {}", .{e});
+        free(alloced) catch |e| {
+            panic(@errorReturnTrace(), "FAILURE: Failed freeing allocation in PMM rt test: {}", .{e});
+        };
     }
     std.log.info(.pmm, "Tested allocation\n", .{});
 }
