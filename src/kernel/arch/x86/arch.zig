@@ -339,11 +339,10 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
     mem.ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);
     const mmap_addr = mb_info.mmap_addr;
     const num_mmap_entries = mb_info.mmap_length / @sizeOf(multiboot.multiboot_memory_map_t);
-    const vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END);
 
-    var allocator = std.heap.FixedBufferAllocator.init(vaddr_end[0..mem.FIXED_ALLOC_SIZE]);
-    var reserved_physical_mem = std.ArrayList(mem.Range).init(&allocator.allocator);
-    var reserved_virtual_mem = std.ArrayList(mem.Map).init(&allocator.allocator);
+    const allocator = &mem.fixed_buffer_allocator.allocator;
+    var reserved_physical_mem = std.ArrayList(mem.Range).init(allocator);
+    var reserved_virtual_mem = std.ArrayList(mem.Map).init(allocator);
     const mem_map = @intToPtr([*]multiboot.multiboot_memory_map_t, mmap_addr)[0..num_mmap_entries];
 
     // Reserve the unavailable sections from the multiboot memory map
@@ -351,7 +350,10 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
         if (entry.@"type" != multiboot.MULTIBOOT_MEMORY_AVAILABLE) {
             // If addr + len is greater than maxInt(usize) just ignore whatever comes after maxInt(usize) since it can't be addressed anyway
             const end: usize = if (entry.addr > std.math.maxInt(usize) - entry.len) std.math.maxInt(usize) else @intCast(usize, entry.addr + entry.len);
-            try reserved_physical_mem.append(.{ .start = @intCast(usize, entry.addr), .end = end });
+            try reserved_physical_mem.append(.{
+                .start = @intCast(usize, entry.addr),
+                .end = end,
+            });
         }
     }
 
@@ -360,8 +362,14 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
         .start = @ptrToInt(mb_info),
         .end = @ptrToInt(mb_info) + @sizeOf(multiboot.multiboot_info_t),
     };
-    const mb_physical = mem.Range{ .start = mem.virtToPhys(mb_region.start), .end = mem.virtToPhys(mb_region.end) };
-    try reserved_virtual_mem.append(.{ .virtual = mb_region, .physical = mb_physical });
+    const mb_physical = mem.Range{
+        .start = mem.virtToPhys(mb_region.start),
+        .end = mem.virtToPhys(mb_region.end),
+    };
+    try reserved_virtual_mem.append(.{
+        .virtual = mb_region,
+        .physical = mb_physical,
+    });
 
     // Map the tty buffer
     const tty_addr = mem.virtToPhys(tty.getVideoBufferAddress());
@@ -379,16 +387,56 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
 
     // Map the boot modules
     const boot_modules = @intToPtr([*]multiboot.multiboot_mod_list, mem.physToVirt(mb_info.mods_addr))[0..mods_count];
-    var modules = std.ArrayList(mem.Module).init(&allocator.allocator);
+    var modules = std.ArrayList(mem.Module).init(allocator);
     for (boot_modules) |module| {
-        const virtual = mem.Range{ .start = mem.physToVirt(module.mod_start), .end = mem.physToVirt(module.mod_end) };
-        const physical = mem.Range{ .start = module.mod_start, .end = module.mod_end };
-        try modules.append(.{ .region = virtual, .name = std.mem.span(mem.physToVirt(@intToPtr([*:0]u8, module.cmdline))) });
-        try reserved_virtual_mem.append(.{ .physical = physical, .virtual = virtual });
+        const virtual = mem.Range{
+            .start = mem.physToVirt(module.mod_start),
+            .end = mem.physToVirt(module.mod_end),
+        };
+        const physical = mem.Range{
+            .start = module.mod_start,
+            .end = module.mod_end,
+        };
+        try modules.append(.{
+            .region = virtual,
+            .name = std.mem.span(mem.physToVirt(@intToPtr([*:0]u8, module.cmdline))),
+        });
+        try reserved_virtual_mem.append(.{
+            .physical = physical,
+            .virtual = virtual,
+        });
     }
 
+    // Map the kernel stack
+    const kernel_stack_virt = mem.Range{
+        .start = @ptrToInt(&KERNEL_STACK_START),
+        .end = @ptrToInt(&KERNEL_STACK_END),
+    };
+    const kernel_stack_phy = mem.Range{
+        .start = mem.virtToPhys(kernel_stack_virt.start),
+        .end = mem.virtToPhys(kernel_stack_virt.end),
+    };
+    try reserved_virtual_mem.append(.{
+        .virtual = kernel_stack_virt,
+        .physical = kernel_stack_phy,
+    });
+
+    // Map the rest of the kernel
+    const kernel_virt = mem.Range{
+        .start = @ptrToInt(&KERNEL_VADDR_START),
+        .end = @ptrToInt(&KERNEL_STACK_START),
+    };
+    const kernel_phy = mem.Range{
+        .start = mem.virtToPhys(kernel_virt.start),
+        .end = mem.virtToPhys(kernel_virt.end),
+    };
+    try reserved_virtual_mem.append(.{
+        .virtual = kernel_virt,
+        .physical = kernel_phy,
+    });
+
     return MemProfile{
-        .vaddr_end = vaddr_end,
+        .vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END),
         .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
         .physaddr_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END),
         .physaddr_start = @ptrCast([*]u8, &KERNEL_PHYSADDR_START),
@@ -397,7 +445,7 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
         .modules = modules.items,
         .physical_reserved = reserved_physical_mem.items,
         .virtual_reserved = reserved_virtual_mem.items,
-        .fixed_allocator = allocator,
+        .fixed_allocator = mem.fixed_buffer_allocator,
     };
 }
 
@@ -452,12 +500,10 @@ pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!
 /// Initialise the architecture
 ///
 /// Arguments:
-///     IN boot_payload: BootPayload      - The multiboot information from the GRUB bootloader.
 ///     IN mem_profile: *const MemProfile - The memory profile of the computer. Used to set up
 ///                                         paging.
-///     IN allocator: *Allocator          - The allocator use to handle memory.
 ///
-pub fn init(boot_payload: BootPayload, mem_profile: *const MemProfile, allocator: *Allocator) void {
+pub fn init(mem_profile: *const MemProfile) void {
     gdt.init();
     idt.init();
 
@@ -465,7 +511,7 @@ pub fn init(boot_payload: BootPayload, mem_profile: *const MemProfile, allocator
     isr.init();
     irq.init();
 
-    paging.init(boot_payload, mem_profile, allocator);
+    paging.init(mem_profile);
 
     pit.init();
     rtc.init();

@@ -9,6 +9,7 @@ const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.
 const tty = @import("tty.zig");
 const panic = @import("panic.zig").panic;
 const arch = @import("arch.zig").internals;
+const Allocator = std.mem.Allocator;
 
 /// Attributes for a virtual memory allocation
 pub const Attributes = struct {
@@ -63,13 +64,13 @@ pub fn Mapper(comptime Payload: type) type {
         ///     IN physical_start: usize - The start of the physical memory to map to
         ///     IN physical_end: usize - The end of the physical memory to map to
         ///     IN attrs: Attributes - The attributes to apply to this region of memory
-        ///     IN/OUT allocator: std.mem.Allocator - The allocator to use when mapping, if required
+        ///     IN/OUT allocator: Allocator - The allocator to use when mapping, if required
         ///     IN spec: Payload - The payload to pass to the mapper
         ///
-        /// Error: std.mem.AllocatorError || MapperError
+        /// Error: AllocatorError || MapperError
         ///     The causes depend on the mapper used
         ///
-        mapFn: fn (virtual_start: usize, virtual_end: usize, physical_start: usize, physical_end: usize, attrs: Attributes, allocator: *std.mem.Allocator, spec: Payload) (std.mem.Allocator.Error || MapperError)!void,
+        mapFn: fn (virtual_start: usize, virtual_end: usize, physical_start: usize, physical_end: usize, attrs: Attributes, allocator: *Allocator, spec: Payload) (Allocator.Error || MapperError)!void,
 
         ///
         /// Unmap a region (can span more than one block) of virtual memory from its physical memory. After a call to this function, the memory should not be accessible without error.
@@ -79,10 +80,10 @@ pub fn Mapper(comptime Payload: type) type {
         ///     IN virtual_end: usize - The end of the virtual region to unmap
         ///     IN spec: Payload - The payload to pass to the mapper
         ///
-        /// Error: std.mem.AllocatorError || MapperError
+        /// Error: AllocatorError || MapperError
         ///     The causes depend on the mapper used
         ///
-        unmapFn: fn (virtual_start: usize, virtual_end: usize, spec: Payload) (std.mem.Allocator.Error || MapperError)!void,
+        unmapFn: fn (virtual_start: usize, virtual_end: usize, spec: Payload) (Allocator.Error || MapperError)!void,
     };
 }
 
@@ -132,7 +133,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         end: usize,
 
         /// The allocator to use when allocating and freeing regions
-        allocator: *std.mem.Allocator,
+        allocator: *Allocator,
 
         /// All allocations that have been made with this manager
         allocations: std.hash_map.AutoHashMap(usize, Allocation),
@@ -151,17 +152,17 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         /// Arguments:
         ///     IN start: usize - The start of the memory region to manage
         ///     IN end: usize - The end of the memory region to manage. Must be greater than the start
-        ///     IN/OUT allocator: *std.mem.Allocator - The allocator to use when allocating and freeing regions
+        ///     IN/OUT allocator: *Allocator - The allocator to use when allocating and freeing regions
         ///     IN mapper: Mapper - The mapper to use when allocating and freeing regions
         ///     IN payload: Payload - The payload data to be passed to the mapper
         ///
         /// Return: Self
         ///     The manager constructed
         ///
-        /// Error: std.mem.Allocator.Error
-        ///     std.mem.Allocator.Error.OutOfMemory - The allocator cannot allocate the memory required
+        /// Error: Allocator.Error
+        ///     error.OutOfMemory - The allocator cannot allocate the memory required
         ///
-        pub fn init(start: usize, end: usize, allocator: *std.mem.Allocator, mapper: Mapper(Payload), payload: Payload) std.mem.Allocator.Error!Self {
+        pub fn init(start: usize, end: usize, allocator: *Allocator, mapper: Mapper(Payload), payload: Payload) Allocator.Error!Self {
             const size = end - start;
             var bmp = try bitmap.Bitmap(usize).init(std.mem.alignForward(size, pmm.BLOCK_SIZE) / pmm.BLOCK_SIZE, allocator);
             return Self{
@@ -189,7 +190,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     Bitmap(u32).Error.OutOfBounds - The address given is outside of the memory managed
         ///
         pub fn isSet(self: *const Self, virt: usize) bitmap.Bitmap(u32).BitmapError!bool {
-            return try self.bmp.isSet((virt - self.start) / BLOCK_SIZE);
+            return self.bmp.isSet((virt - self.start) / BLOCK_SIZE);
         }
 
         ///
@@ -201,21 +202,22 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     IN physical: ?mem.Range - The physical region to map to or null if only the virtual region is to be set
         ///     IN attrs: Attributes - The attributes to apply to the memory regions
         ///
-        /// Error: VmmError || Bitmap(u32).BitmapError || std.mem.Allocator.Error || MapperError
+        /// Error: VmmError || Bitmap(u32).BitmapError || Allocator.Error || MapperError
         ///     VmmError.AlreadyAllocated - The virtual address has already been allocated
         ///     VmmError.PhysicalAlreadyAllocated - The physical address has already been allocated
         ///     VmmError.PhysicalVirtualMismatch - The physical region and virtual region are of different sizes
         ///     VmmError.InvalidVirtAddresses - The start virtual address is greater than the end address
         ///     VmmError.InvalidPhysicalAddresses - The start physical address is greater than the end address
         ///     Bitmap.BitmapError.OutOfBounds - The physical or virtual addresses are out of bounds
-        ///     std.mem.Allocator.Error.OutOfMemory - Allocating the required memory failed
+        ///     Allocator.Error.OutOfMemory - Allocating the required memory failed
         ///     MapperError.* - The causes depend on the mapper used
         ///
-        pub fn set(self: *Self, virtual: mem.Range, physical: ?mem.Range, attrs: Attributes) (VmmError || bitmap.Bitmap(u32).BitmapError || std.mem.Allocator.Error || MapperError)!void {
+        pub fn set(self: *Self, virtual: mem.Range, physical: ?mem.Range, attrs: Attributes) (VmmError || bitmap.Bitmap(u32).BitmapError || Allocator.Error || MapperError)!void {
             var virt = virtual.start;
             while (virt < virtual.end) : (virt += BLOCK_SIZE) {
-                if (try self.isSet(virt))
+                if (try self.isSet(virt)) {
                     return VmmError.AlreadyAllocated;
+                }
             }
             if (virtual.start > virtual.end) {
                 return VmmError.InvalidVirtAddresses;
@@ -266,12 +268,13 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         /// Return: ?usize
         ///     The address at the start of the allocated region, or null if no region could be allocated due to a lack of contiguous blocks.
         ///
-        /// Error: std.mem.Allocator.Error
-        ///     std.mem.AllocatorError.OutOfMemory: The required amount of memory couldn't be allocated
+        /// Error: Allocator.Error
+        ///     error.OutOfMemory: The required amount of memory couldn't be allocated
         ///
-        pub fn alloc(self: *Self, num: usize, attrs: Attributes) std.mem.Allocator.Error!?usize {
-            if (num == 0)
+        pub fn alloc(self: *Self, num: usize, attrs: Attributes) Allocator.Error!?usize {
+            if (num == 0) {
                 return null;
+            }
             // Ensure that there is both enough physical and virtual address space free
             if (pmm.blocksFree() >= num and self.bmp.num_free_entries >= num) {
                 // The virtual address space must be contiguous
@@ -312,19 +315,23 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             const entry = (vaddr - self.start) / BLOCK_SIZE;
             if (try self.bmp.isSet(entry)) {
                 // There will be an allocation associated with this virtual address
-                const allocation = self.allocations.get(vaddr) orelse unreachable;
+                const allocation = self.allocations.get(vaddr).?;
                 const physical = allocation.physical;
                 defer physical.deinit();
                 const num_physical_allocations = physical.items.len;
                 for (physical.items) |block, i| {
                     // Clear the address space entry and free the physical memory
                     try self.bmp.clearEntry(entry + i);
-                    pmm.free(block) catch |e| panic(@errorReturnTrace(), "Failed to free PMM reserved memory at 0x{X}: {}\n", .{ block * BLOCK_SIZE, e });
+                    pmm.free(block) catch |e| {
+                        panic(@errorReturnTrace(), "Failed to free PMM reserved memory at 0x{X}: {}\n", .{ block * BLOCK_SIZE, e });
+                    };
                 }
                 // Unmap the entire range
                 const region_start = entry * BLOCK_SIZE;
                 const region_end = (entry + num_physical_allocations) * BLOCK_SIZE;
-                self.mapper.unmapFn(region_start, region_end, self.payload) catch |e| panic(@errorReturnTrace(), "Failed to unmap VMM reserved memory from 0x{X} to 0x{X}: {}\n", .{ region_start, region_end, e });
+                self.mapper.unmapFn(region_start, region_end, self.payload) catch |e| {
+                    panic(@errorReturnTrace(), "Failed to unmap VMM reserved memory from 0x{X} to 0x{X}: {}\n", .{ region_start, region_end, e });
+                };
                 // The allocation is freed so remove from the map
                 self.allocations.removeAssertDiscard(vaddr);
             } else {
@@ -339,31 +346,33 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
 ///
 /// Arguments:
 ///     IN mem_profile: *const mem.MemProfile - The system's memory profile. This is used to find the kernel code region and boot modules
-///     IN/OUT allocator: *std.mem.Allocator - The allocator to use when needing to allocate memory
+///     IN/OUT allocator: *Allocator - The allocator to use when needing to allocate memory
 ///
 /// Return: VirtualMemoryManager
 ///     The virtual memory manager created with all reserved virtual regions allocated
 ///
-/// Error: std.mem.Allocator.Error
-///     std.mem.Allocator.Error.OutOfMemory - The allocator cannot allocate the memory required
+/// Error: Allocator.Error
+///     error.OutOfMemory - The allocator cannot allocate the memory required
 ///
-pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) std.mem.Allocator.Error!VirtualMemoryManager(arch.VmmPayload) {
-    std.log.info(.tty, "Init\n", .{});
-    defer std.log.info(.tty, "Done\n", .{});
+pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator.Error!VirtualMemoryManager(arch.VmmPayload) {
+    std.log.info(.vmm, "Init\n", .{});
+    defer std.log.info(.vmm, "Done\n", .{});
 
     var vmm = try VirtualMemoryManager(arch.VmmPayload).init(@ptrToInt(&KERNEL_ADDR_OFFSET), 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
 
-    // Map in kernel
-    // Calculate start and end of mapping
-    const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), BLOCK_SIZE);
-    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem.FIXED_ALLOC_SIZE, BLOCK_SIZE);
-    const p_start = std.mem.alignBackward(@ptrToInt(mem_profile.physaddr_start), BLOCK_SIZE);
-    const p_end = std.mem.alignForward(@ptrToInt(mem_profile.physaddr_end) + mem.FIXED_ALLOC_SIZE, BLOCK_SIZE);
-    vmm.set(.{ .start = v_start, .end = v_end }, mem.Range{ .start = p_start, .end = p_end }, .{ .kernel = true, .writable = false, .cachable = true }) catch |e| panic(@errorReturnTrace(), "Failed mapping kernel code in VMM: {}", .{e});
-
+    // Map all the reserved virtual addresses.
     for (mem_profile.virtual_reserved) |entry| {
-        const virtual = mem.Range{ .start = std.mem.alignBackward(entry.virtual.start, BLOCK_SIZE), .end = std.mem.alignForward(entry.virtual.end, BLOCK_SIZE) };
-        const physical: ?mem.Range = if (entry.physical) |phys| mem.Range{ .start = std.mem.alignBackward(phys.start, BLOCK_SIZE), .end = std.mem.alignForward(phys.end, BLOCK_SIZE) } else null;
+        const virtual = mem.Range{
+            .start = std.mem.alignBackward(entry.virtual.start, BLOCK_SIZE),
+            .end = std.mem.alignForward(entry.virtual.end, BLOCK_SIZE),
+        };
+        const physical: ?mem.Range = if (entry.physical) |phys|
+            mem.Range{
+                .start = std.mem.alignBackward(phys.start, BLOCK_SIZE),
+                .end = std.mem.alignForward(phys.end, BLOCK_SIZE),
+            }
+        else
+            null;
         vmm.set(virtual, physical, .{ .kernel = true, .writable = true, .cachable = true }) catch |e| switch (e) {
             VmmError.AlreadyAllocated => {},
             else => panic(@errorReturnTrace(), "Failed mapping region in VMM {}: {}\n", .{ entry, e }),
@@ -380,7 +389,7 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) s
 test "alloc and free" {
     const num_entries = 512;
     var vmm = try testInit(num_entries);
-    var allocations = test_allocations orelse unreachable;
+    var allocations = test_allocations.?;
     var virtual_allocations = std.ArrayList(usize).init(std.testing.allocator);
     defer virtual_allocations.deinit();
 
@@ -399,7 +408,7 @@ test "alloc and free" {
         } else {
             // Else it should have succeeded and allocated the correct address
             std.testing.expectEqual(@as(?usize, vmm.start + entry * BLOCK_SIZE), result);
-            try virtual_allocations.append(result orelse unreachable);
+            try virtual_allocations.append(result.?);
         }
 
         // Make sure that the entries are set or not depending on the allocation success
@@ -471,7 +480,7 @@ test "set" {
     // Make sure it put the correct address in the map
     std.testing.expect(vmm.allocations.get(vstart) != null);
 
-    var allocations = test_allocations orelse unreachable;
+    var allocations = test_allocations.?;
     // The entries before the virtual start shouldn't be set
     var vaddr = vmm.start;
     while (vaddr < vstart) : (vaddr += BLOCK_SIZE) {
@@ -499,10 +508,10 @@ var test_mapper = Mapper(u8){ .mapFn = testMap, .unmapFn = testUnmap };
 /// Return: VirtualMemoryManager(u8)
 ///     The VMM constructed
 ///
-/// Error: std.mem.Allocator.Error
+/// Error: Allocator.Error
 ///     OutOfMemory: The allocator couldn't allocate the structures needed
 ///
-fn testInit(num_entries: u32) std.mem.Allocator.Error!VirtualMemoryManager(u8) {
+fn testInit(num_entries: u32) Allocator.Error!VirtualMemoryManager(u8) {
     if (test_allocations == null) {
         test_allocations = try bitmap.Bitmap(u64).init(num_entries, std.heap.page_allocator);
     } else |allocations| {
@@ -524,7 +533,7 @@ fn testInit(num_entries: u32) std.mem.Allocator.Error!VirtualMemoryManager(u8) {
         .modules = &[_]mem.Module{},
     };
     pmm.init(&mem_profile, std.heap.page_allocator);
-    return try VirtualMemoryManager(u8).init(0, num_entries * BLOCK_SIZE, std.heap.page_allocator, test_mapper, 39);
+    return VirtualMemoryManager(u8).init(0, num_entries * BLOCK_SIZE, std.heap.page_allocator, test_mapper, 39);
 }
 
 ///
@@ -536,14 +545,14 @@ fn testInit(num_entries: u32) std.mem.Allocator.Error!VirtualMemoryManager(u8) {
 ///     IN pstart: usize - The start of the physical region to map
 ///     IN pend: usize - The end of the physical region to map
 ///     IN attrs: Attributes - The attributes to map with
-///     IN/OUT allocator: *std.mem.Allocator - The allocator to use. Ignored
+///     IN/OUT allocator: *Allocator - The allocator to use. Ignored
 ///     IN payload: u8 - The payload value. Expected to be 39
 ///
-fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: *std.mem.Allocator, payload: u8) (std.mem.Allocator.Error || MapperError)!void {
+fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: *Allocator, payload: u8) (Allocator.Error || MapperError)!void {
     std.testing.expectEqual(@as(u8, 39), payload);
     var vaddr = vstart;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
-        (test_allocations orelse unreachable).setEntry(vaddr / BLOCK_SIZE) catch unreachable;
+        (test_allocations.?).setEntry(vaddr / BLOCK_SIZE) catch unreachable;
     }
 }
 
@@ -555,11 +564,11 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
 ///     IN vend: usize - The end of the virtual region to unmap
 ///     IN payload: u8 - The payload value. Expected to be 39
 ///
-fn testUnmap(vstart: usize, vend: usize, payload: u8) (std.mem.Allocator.Error || MapperError)!void {
+fn testUnmap(vstart: usize, vend: usize, payload: u8) (Allocator.Error || MapperError)!void {
     std.testing.expectEqual(@as(u8, 39), payload);
     var vaddr = vstart;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
-        (test_allocations orelse unreachable).clearEntry(vaddr / BLOCK_SIZE) catch unreachable;
+        (test_allocations.?).clearEntry(vaddr / BLOCK_SIZE) catch unreachable;
     }
 }
 
@@ -574,7 +583,7 @@ fn testUnmap(vstart: usize, vend: usize, payload: u8) (std.mem.Allocator.Error |
 ///
 fn runtimeTests(comptime Payload: type, vmm: VirtualMemoryManager(Payload), mem_profile: *const mem.MemProfile) void {
     const v_start = std.mem.alignBackward(@ptrToInt(mem_profile.vaddr_start), BLOCK_SIZE);
-    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem.FIXED_ALLOC_SIZE, BLOCK_SIZE);
+    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end), BLOCK_SIZE);
 
     var vaddr = vmm.start;
     while (vaddr < vmm.end - BLOCK_SIZE) : (vaddr += BLOCK_SIZE) {
@@ -597,5 +606,5 @@ fn runtimeTests(comptime Payload: type, vmm: VirtualMemoryManager(Payload), mem_
         }
     }
 
-    std.log.info(.tty, "Tested allocations\n", .{});
+    std.log.info(.vmm, "Tested allocations\n", .{});
 }

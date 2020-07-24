@@ -120,6 +120,8 @@ pub const RuntimeStep = struct {
             std.debug.warn("{}\n", .{msg});
             if (std.mem.indexOf(u8, msg, "FAILURE")) |_| {
                 return false;
+            } else if (std.mem.indexOf(u8, msg, "Kernel panic")) |_| {
+                return false;
             } else if (std.mem.eql(u8, msg, "[info] (kmain): SUCCESS")) {
                 return true;
             }

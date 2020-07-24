@@ -61,7 +61,9 @@ export fn kmain(boot_payload: arch.BootPayload) void {
 
     log_root.init(serial_stream);
 
-    const mem_profile = arch.initMem(boot_payload) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise memory profile: {}", .{e});
+    const mem_profile = arch.initMem(boot_payload) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise memory profile: {}", .{e});
+    };
     var fixed_allocator = mem_profile.fixed_allocator;
 
     panic_root.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
@@ -69,10 +71,12 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     };
 
     pmm.init(&mem_profile, &fixed_allocator.allocator);
-    kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
+    kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
+    };
 
     std.log.info(.kmain, "Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
-    arch.init(boot_payload, &mem_profile, &fixed_allocator.allocator);
+    arch.init(&mem_profile);
     std.log.info(.kmain, "Arch init done\n", .{});
 
     // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.

@@ -28,7 +28,6 @@ pub const MemProfile = struct {
     fixed_allocator: std.heap.FixedBufferAllocator,
 };
 
-// The size of the fixed allocator used before the heap is set up. Set to 1MiB.
 const FIXED_ALLOC_SIZE = 1024 * 1024;
 
 pub fn virtToPhys(virt: anytype) @TypeOf(virt) {

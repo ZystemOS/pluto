@@ -387,9 +387,8 @@ fn pageFault(state: *arch.CpuState) u32 {
 ///
 /// Arguments:
 ///     IN mem_profile: *const MemProfile - The memory profile of the system and kernel
-///     IN allocator: *std.mem.Allocator - The allocator to use
 ///
-pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile, allocator: *std.mem.Allocator) void {
+pub fn init(mem_profile: *const MemProfile) void {
     std.log.info(.paging, "Init\n", .{});
     defer std.log.info(.paging, "Done\n", .{});
 
@@ -401,7 +400,7 @@ pub fn init(mb_info: *multiboot.multiboot_info_t, mem_profile: *const MemProfile
         :
         : [addr] "{eax}" (dir_physaddr)
     );
-    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end) + mem.FIXED_ALLOC_SIZE, PAGE_SIZE_4KB);
+    const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end), PAGE_SIZE_4KB);
     switch (build_options.test_mode) {
         .Initialisation => runtimeTests(v_end),
         else => {},

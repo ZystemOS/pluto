@@ -414,6 +414,8 @@ const FreeListAllocator = struct {
         var free_list = &(try FreeListAllocator.init(start, size));
         var allocator = &free_list.allocator;
 
+        std.debug.warn("", .{});
+
         const alloc0 = try alloc(allocator, 64, 0, 0);
         const alloc0_addr = @ptrToInt(alloc0.ptr);
         // Should be at the start of the heap
@@ -423,6 +425,8 @@ const FreeListAllocator = struct {
         testing.expectEqual(header.size, size - 64 - @sizeOf(Header));
         testing.expectEqual(header.next_free, null);
         testing.expectEqual(free_list.first_free, header);
+
+        std.debug.warn("", .{});
 
         // 64 bytes aligned to 4 bytes
         const alloc1 = try alloc(allocator, 64, 4, 0);

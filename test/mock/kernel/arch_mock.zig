@@ -122,7 +122,7 @@ pub fn initTTY(boot_payload: BootPayload) TTY {
     };
 }
 
-pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
+pub fn initMem(payload: BootPayload) Allocator.Error!mem.MemProfile {
     return MemProfile{
         .vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END),
         .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
@@ -142,7 +142,7 @@ pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!
     return ret;
 }
 
-pub fn init(payload: BootPayload, mem_profile: *const MemProfile, allocator: *Allocator) void {
+pub fn init(mem_profile: *const MemProfile) void {
     // I'll get back to this as this doesn't effect the current testing.
     // When I come on to the mem.zig testing, I'll fix :)
     //return mock_framework.performAction("init", void, mem_profile, allocator);

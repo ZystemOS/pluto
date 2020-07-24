@@ -6,6 +6,7 @@ const multiboot = @import("multiboot.zig");
 const mem = @import("mem.zig");
 const build_options = @import("build_options");
 const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
 /// The possible errors from panic code
@@ -31,12 +32,12 @@ const SymbolMap = struct {
     /// Initialise an empty symbol map.
     ///
     /// Arguments:
-    ///     IN allocator: *std.mem.Allocator - The allocator to use to initialise the array list.
+    ///     IN allocator: *Allocator - The allocator to use to initialise the array list.
     ///
     /// Return: SymbolMap
     ///     The symbol map.
     ///
-    pub fn init(allocator: *std.mem.Allocator) SymbolMap {
+    pub fn init(allocator: *Allocator) SymbolMap {
         return SymbolMap{
             .symbols = ArrayList(MapEntry).init(allocator),
         };
@@ -56,14 +57,23 @@ const SymbolMap = struct {
     ///     IN name: []const u8 - The name of the entry.
     ///     IN addr: usize - The address for the entry.
     ///
-    /// Error: std.mem.Allocator.Error
-    ///      * - See ArrayList.append
+    /// Error: Allocator.Error
+    ///      error.OutOfMemory - If there isn't enough memory to append a map entry.
     ///
-    pub fn add(self: *SymbolMap, name: []const u8, addr: usize) !void {
+    pub fn add(self: *SymbolMap, name: []const u8, addr: usize) Allocator.Error!void {
         try self.addEntry(MapEntry{ .addr = addr, .func_name = name });
     }
 
-    pub fn addEntry(self: *SymbolMap, entry: MapEntry) !void {
+    ///
+    /// Add a symbol map entry.
+    ///
+    /// Arguments:
+    ///     IN entry: MapEntry - The entry.
+    ///
+    /// Error: Allocator.Error
+    ///      error.OutOfMemory - If there isn't enough memory to append a map entry.
+    ///
+    pub fn addEntry(self: *SymbolMap, entry: MapEntry) Allocator.Error!void {
         try self.symbols.append(entry);
     }
 
@@ -104,6 +114,168 @@ fn logTraceAddress(addr: usize) void {
     std.log.emerg(.panic, "{x}: {}\n", .{ addr, str });
 }
 
+///
+/// Parse a hexadecimal address from the pointer up until the end pointer. Must be terminated by a
+/// whitespace character.
+///
+/// Arguments:
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
+///         characters have been consumed.
+///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
+///         be found before this.
+///
+/// Return: usize
+///     The address parsed.
+///
+/// Error: PanicError || std.fmt.ParseIntError
+///     PanicError.InvalidSymbolFile - A terminating whitespace wasn't found before the end address.
+///     std.fmt.ParseIntError - See std.fmt.parseInt
+///
+fn parseAddr(ptr: *[*]const u8, end: *const u8) (PanicError || std.fmt.ParseIntError)!usize {
+    const addr_start = ptr.*;
+    ptr.* = try parseNonWhitespace(ptr.*, end);
+    const len = @ptrToInt(ptr.*) - @ptrToInt(addr_start);
+    const addr_str = addr_start[0..len];
+    return std.fmt.parseInt(usize, addr_str, 16);
+}
+
+///
+/// Parse a single character. The address given cannot be greater than or equal to the end address
+/// given.
+///
+/// Arguments:
+///     IN ptr: [*]const u8 - The address at which to get the character from.
+///     IN end: *const u8 - The end address at which to start looking. ptr cannot be greater than or
+///         equal to this.
+///
+/// Return: u8
+///     The character parsed.
+///
+/// Error: PanicError
+///     PanicError.InvalidSymbolFile - The address given is greater than or equal to the end address.
+///
+fn parseChar(ptr: [*]const u8, end: *const u8) PanicError!u8 {
+    if (@ptrToInt(ptr) >= @ptrToInt(end)) {
+        return PanicError.InvalidSymbolFile;
+    }
+    return ptr[0];
+}
+
+///
+/// Parse until a non-whitespace character. Must be terminated by a non-whitespace character before
+/// the end address.
+///
+/// Arguments:
+///     IN ptr: [*]const u8 - The address at which to start looking.
+///     IN end: *const u8 - The end address at which to start looking. A non-whitespace character
+///         must be found before this.
+///
+/// Return: [*]const u8
+///     ptr plus the number of whitespace characters consumed.
+///
+/// Error: PanicError
+///     PanicError.InvalidSymbolFile - A terminating non-whitespace character wasn't found before
+///         the end address.
+///
+fn parseWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
+    var i: u32 = 0;
+    while (std.fmt.isWhiteSpace(try parseChar(ptr + i, end))) : (i += 1) {}
+    return ptr + i;
+}
+
+///
+/// Parse until a whitespace character. Must be terminated by a whitespace character before the end
+/// address.
+///
+/// Arguments:
+///     IN ptr: [*]const u8 - The address at which to start looking.
+///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
+///         be found before this.
+///
+/// Return: [*]const u8
+///     ptr plus the number of non-whitespace characters consumed.
+///
+/// Error: PanicError
+///     PanicError.InvalidSymbolFile - A terminating whitespace character wasn't found before the
+///         end address.
+///
+fn parseNonWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
+    var i: u32 = 0;
+    while (!std.fmt.isWhiteSpace(try parseChar(ptr + i, end))) : (i += 1) {}
+    return ptr + i;
+}
+
+///
+/// Parse until a newline character. Must be terminated by a newline character before the end
+/// address.
+///
+/// Arguments:
+///     IN ptr: [*]const u8 - The address at which to start looking.
+///     IN end: *const u8 - The end address at which to start looking. A newline character must
+///         be found before this.
+///
+/// Return: [*]const u8
+///     ptr plus the number of non-newline characters consumed.
+///
+/// Error: PanicError
+///     PanicError.InvalidSymbolFile - A terminating newline character wasn't found before the
+///         end address.
+///
+fn parseNonNewLine(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
+    var i: u32 = 0;
+    while ((try parseChar(ptr + i, end)) != '\n') : (i += 1) {}
+    return ptr + i;
+}
+
+///
+/// Parse a name from the pointer up until the end pointer. Must be terminated by a whitespace
+/// character.
+///
+/// Arguments:
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
+///         characters have been consumed.
+///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
+///         be found before this.
+///
+/// Return: []const u8
+///     The name parsed.
+///
+/// Error: PanicError
+///     PanicError.InvalidSymbolFile - A terminating whitespace wasn't found before the end address.
+///
+fn parseName(ptr: *[*]const u8, end: *const u8) PanicError![]const u8 {
+    const name_start = ptr.*;
+    ptr.* = try parseNonNewLine(ptr.*, end);
+    const len = @ptrToInt(ptr.*) - @ptrToInt(name_start);
+    return name_start[0..len];
+}
+
+///
+/// Parse a symbol map entry from the pointer up until the end pointer,
+/// in the format of '\d+\w+[a-zA-Z0-9]+'. Must be terminated by a whitespace character.
+///
+/// Arguments:
+///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated once after the
+///         address has been consumed and once again after the name has been consumed.
+///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
+///         be found before this.
+///
+/// Return: MapEntry
+///     The entry parsed.
+///
+/// Error: PanicError || std.fmt.ParseIntError
+///     PanicError.InvalidSymbolFile - A terminating whitespace wasn't found before the end address.
+///     std.fmt.ParseIntError - See parseAddr.
+///
+fn parseMapEntry(start: *[*]const u8, end: *const u8) (PanicError || std.fmt.ParseIntError)!MapEntry {
+    var ptr = try parseWhitespace(start.*, end);
+    defer start.* = ptr;
+    const addr = try parseAddr(&ptr, end);
+    ptr = try parseWhitespace(ptr, end);
+    const name = try parseName(&ptr, end);
+    return MapEntry{ .addr = addr, .func_name = name };
+}
+
 pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
     std.log.emerg(.panic, "Kernel panic: " ++ format ++ "\n", args);
@@ -126,181 +298,20 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: any
 }
 
 ///
-/// Parse a hexadecimal address from the pointer up until the end pointer. Must be terminated by a
-/// whitespace character.
-///
-/// Arguments:
-///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
-///         characters have been consumed.
-///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
-///         be found before this.
-///
-/// Return: usize
-///     The address parsed.
-///
-/// Error: PanicError || std.fmt.ParseUnsignedError
-///     PanicError.InvalidSymbolFile: A terminating whitespace wasn't found before the end address.
-///     std.fmt.ParseUnsignedError: See std.fmt.parseInt
-///
-fn parseAddr(ptr: *[*]const u8, end: *const u8) !usize {
-    const addr_start = ptr.*;
-    ptr.* = try parseNonWhitespace(ptr.*, end);
-    const len = @ptrToInt(ptr.*) - @ptrToInt(addr_start);
-    const addr_str = addr_start[0..len];
-    return try std.fmt.parseInt(usize, addr_str, 16);
-}
-
-///
-/// Parse a single character. The address given cannot be greater than or equal to the end address
-/// given.
-///
-/// Arguments:
-///     IN ptr: [*]const u8 - The address at which to get the character from.
-///     IN end: *const u8 - The end address at which to start looking. ptr cannot be greater than or
-///         equal to this.
-///
-/// Return: u8
-///     The character parsed.
-///
-/// Error: PanicError
-///     PanicError.InvalidSymbolFile: The address given is greater than or equal to the end address.
-///
-fn parseChar(ptr: [*]const u8, end: *const u8) PanicError!u8 {
-    if (@ptrToInt(ptr) >= @ptrToInt(end)) {
-        return PanicError.InvalidSymbolFile;
-    }
-    return ptr[0];
-}
-
-///
-/// Parse until a non-whitespace character. Must be terminated by a non-whitespace character before
-/// the end address.
-///
-/// Arguments:
-///     IN ptr: [*]const u8 - The address at which to start looking.
-///     IN end: *const u8 - The end address at which to start looking. A non-whitespace character
-///         must be found before this.
-///
-/// Return: [*]const u8
-///     ptr plus the number of whitespace characters consumed.
-///
-/// Error: PanicError
-///     PanicError.InvalidSymbolFile: A terminating non-whitespace character wasn't found before the
-///         end address.
-///
-fn parseWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
-    var i: u32 = 0;
-    while (std.fmt.isWhiteSpace(try parseChar(ptr + i, end))) : (i += 1) {}
-    return ptr + i;
-}
-
-///
-/// Parse until a whitespace character. Must be terminated by a whitespace character before the end
-/// address.
-///
-/// Arguments:
-///     IN ptr: [*]const u8 - The address at which to start looking.
-///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
-///         be found before this.
-///
-/// Return: [*]const u8
-///     ptr plus the number of non-whitespace characters consumed.
-///
-/// Error: PanicError
-///     PanicError.InvalidSymbolFile: A terminating whitespace character wasn't found before the end
-///         address.
-///
-fn parseNonWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
-    var i: u32 = 0;
-    while (!std.fmt.isWhiteSpace(try parseChar(ptr + i, end))) : (i += 1) {}
-    return ptr + i;
-}
-
-///
-/// Parse until a newline character. Must be terminated by a newline character before the end
-/// address.
-///
-/// Arguments:
-///     IN ptr: [*]const u8 - The address at which to start looking.
-///     IN end: *const u8 - The end address at which to start looking. A newline character must
-///         be found before this.
-///
-/// Return: [*]const u8
-///     ptr plus the number of non-newline characters consumed.
-///
-/// Error: PanicError
-///     PanicError.InvalidSymbolFile: A terminating newline character wasn't found before the end
-///         address.
-///
-fn parseNonNewLine(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
-    var i: u32 = 0;
-    while ((try parseChar(ptr + i, end)) != '\n') : (i += 1) {}
-    return ptr + i;
-}
-
-///
-/// Parse a name from the pointer up until the end pointer. Must be terminated by a whitespace
-/// character.
-///
-/// Arguments:
-///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated after all
-///         characters have been consumed.
-///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
-///         be found before this.
-///
-/// Return: []const u8
-///     The name parsed.
-///
-/// Error: PanicError
-///     PanicError.InvalidSymbolFile: A terminating whitespace wasn't found before the end address.
-///
-fn parseName(ptr: *[*]const u8, end: *const u8) PanicError![]const u8 {
-    const name_start = ptr.*;
-    ptr.* = try parseNonNewLine(ptr.*, end);
-    const len = @ptrToInt(ptr.*) - @ptrToInt(name_start);
-    return name_start[0..len];
-}
-
-///
-/// Parse a symbol map entry from the pointer up until the end pointer,
-/// in the format of '\d+\w+[a-zA-Z0-9]+'. Must be terminated by a whitespace character.
-///
-/// Arguments:
-///     IN/OUT ptr: *[*]const u8 - The address at which to start looking, updated once after the
-///         address has been consumed and once again after the name has been consumed.
-///     IN end: *const u8 - The end address at which to start looking. A whitespace character must
-///         be found before this.
-///
-/// Return: MapEntry
-///     The entry parsed.
-///
-/// Error: PanicError || std.fmt.ParseUnsignedError
-///     PanicError.InvalidSymbolFile: A terminating whitespace wasn't found before the end address.
-///     std.fmt.ParseUnsignedError: See parseAddr.
-///
-fn parseMapEntry(start: *[*]const u8, end: *const u8) !MapEntry {
-    var ptr = try parseWhitespace(start.*, end);
-    defer start.* = ptr;
-    const addr = try parseAddr(&ptr, end);
-    ptr = try parseWhitespace(ptr, end);
-    const name = try parseName(&ptr, end);
-    return MapEntry{ .addr = addr, .func_name = name };
-}
-
-///
 /// Initialise the panic subsystem by looking for a boot module called "kernel.map" and loading the
 /// symbols from it. Exits early if no such module was found.
 ///
 /// Arguments:
 ///     IN mem_profile: *const mem.MemProfile - The memory profile from which to get the loaded boot
 ///         modules.
-///     IN allocator: *std.mem.Allocator - The allocator to use to store the symbol map.
+///     IN allocator: *Allocator - The allocator to use to store the symbol map.
 ///
-/// Error: PanicError || std.fmt.ParseUnsignedError
-///     PanicError.InvalidSymbolFile: A terminating whitespace wasn't found before the end address.
-///     std.fmt.ParseUnsignedError: See parseMapEntry.
+/// Error: PanicError || Allocator.Error || std.fmt.ParseIntError
+///     PanicError.InvalidSymbolFile - A terminating whitespace wasn't found before the end address.
+///     Allocator.Error.OutOfMemory - If there wasn't enough memory.
+///     std.fmt.ParseIntError - See parseMapEntry.
 ///
-pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) !void {
+pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) (PanicError || Allocator.Error || std.fmt.ParseIntError)!void {
     std.log.info(.panic, "Init\n", .{});
     defer std.log.info(.panic, "Done\n", .{});
 
