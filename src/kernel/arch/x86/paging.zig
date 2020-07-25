@@ -14,6 +14,7 @@ const tty = @import("../../tty.zig");
 const mem = @import("../../mem.zig");
 const vmm = @import("../../vmm.zig");
 const multiboot = @import("multiboot.zig");
+const Allocator = std.mem.Allocator;
 
 /// An array of directory entries and page tables. Forms the first level of paging and covers the entire 4GB memory space.
 pub const Directory = packed struct {
@@ -169,15 +170,15 @@ inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
 ///     IN allocator: *Allocator - The allocator to use to map any tables needed
 ///     OUT dir: *Directory - The directory that this entry is in
 ///
-/// Error: vmm.MapperError || std.mem.Allocator.Error
+/// Error: vmm.MapperError || Allocator.Error
 ///     vmm.MapperError.InvalidPhysicalAddress - The physical start address is greater than the end
 ///     vmm.MapperError.InvalidVirtualAddress - The virtual start address is greater than the end or is larger than 4GB
 ///     vmm.MapperError.AddressMismatch - The differences between the virtual addresses and the physical addresses aren't the same
 ///     vmm.MapperError.MisalignedPhysicalAddress - One or both of the physical addresses aren't page size aligned
 ///     vmm.MapperError.MisalignedVirtualAddress - One or both of the virtual addresses aren't page size aligned
-///     std.mem.Allocator.Error.* - See std.mem.Allocator.alignedAlloc
+///     Allocator.Error.* - See Allocator.alignedAlloc
 ///
-fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: *std.mem.Allocator) (vmm.MapperError || std.mem.Allocator.Error)!void {
+fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: *Allocator) (vmm.MapperError || Allocator.Error)!void {
     if (phys_start > phys_end) {
         return vmm.MapperError.InvalidPhysicalAddress;
     }
@@ -301,13 +302,13 @@ fn mapTableEntry(entry: *align(1) TableEntry, phys_addr: usize, attrs: vmm.Attri
 ///     IN physical_start: usize - The start of the physical region to map to
 ///     IN physical_end: usize - The end (exclusive) of the physical region to map to
 ///     IN attrs: vmm.Attributes - The attributes to apply to this mapping
-///     IN/OUT allocator: *std.mem.Allocator - The allocator to use to allocate any intermediate data structures required to map this region
+///     IN/OUT allocator: *Allocator - The allocator to use to allocate any intermediate data structures required to map this region
 ///     IN/OUT dir: *Directory - The page directory to map within
 ///
-/// Error: vmm.MapperError || std.mem.Allocator.Error
+/// Error: vmm.MapperError || Allocator.Error
 ///     * - See mapDirEntry
 ///
-pub fn map(virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: *std.mem.Allocator, dir: *Directory) (std.mem.Allocator.Error || vmm.MapperError)!void {
+pub fn map(virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: *Allocator, dir: *Directory) (Allocator.Error || vmm.MapperError)!void {
     var virt_addr = virt_start;
     var phys_addr = phys_start;
     var page = virt_addr / PAGE_SIZE_4KB;
@@ -329,10 +330,10 @@ pub fn map(virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usiz
 ///     IN virtual_end: usize - The end (exclusive) of the virtual region to unmap
 ///     IN/OUT dir: *Directory - The page directory to unmap within
 ///
-/// Error: std.mem.Allocator.Error || vmm.MapperError
+/// Error: Allocator.Error || vmm.MapperError
 ///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
 ///
-pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (std.mem.Allocator.Error || vmm.MapperError)!void {
+pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (Allocator.Error || vmm.MapperError)!void {
     var virt_addr = virtual_start;
     var page = virt_addr / PAGE_SIZE_4KB;
     var entry_idx = virt_addr / PAGE_SIZE_4MB;

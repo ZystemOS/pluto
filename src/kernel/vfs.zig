@@ -5,7 +5,7 @@ const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
 /// Flags specifying what to do when opening a file or directory
-const OpenFlags = enum {
+pub const OpenFlags = enum {
     /// Create a directory if it doesn't exist
     CREATE_DIR,
     /// Create a file if it doesn't exist
@@ -79,10 +79,11 @@ pub const FileSystem = struct {
     /// Return: []u8
     ///     The data read as a slice of bytes. The length will be <= len, including 0 if there was no data to read
     ///
-    /// Error: Allocator.Error
+    /// Error: Allocator.Error || Error
     ///     Allocator.Error.OutOfMemory - There wasn't enough memory to fulfill the request
+    ///     Error.NotOpened - If the node provided is not one that the file system recognised as being opened.
     ///
-    const Read = fn (self: *const Self, node: *const FileNode, len: usize) Allocator.Error![]u8;
+    const Read = fn (self: *const Self, node: *const FileNode, len: usize) (Allocator.Error || Error)![]u8;
 
     ///
     /// Write to an open file
@@ -95,7 +96,7 @@ pub const FileSystem = struct {
     /// Error: Allocator.Error
     ///     Allocator.Error.OutOfMemory - There wasn't enough memory to fulfill the request
     ///
-    const Write = fn (self: *const Self, node: *const FileNode, bytes: []const u8) Allocator.Error!void;
+    const Write = fn (self: *const Self, node: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!void;
 
     ///
     /// Open a file/dir within the filesystem. The result can then be used for write, read or close operations
@@ -152,7 +153,7 @@ pub const FileNode = struct {
     fs: *const FileSystem,
 
     /// See the documentation for FileSystem.Read
-    pub fn read(self: *const FileNode, len: usize) Allocator.Error![]u8 {
+    pub fn read(self: *const FileNode, len: usize) (Allocator.Error || Error)![]u8 {
         return self.fs.read(self.fs, self, len);
     }
 
@@ -162,7 +163,7 @@ pub const FileNode = struct {
     }
 
     /// See the documentation for FileSystem.Write
-    pub fn write(self: *const FileNode, bytes: []const u8) Allocator.Error!void {
+    pub fn write(self: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!void {
         return self.fs.write(self.fs, self, bytes);
     }
 };
@@ -203,6 +204,9 @@ pub const Error = error{
 
     /// The flags provided are invalid for the requested operation
     InvalidFlags,
+
+    /// The node is not recognised as being opened by the filesystem
+    NotOpened,
 };
 
 /// Errors that can be thrown when attempting to mount
@@ -383,6 +387,16 @@ pub fn isAbsolute(path: []const u8) bool {
     return path.len > 0 and path[0] == SEPARATOR;
 }
 
+///
+/// Initialise the virtual file system with a root Node. This will be a Directory node.
+///
+/// Arguments:
+///     IN node: *Node - The node to initialise the root node.
+///
+pub fn setRoot(node: *Node) void {
+    root = node;
+}
+
 const TestFS = struct {
     const TreeNode = struct {
         val: *Node,
@@ -453,7 +467,7 @@ const TestFS = struct {
 
     fn close(fs: *const FileSystem, node: *const FileNode) void {}
 
-    fn read(fs: *const FileSystem, node: *const FileNode, len: usize) Allocator.Error![]u8 {
+    fn read(fs: *const FileSystem, node: *const FileNode, len: usize) (Allocator.Error || Error)![]u8 {
         var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
         // Get the tree that corresponds to the node. Cannot error as the file is already open so it does exist
         var tree = (getTreeNode(test_fs, node) catch unreachable) orelse unreachable;
@@ -464,7 +478,7 @@ const TestFS = struct {
         return bytes;
     }
 
-    fn write(fs: *const FileSystem, node: *const FileNode, bytes: []const u8) Allocator.Error!void {
+    fn write(fs: *const FileSystem, node: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!void {
         var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
         var tree = (try getTreeNode(test_fs, node)) orelse unreachable;
         if (tree.data) |_| {

@@ -4,7 +4,8 @@ BOOT_DIR=$1
 MODULES_DIR=$2
 ISO_DIR=$3
 PLUTO_ELF=$4
-OUTPUT_FILE=$5
+RAMDISK=$5
+OUTPUT_FILE=$6
 
 MAP_FILE=$MODULES_DIR/'kernel.map'
 
@@ -23,6 +24,7 @@ mkdir -p $MODULES_DIR
 
 cp -r grub $BOOT_DIR
 cp $PLUTO_ELF $BOOT_DIR/"pluto.elf"
+cp $RAMDISK $MODULES_DIR/"initrd.ramdisk"
 
 # Read the symbols from the binary, remove all the unnecessary columns with awk and emit to a map file
 readelf -s --wide $PLUTO_ELF | grep -F "FUNC" | awk '{$1=$3=$4=$5=$6=$7=""; print $0}' | sort -k 1 > $MAP_FILE

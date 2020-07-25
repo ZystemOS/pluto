@@ -2,10 +2,13 @@ const std = @import("std");
 const builtin = @import("builtin");
 const rt = @import("test/runtime_test.zig");
 const RuntimeStep = rt.RuntimeStep;
+const Allocator = std.mem.Allocator;
 const Builder = std.build.Builder;
+const Step = std.build.Step;
 const Target = std.Target;
 const CrossTarget = std.zig.CrossTarget;
 const fs = std.fs;
+const File = fs.File;
 const Mode = builtin.Mode;
 const TestMode = rt.TestMode;
 const ArrayList = std.ArrayList;
@@ -38,6 +41,7 @@ pub fn build(b: *Builder) !void {
     const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso" });
     const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
     const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
+    const ramdisk_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "initrd.ramdisk" });
 
     const build_mode = b.standardReleaseOptions();
     comptime var test_mode_desc: []const u8 = "\n                         ";
@@ -59,10 +63,22 @@ pub fn build(b: *Builder) !void {
     exec.setTarget(target);
 
     const make_iso = switch (target.getCpuArch()) {
-        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso }),
+        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
         else => unreachable,
     };
     make_iso.step.dependOn(&exec.step);
+
+    var ramdisk_files_al = ArrayList([]const u8).init(b.allocator);
+    defer ramdisk_files_al.deinit();
+
+    // Add some test files for the ramdisk runtime tests
+    if (test_mode == .Initialisation) {
+        try ramdisk_files_al.append("test/ramdisk_test1.txt");
+        try ramdisk_files_al.append("test/ramdisk_test2.txt");
+    }
+
+    const ramdisk_step = RamdiskStep.create(b, target, ramdisk_files_al.toOwnedSlice(), ramdisk_path);
+    make_iso.step.dependOn(&ramdisk_step.step);
 
     b.default_step.dependOn(&make_iso.step);
 
@@ -149,3 +165,120 @@ pub fn build(b: *Builder) !void {
     });
     debug_step.dependOn(&debug_cmd.step);
 }
+
+/// The ramdisk make step for creating the initial ramdisk.
+const RamdiskStep = struct {
+    /// The Step, that is all you need to know
+    step: Step,
+
+    /// The builder pointer, also all you need to know
+    builder: *Builder,
+
+    /// The target for the build
+    target: CrossTarget,
+
+    /// The list of files to be added to the ramdisk
+    files: []const []const u8,
+
+    /// The path to where the ramdisk will be written to.
+    out_file_path: []const u8,
+
+    /// The possible errors for creating a ramdisk
+    const Error = (error{EndOfStream} || File.ReadError || File.GetPosError || Allocator.Error || File.WriteError || File.OpenError);
+
+    ///
+    /// Create and write the files to a raw ramdisk in the format:
+    /// (NumOfFiles:usize)[(name_length:usize)(name:u8[name_length])(content_length:usize)(content:u8[content_length])]*
+    ///
+    /// Argument:
+    ///     IN comptime Usize: type - The usize type for the architecture.
+    ///     IN self: *RamdiskStep   - Self.
+    ///
+    /// Error: Error
+    ///     Errors for opening, reading and writing to and from files and for allocating memory.
+    ///
+    fn writeRamdisk(comptime Usize: type, self: *RamdiskStep) Error!void {
+        // 1MB, don't think the ram disk should be very big
+        const max_file_size = 1024 * 1024 * 1024;
+
+        // Open the out file
+        var ramdisk = try fs.cwd().createFile(self.out_file_path, .{});
+        defer ramdisk.close();
+
+        // Get the targets endian
+        const endian = self.target.getCpuArch().endian();
+
+        // First write the number of files/headers
+        std.debug.assert(self.files.len < std.math.maxInt(Usize));
+        try ramdisk.writer().writeInt(Usize, @truncate(Usize, self.files.len), endian);
+        var current_offset: usize = 0;
+        for (self.files) |file_path| {
+            // Open, and read the file. Can get the size from this as well
+            const file_content = try fs.cwd().readFileAlloc(self.builder.allocator, file_path, max_file_size);
+
+            // Get the last occurrence of / for the file name, if there isn't one, then the file_path is the name
+            const file_name_index = if (std.mem.lastIndexOf(u8, file_path, "/")) |index| index + 1 else 0;
+
+            // Write the header and file content to the ramdisk
+            // Name length
+            std.debug.assert(file_path[file_name_index..].len < std.math.maxInt(Usize));
+            try ramdisk.writer().writeInt(Usize, @truncate(Usize, file_path[file_name_index..].len), endian);
+
+            // Name
+            try ramdisk.writer().writeAll(file_path[file_name_index..]);
+
+            // Length
+            std.debug.assert(file_content.len < std.math.maxInt(Usize));
+            try ramdisk.writer().writeInt(Usize, @truncate(Usize, file_content.len), endian);
+
+            // File contest
+            try ramdisk.writer().writeAll(file_content);
+
+            // Increment the offset to the new location
+            current_offset += @sizeOf(Usize) * 3 + file_path[file_name_index..].len + file_content.len;
+        }
+    }
+
+    ///
+    /// The make function that is called by the builder. This will create the qemu process with the
+    /// stdout as a Pipe. Then create the read thread to read the logs from the qemu stdout. Then
+    /// will call the test function to test a specifics part of the OS defined by the test mode.
+    ///
+    /// Arguments:
+    ///     IN step: *Step - The step of this step.
+    ///
+    /// Error: Error
+    ///     Errors for opening, reading and writing to and from files and for allocating memory.
+    ///
+    fn make(step: *Step) Error!void {
+        const self = @fieldParentPtr(RamdiskStep, "step", step);
+        switch (self.target.getCpuArch()) {
+            .i386 => try writeRamdisk(u32, self),
+            else => unreachable,
+        }
+    }
+
+    ///
+    /// Create a ramdisk step.
+    ///
+    /// Argument:
+    ///     IN builder: *Builder - The build builder.
+    ///     IN target: CrossTarget - The target for the build.
+    ///     IN files: []const []const u8 - The file names to be added to the ramdisk.
+    ///     IN out_file_path: []const u8 - The output file path.
+    ///
+    /// Return: *RamdiskStep
+    ///     The ramdisk step pointer to add to the build process.
+    ///
+    pub fn create(builder: *Builder, target: CrossTarget, files: []const []const u8, out_file_path: []const u8) *RamdiskStep {
+        const ramdisk_step = builder.allocator.create(RamdiskStep) catch unreachable;
+        ramdisk_step.* = .{
+            .step = Step.init(.Custom, builder.fmt("Ramdisk", .{}), builder.allocator, make),
+            .builder = builder,
+            .target = target,
+            .files = files,
+            .out_file_path = out_file_path,
+        };
+        return ramdisk_step;
+    }
+};
