@@ -377,7 +377,7 @@ pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (Allocat
         if (virt_next - virt_addr >= PAGE_SIZE_4MB) {
             clearAttribute(&dir.entries[entry_idx], DENTRY_PRESENT);
         }
-        
+
         // If the region to be unmapped covers all of this directory entry, set the whole thing as not present
         if (std.mem.alignBackward(virt_addr, PAGE_SIZE_4MB) >= virtual_start and virtual_end - std.mem.alignForward(virt_addr, PAGE_SIZE_4MB) >= PAGE_SIZE_4MB) {
             clearAttribute(&dir.entries[entry_idx], DENTRY_PRESENT);
