@@ -290,7 +290,9 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                         const addr = pmm.alloc() orelse unreachable;
                         try block_list.append(addr);
                         // The map function failing isn't the caller's responsibility so panic as it shouldn't happen
-                        self.mapper.mapFn(vaddr, vaddr + BLOCK_SIZE, addr, addr + BLOCK_SIZE, attrs, self.allocator, self.payload) catch |e| panic(@errorReturnTrace(), "Failed to map virtual memory: {}\n", .{e});
+                        self.mapper.mapFn(vaddr, vaddr + BLOCK_SIZE, addr, addr + BLOCK_SIZE, attrs, self.allocator, self.payload) catch |e| {
+                            panic(@errorReturnTrace(), "Failed to map virtual memory: {}\n", .{e});
+                        };
                         vaddr += BLOCK_SIZE;
                     }
                     _ = try self.allocations.put(vaddr_start, Allocation{ .physical = block_list });
@@ -327,8 +329,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                     };
                 }
                 // Unmap the entire range
-                const region_start = entry * BLOCK_SIZE;
-                const region_end = (entry + num_physical_allocations) * BLOCK_SIZE;
+                const region_start = vaddr;
+                const region_end = vaddr + (num_physical_allocations * BLOCK_SIZE);
                 self.mapper.unmapFn(region_start, region_end, self.payload) catch |e| {
                     panic(@errorReturnTrace(), "Failed to unmap VMM reserved memory from 0x{X} to 0x{X}: {}\n", .{ region_start, region_end, e });
                 };
@@ -412,7 +414,7 @@ test "alloc and free" {
         }
 
         // Make sure that the entries are set or not depending on the allocation success
-        var vaddr = entry * BLOCK_SIZE;
+        var vaddr = vmm.start + entry * BLOCK_SIZE;
         while (vaddr < (entry + num_to_alloc) * BLOCK_SIZE) : (vaddr += BLOCK_SIZE) {
             if (should_be_set) {
                 // Allocation succeeded so this address should be set
@@ -471,10 +473,10 @@ test "set" {
     const num_entries = 512;
     var vmm = try testInit(num_entries);
 
-    const vstart = BLOCK_SIZE * 37;
-    const vend = BLOCK_SIZE * 46;
-    const pstart = vstart + 123;
-    const pend = vend + 123;
+    const vstart = vmm.start + BLOCK_SIZE * 37;
+    const vend = vmm.start + BLOCK_SIZE * 46;
+    const pstart = BLOCK_SIZE * 37 + 123;
+    const pend = BLOCK_SIZE * 46 + 123;
     const attrs = Attributes{ .kernel = true, .writable = true, .cachable = true };
     try vmm.set(.{ .start = vstart, .end = vend }, mem.Range{ .start = pstart, .end = pend }, attrs);
     // Make sure it put the correct address in the map
@@ -484,20 +486,21 @@ test "set" {
     // The entries before the virtual start shouldn't be set
     var vaddr = vmm.start;
     while (vaddr < vstart) : (vaddr += BLOCK_SIZE) {
-        std.testing.expect(!(try allocations.isSet(vaddr / BLOCK_SIZE)));
+        std.testing.expect(!(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE)));
     }
     // The entries up until the virtual end should be set
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
-        std.testing.expect(try allocations.isSet(vaddr / BLOCK_SIZE));
+        std.testing.expect(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE));
     }
     // The entries after the virtual end should not be set
     while (vaddr < vmm.end) : (vaddr += BLOCK_SIZE) {
-        std.testing.expect(!(try allocations.isSet(vaddr / BLOCK_SIZE)));
+        std.testing.expect(!(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE)));
     }
 }
 
 var test_allocations: ?bitmap.Bitmap(u64) = null;
 var test_mapper = Mapper(u8){ .mapFn = testMap, .unmapFn = testUnmap };
+const test_vaddr_start: usize = 0xC0000000;
 
 ///
 /// Initialise a virtual memory manager used for testing
@@ -533,7 +536,7 @@ fn testInit(num_entries: u32) Allocator.Error!VirtualMemoryManager(u8) {
         .modules = &[_]mem.Module{},
     };
     pmm.init(&mem_profile, std.heap.page_allocator);
-    return VirtualMemoryManager(u8).init(0, num_entries * BLOCK_SIZE, std.heap.page_allocator, test_mapper, 39);
+    return VirtualMemoryManager(u8).init(test_vaddr_start, test_vaddr_start + num_entries * BLOCK_SIZE, std.heap.page_allocator, test_mapper, 39);
 }
 
 ///
@@ -552,7 +555,7 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
     std.testing.expectEqual(@as(u8, 39), payload);
     var vaddr = vstart;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
-        (test_allocations.?).setEntry(vaddr / BLOCK_SIZE) catch unreachable;
+        (test_allocations.?).setEntry((vaddr - test_vaddr_start) / BLOCK_SIZE) catch unreachable;
     }
 }
 
@@ -568,7 +571,11 @@ fn testUnmap(vstart: usize, vend: usize, payload: u8) (Allocator.Error || Mapper
     std.testing.expectEqual(@as(u8, 39), payload);
     var vaddr = vstart;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
-        (test_allocations.?).clearEntry(vaddr / BLOCK_SIZE) catch unreachable;
+        if ((test_allocations.?).isSet((vaddr - test_vaddr_start) / BLOCK_SIZE) catch unreachable) {
+            (test_allocations.?).clearEntry((vaddr - test_vaddr_start) / BLOCK_SIZE) catch unreachable;
+        } else {
+            return MapperError.NotMapped;
+        }
     }
 }
 

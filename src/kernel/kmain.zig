@@ -15,6 +15,8 @@ const panic_root = if (is_test) @import(mock_path ++ "panic_mock.zig") else @imp
 const task = if (is_test) @import(mock_path ++ "task_mock.zig") else @import("task.zig");
 const heap = @import("heap.zig");
 const scheduler = @import("scheduler.zig");
+const vfs = @import("vfs.zig");
+const initrd = @import("initrd.zig");
 
 comptime {
     if (!is_test) {
@@ -67,7 +69,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     var fixed_allocator = mem_profile.fixed_allocator;
 
     panic_root.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}", .{e});
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}\n", .{e});
     };
 
     pmm.init(&mem_profile, &fixed_allocator.allocator);
@@ -92,8 +94,34 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     tty.init(&kernel_heap.allocator, boot_payload);
 
     scheduler.init(&kernel_heap.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise scheduler: {}", .{e});
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise scheduler: {}\n", .{e});
     };
+
+    // Get the ramdisk module
+    const rd_module = for (mem_profile.modules) |module| {
+        if (std.mem.eql(u8, module.name, "initrd.ramdisk")) {
+            break module;
+        }
+    } else null;
+
+    if (rd_module) |module| {
+        // Load the ram disk
+        var ramdisk_filesystem = initrd.InitrdFS.init(module, &kernel_heap.allocator) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk: {}\n", .{e});
+        };
+        defer {
+            ramdisk_filesystem.deinit();
+            // Free the raw ramdisk module as we are done
+            kernel_vmm.free(module.region.start) catch |e| {
+                panic_root.panic(@errorReturnTrace(), "Failed to free ramdisk: {}\n", .{e});
+            };
+        }
+
+        // Need to init the vfs after the ramdisk as we need the root node from the ramdisk filesystem
+        vfs.setRoot(ramdisk_filesystem.root_node);
+
+        // Load all files here
+    }
 
     // Initialisation is finished, now does other stuff
     std.log.info(.kmain, "Init\n", .{});
@@ -105,10 +133,10 @@ export fn kmain(boot_payload: arch.BootPayload) void {
 
     // Create a init2 task
     var idle_task = task.Task.create(initStage2, &kernel_heap.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to create init stage 2 task: {}", .{e});
+        panic_root.panic(@errorReturnTrace(), "Failed to create init stage 2 task: {}\n", .{e});
     };
     scheduler.scheduleTask(idle_task, &kernel_heap.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to schedule init stage 2 task: {}", .{e});
+        panic_root.panic(@errorReturnTrace(), "Failed to schedule init stage 2 task: {}\n", .{e});
     };
 
     // Can't return for now, later this can return maybe
