@@ -119,7 +119,7 @@ pub var kernel_directory: Directory align(@truncate(u29, PAGE_SIZE_4KB)) = Direc
 ///     The index into an array of directory entries.
 ///
 inline fn virtToDirEntryIdx(virt: usize) usize {
-    return (virt / PAGE_SIZE_4MB) % ENTRIES_PER_DIRECTORY;
+    return virt / PAGE_SIZE_4MB;
 }
 
 ///
@@ -195,9 +195,7 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
         return vmm.MapperError.MisalignedVirtualAddress;
     }
 
-    const entry = virt_start / PAGE_SIZE_4MB;
-    if (entry >= ENTRIES_PER_DIRECTORY)
-        return vmm.MapperError.InvalidVirtualAddress;
+    const entry = virtToDirEntryIdx(virt_start);
     var dir_entry = &dir.entries[entry];
 
     setAttribute(dir_entry, DENTRY_PRESENT);
@@ -246,6 +244,32 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
         tentry += 1;
     }) {
         try mapTableEntry(&table.entries[tentry], phys, attrs);
+    }
+}
+
+///
+/// Unmap a page directory entry, clearing the present bits.
+///
+/// Arguments:
+///     IN virt_addr: usize - The start of the virtual space to map
+///     IN virt_end: usize - The end of the virtual space to map
+///     OUT dir: *Directory - The directory that this entry is in
+///
+/// Error: vmm.MapperError
+///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
+///
+fn unmapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize) vmm.MapperError!void {
+    const entry = virtToDirEntryIdx(virt_start);
+    var dir_entry = &dir.entries[entry];
+    const table = dir.tables[entry] orelse return vmm.MapperError.NotMapped;
+    var addr = virt_start;
+    while (addr < virt_end) : (addr += PAGE_SIZE_4KB) {
+        var table_entry = &table.entries[virtToTableEntryIdx(addr)];
+        if (table_entry.* & TENTRY_PRESENT != 0) {
+            clearAttribute(table_entry, TENTRY_PRESENT);
+        } else {
+            return vmm.MapperError.NotMapped;
+        }
     }
 }
 
@@ -308,17 +332,20 @@ fn mapTableEntry(entry: *align(1) TableEntry, phys_addr: usize, attrs: vmm.Attri
 /// Error: vmm.MapperError || Allocator.Error
 ///     * - See mapDirEntry
 ///
-pub fn map(virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: *Allocator, dir: *Directory) (Allocator.Error || vmm.MapperError)!void {
-    var virt_addr = virt_start;
+pub fn map(virtual_start: usize, virtual_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: *Allocator, dir: *Directory) (Allocator.Error || vmm.MapperError)!void {
+    var virt_addr = virtual_start;
     var phys_addr = phys_start;
-    var page = virt_addr / PAGE_SIZE_4KB;
-    var entry_idx = virt_addr / PAGE_SIZE_4MB;
-    while (entry_idx < ENTRIES_PER_DIRECTORY and virt_addr < virt_end) : ({
-        phys_addr += PAGE_SIZE_4MB;
-        virt_addr += PAGE_SIZE_4MB;
+    var virt_next = std.math.min(virtual_end, std.mem.alignBackward(virt_addr, PAGE_SIZE_4MB) + PAGE_SIZE_4MB);
+    var phys_next = std.math.min(phys_end, std.mem.alignBackward(phys_addr, PAGE_SIZE_4MB) + PAGE_SIZE_4MB);
+    var entry_idx = virtToDirEntryIdx(virt_addr);
+    while (entry_idx < ENTRIES_PER_DIRECTORY and virt_addr < virtual_end) : ({
+        virt_addr = virt_next;
+        phys_addr = phys_next;
+        virt_next = std.math.min(virtual_end, virt_next + PAGE_SIZE_4MB);
+        phys_next = std.math.min(phys_end, phys_next + PAGE_SIZE_4MB);
         entry_idx += 1;
     }) {
-        try mapDirEntry(dir, virt_addr, std.math.min(virt_end, virt_addr + PAGE_SIZE_4MB), phys_addr, std.math.min(phys_end, phys_addr + PAGE_SIZE_4MB), attrs, allocator);
+        try mapDirEntry(dir, virt_addr, virt_next, phys_addr, phys_next, attrs, allocator);
     }
 }
 
@@ -335,27 +362,17 @@ pub fn map(virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usiz
 ///
 pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (Allocator.Error || vmm.MapperError)!void {
     var virt_addr = virtual_start;
-    var page = virt_addr / PAGE_SIZE_4KB;
-    var entry_idx = virt_addr / PAGE_SIZE_4MB;
+    var virt_next = std.math.min(virtual_end, std.mem.alignBackward(virt_addr, PAGE_SIZE_4MB) + PAGE_SIZE_4MB);
+    var entry_idx = virtToDirEntryIdx(virt_addr);
     while (entry_idx < ENTRIES_PER_DIRECTORY and virt_addr < virtual_end) : ({
-        virt_addr += PAGE_SIZE_4MB;
+        virt_addr = virt_next;
+        virt_next = std.math.min(virtual_end, virt_next + PAGE_SIZE_4MB);
         entry_idx += 1;
     }) {
-        var dir_entry = &dir.entries[entry_idx];
-        const table = dir.tables[entry_idx] orelse return vmm.MapperError.NotMapped;
-        const end = std.math.min(virtual_end, virt_addr + PAGE_SIZE_4MB);
-        var addr = virt_addr;
-        while (addr < end) : (addr += PAGE_SIZE_4KB) {
-            var table_entry = &table.entries[virtToTableEntryIdx(addr)];
-            if (table_entry.* & TENTRY_PRESENT != 0) {
-                clearAttribute(table_entry, TENTRY_PRESENT);
-            } else {
-                return vmm.MapperError.NotMapped;
-            }
+        try unmapDirEntry(dir, virt_addr, virt_next);
+        if (virt_next - virt_addr >= PAGE_SIZE_4MB) {
+            clearAttribute(&dir.entries[entry_idx], DENTRY_PRESENT);
         }
-        // If the region to be mapped covers all of this directory entry, set the whole thing as not present
-        if (virtual_end - virt_addr >= PAGE_SIZE_4MB)
-            clearAttribute(dir_entry, DENTRY_PRESENT);
     }
 }
 
