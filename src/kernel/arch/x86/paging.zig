@@ -198,6 +198,20 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
     const entry = virtToDirEntryIdx(virt_start);
     var dir_entry = &dir.entries[entry];
 
+    // Only create a new table if one hasn't already been created for this dir entry.
+    // Prevents us from overriding previous mappings.
+    var table: *Table = undefined;
+    if (dir.tables[entry]) |tbl| {
+        table = tbl;
+    } else {
+        // Create a table and put the physical address in the dir entry
+        table = &(try allocator.alignedAlloc(Table, @truncate(u29, PAGE_SIZE_4KB), 1))[0];
+        @memset(@ptrCast([*]u8, table), 0, @sizeOf(Table));
+        const table_phys_addr = @ptrToInt(mem.virtToPhys(table));
+        dir_entry.* |= DENTRY_PAGE_ADDR & table_phys_addr;
+        dir.tables[entry] = table;
+    }
+
     setAttribute(dir_entry, DENTRY_PRESENT);
     setAttribute(dir_entry, DENTRY_WRITE_THROUGH);
     clearAttribute(dir_entry, DENTRY_4MB_PAGES);
@@ -218,20 +232,6 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
         clearAttribute(dir_entry, DENTRY_CACHE_DISABLED);
     } else {
         setAttribute(dir_entry, DENTRY_CACHE_DISABLED);
-    }
-
-    // Only create a new table if one hasn't already been created for this dir entry.
-    // Prevents us from overriding previous mappings.
-    var table: *Table = undefined;
-    if (dir.tables[entry]) |tbl| {
-        table = tbl;
-    } else {
-        // Create a table and put the physical address in the dir entry
-        table = &(try allocator.alignedAlloc(Table, @truncate(u29, PAGE_SIZE_4KB), 1))[0];
-        @memset(@ptrCast([*]u8, table), 0, @sizeOf(Table));
-        const table_phys_addr = @ptrToInt(mem.virtToPhys(table));
-        dir_entry.* |= DENTRY_PAGE_ADDR & table_phys_addr;
-        dir.tables[entry] = table;
     }
 
     // Map the table entries within the requested space
@@ -498,16 +498,30 @@ test "virtToTableEntryIdx" {
 test "mapDirEntry" {
     var allocator = std.heap.page_allocator;
     var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
-    var phys: usize = 0 * PAGE_SIZE_4MB;
-    const phys_end: usize = phys + PAGE_SIZE_4MB;
-    const virt: usize = 1 * PAGE_SIZE_4MB;
-    const virt_end: usize = virt + PAGE_SIZE_4MB;
-    try mapDirEntry(&dir, virt, virt_end, phys, phys_end, .{ .kernel = true, .writable = true, .cachable = true }, allocator);
+    {
+        const phys: usize = 0 * PAGE_SIZE_4MB;
+        const phys_end: usize = phys + PAGE_SIZE_4MB;
+        const virt: usize = 1 * PAGE_SIZE_4MB;
+        const virt_end: usize = virt + PAGE_SIZE_4MB;
+        try mapDirEntry(&dir, virt, virt_end, phys, phys_end, .{ .kernel = true, .writable = true, .cachable = true }, allocator);
 
-    const entry_idx = virtToDirEntryIdx(virt);
-    const entry = dir.entries[entry_idx];
-    const table = dir.tables[entry_idx] orelse unreachable;
-    checkDirEntry(entry, virt, virt_end, phys, .{ .kernel = true, .writable = true, .cachable = true }, table, true);
+        const entry_idx = virtToDirEntryIdx(virt);
+        const entry = dir.entries[entry_idx];
+        const table = dir.tables[entry_idx] orelse unreachable;
+        checkDirEntry(entry, virt, virt_end, phys, .{ .kernel = true, .writable = true, .cachable = true }, table, true);
+    }
+    {
+        const phys: usize = 7 * PAGE_SIZE_4MB;
+        const phys_end: usize = phys + PAGE_SIZE_4MB;
+        const virt: usize = 8 * PAGE_SIZE_4MB;
+        const virt_end: usize = virt + PAGE_SIZE_4MB;
+        try mapDirEntry(&dir, virt, virt_end, phys, phys_end, .{ .kernel = false, .writable = false, .cachable = false }, allocator);
+
+        const entry_idx = virtToDirEntryIdx(virt);
+        const entry = dir.entries[entry_idx];
+        const table = dir.tables[entry_idx] orelse unreachable;
+        checkDirEntry(entry, virt, virt_end, phys, .{ .kernel = false, .writable = false, .cachable = false }, table, true);
+    }
 }
 
 test "mapDirEntry returns errors correctly" {
