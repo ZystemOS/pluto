@@ -291,7 +291,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                         try block_list.append(addr);
                         // The map function failing isn't the caller's responsibility so panic as it shouldn't happen
                         self.mapper.mapFn(vaddr, vaddr + BLOCK_SIZE, addr, addr + BLOCK_SIZE, attrs, self.allocator, self.payload) catch |e| {
-                            panic(@errorReturnTrace(), "Failed to map virtual memory: {}\n", .{e});
+                            panic(@errorReturnTrace(), "Failed to map virtual memory: {X}\n", .{e});
                         };
                         vaddr += BLOCK_SIZE;
                     }
@@ -377,7 +377,7 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator
             null;
         vmm.set(virtual, physical, .{ .kernel = true, .writable = true, .cachable = true }) catch |e| switch (e) {
             VmmError.AlreadyAllocated => {},
-            else => panic(@errorReturnTrace(), "Failed mapping region in VMM {}: {}\n", .{ entry, e }),
+            else => panic(@errorReturnTrace(), "Failed mapping region in VMM {X}: {}\n", .{ entry, e }),
         };
     }
 
