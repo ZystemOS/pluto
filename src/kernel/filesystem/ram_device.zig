@@ -181,9 +181,9 @@ pub const RamDevice = struct {
         const read3 = try device.read(device, 1024, 0);
         defer std.testing.allocator.free(read3);
 
-        expectEqualSlices(u8, read1, &[_]u8 {0xAA});
-        expectEqualSlices(u8, read2, &[_]u8 {0xAA, 0xAA, 0xAA, 0xAA});
-        expectEqualSlices(u8, read3, &[_]u8 {});
+        expectEqualSlices(u8, read1, &[_]u8{0xAA});
+        expectEqualSlices(u8, read2, &[_]u8{ 0xAA, 0xAA, 0xAA, 0xAA });
+        expectEqualSlices(u8, read3, &[_]u8{});
     }
 
     test "write OutOfBounds" {
@@ -192,10 +192,10 @@ pub const RamDevice = struct {
         const device = ram_device.device;
         defer ram_device.deinit();
 
-        const write0 = &[_]u8 {};
-        const write1 = &[_]u8 {0xBB};
-        const write2 = &[_]u8 {0xBB, 0xBB};
-        const write5 = &[_]u8 {0xBB, 0xBB, 0xBB, 0xBB, 0xBB};
+        const write0 = &[_]u8{};
+        const write1 = &[_]u8{0xBB};
+        const write2 = &[_]u8{ 0xBB, 0xBB };
+        const write5 = &[_]u8{ 0xBB, 0xBB, 0xBB, 0xBB, 0xBB };
 
         expectError(error.OutOfBounds, device.write(device, 1020, write5));
         expectError(error.OutOfBounds, device.write(device, 1023, write2));
@@ -209,8 +209,8 @@ pub const RamDevice = struct {
         var ram_device = try RamDevice.init(buffer[0..], std.testing.allocator);
         const device = ram_device.device;
         defer ram_device.deinit();
-        
-        const write5 = &[_]u8 {0xBB, 0xBB, 0xBB, 0xBB, 0xBB};
+
+        const write5 = &[_]u8{ 0xBB, 0xBB, 0xBB, 0xBB, 0xBB };
 
         try device.write(device, 1000, write5);
         for (ram_device.memory) |m, i| {

@@ -433,8 +433,6 @@ const FreeListAllocator = struct {
         testing.expectEqual(header.next_free, null);
         testing.expectEqual(free_list.first_free, header);
 
-        std.debug.warn("", .{});
-
         // 64 bytes aligned to 4 bytes
         const alloc1 = try alloc(allocator, 64, 4, 0);
         const alloc1_addr = @ptrToInt(alloc1.ptr);
