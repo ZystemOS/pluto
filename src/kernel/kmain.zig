@@ -15,8 +15,9 @@ const panic_root = if (is_test) @import(mock_path ++ "panic_mock.zig") else @imp
 const task = if (is_test) @import(mock_path ++ "task_mock.zig") else @import("task.zig");
 const heap = @import("heap.zig");
 const scheduler = @import("scheduler.zig");
-const vfs = @import("vfs.zig");
-const initrd = @import("initrd.zig");
+const vfs = @import("filesystem/vfs.zig");
+const initrd = @import("filesystem/initrd.zig");
+const ram_device = @import("filesystem/ram_device.zig");
 
 comptime {
     if (!is_test) {
@@ -106,6 +107,14 @@ export fn kmain(boot_payload: arch.BootPayload) void {
 
     if (rd_module) |module| {
         // Load the ram disk
+        // Create a RamDevice
+        // const rd_len: usize = module.region.end - module.region.start;
+        // const ramdisk_bytes = @intToPtr([*]u8, module.region.start)[0..rd_len];
+        // Tbh, there is a lot, A LOT of memory coping. It would be faster to just use the ram disk in memory already.
+        // It would be nice to use the ram device for the initrd but would but unnecessary.
+        // var ram_disk_device = ram_device.RamDevice.init(ramdisk_bytes, &kernel_heap.allocator) catch |e| {
+        //     panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk device: {}\n", .{e});
+        // };
         var ramdisk_filesystem = initrd.InitrdFS.init(module, &kernel_heap.allocator) catch |e| {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk: {}\n", .{e});
         };
@@ -124,7 +133,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     }
 
     // Initialisation is finished, now does other stuff
-    std.log.info(.kmain, "Init\n", .{});
+    std.log.info(.kmain, "Done\n", .{});
 
     // Main initialisation finished so can enable interrupts
     arch.enableInterrupts();
