@@ -177,6 +177,67 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         }
 
         ///
+        /// Find the physical address that a given virtual address is mapped to.
+        ///
+        /// Arguments:
+        ///     IN self: *const Self - The VMM to check for mappings in
+        ///     IN virt: usize - The virtual address to find the physical address for
+        ///
+        /// Return: usize
+        ///     The physical address that the virtual address is mapped to
+        ///
+        /// Error: VmmError
+        ///     VmmError.NotAllocated - The virtual address hasn't been mapped within the VMM
+        ///
+        pub fn virtToPhys(self: *const Self, virt: usize) VmmError!usize {
+            for (self.allocations.unmanaged.entries.items) |entry| {
+                const vaddr = entry.key;
+                // If we've gone past the address without finding a covering region then it hasn't been mapped
+                if (vaddr > virt) {
+                    break;
+                }
+
+                const allocation = entry.value;
+                // If this allocation range covers the virtual address then figure out the corresponding physical block
+                if (vaddr <= virt and vaddr + (allocation.physical.items.len * BLOCK_SIZE) > virt) {
+                    const block_number = (virt - vaddr) / BLOCK_SIZE;
+                    const block_offset = (virt - vaddr) % BLOCK_SIZE;
+                    return allocation.physical.items[block_number] + block_offset;
+                }
+            }
+            return VmmError.NotAllocated;
+        }
+
+        ///
+        /// Find the virtual address that a given physical address is mapped to.
+        ///
+        /// Arguments:
+        ///     IN self: *const Self - The VMM to check for mappings in
+        ///     IN phys: usize - The physical address to find the virtual address for
+        ///
+        /// Return: usize
+        ///     The virtual address that the physical address is mapped to
+        ///
+        /// Error: VmmError
+        ///     VmmError.NotAllocated - The physical address hasn't been mapped within the VMM
+        ///
+        pub fn physToVirt(self: *const Self, phys: usize) VmmError!usize {
+            for (self.allocations.unmanaged.entries.items) |entry| {
+                const vaddr = entry.key;
+                const allocation = entry.value;
+
+                for (allocation.physical.items) |block, i| {
+                    if (block <= phys and block + BLOCK_SIZE > phys) {
+                        const block_addr = vaddr + i * BLOCK_SIZE;
+                        const block_offset = phys % BLOCK_SIZE;
+                        return block_addr + block_offset;
+                    }
+                }
+            }
+            return VmmError.NotAllocated;
+        }
+
+        ///
         /// Check if a virtual memory address has been set
         ///
         /// Arguments:
@@ -386,6 +447,50 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator
         else => {},
     }
     return vmm;
+}
+
+test "virtToPhys" {
+    const num_entries = 512;
+    var vmm = try testInit(num_entries);
+
+    const vstart = test_vaddr_start + BLOCK_SIZE;
+    const vend = vstart + BLOCK_SIZE * 3;
+    const pstart = BLOCK_SIZE * 20;
+    const pend = BLOCK_SIZE * 23;
+
+    // Set the physical and virtual back to front to complicate the mappings a bit
+    try vmm.set(.{ .start = vstart, .end = vstart + BLOCK_SIZE }, mem.Range{ .start = pstart + BLOCK_SIZE * 2, .end = pend }, .{ .kernel = true, .writable = true, .cachable = true });
+    try vmm.set(.{ .start = vstart + BLOCK_SIZE, .end = vend }, mem.Range{ .start = pstart, .end = pstart + BLOCK_SIZE * 2 }, .{ .kernel = true, .writable = true, .cachable = true });
+
+    std.testing.expectEqual(pstart + BLOCK_SIZE * 2, try vmm.virtToPhys(vstart));
+    std.testing.expectEqual(pstart + BLOCK_SIZE * 2 + 29, (try vmm.virtToPhys(vstart + 29)));
+    std.testing.expectEqual(pstart + 29, (try vmm.virtToPhys(vstart + BLOCK_SIZE + 29)));
+
+    std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vstart - 1));
+    std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vend));
+    std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vend + 1));
+}
+
+test "physToVirt" {
+    const num_entries = 512;
+    var vmm = try testInit(num_entries);
+
+    const vstart = test_vaddr_start + BLOCK_SIZE;
+    const vend = vstart + BLOCK_SIZE * 3;
+    const pstart = BLOCK_SIZE * 20;
+    const pend = BLOCK_SIZE * 23;
+
+    // Set the physical and virtual back to front to complicate the mappings a bit
+    try vmm.set(.{ .start = vstart, .end = vstart + BLOCK_SIZE }, mem.Range{ .start = pstart + BLOCK_SIZE * 2, .end = pend }, .{ .kernel = true, .writable = true, .cachable = true });
+    try vmm.set(.{ .start = vstart + BLOCK_SIZE, .end = vend }, mem.Range{ .start = pstart, .end = pstart + BLOCK_SIZE * 2 }, .{ .kernel = true, .writable = true, .cachable = true });
+
+    std.testing.expectEqual(vstart, try vmm.physToVirt(pstart + BLOCK_SIZE * 2));
+    std.testing.expectEqual(vstart + 29, (try vmm.physToVirt(pstart + BLOCK_SIZE * 2 + 29)));
+    std.testing.expectEqual(vstart + BLOCK_SIZE + 29, (try vmm.physToVirt(pstart + 29)));
+
+    std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pstart - 1));
+    std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pend));
+    std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pend + 1));
 }
 
 test "alloc and free" {
@@ -601,6 +706,15 @@ fn runtimeTests(comptime Payload: type, vmm: VirtualMemoryManager(Payload), mem_
         } else {
             for (mem_profile.virtual_reserved) |entry| {
                 if (vaddr >= std.mem.alignBackward(entry.virtual.start, BLOCK_SIZE) and vaddr < std.mem.alignForward(entry.virtual.end, BLOCK_SIZE)) {
+                    if (entry.physical) |phys| {
+                        const expected_phys = phys.start + (vaddr - entry.virtual.start);
+                        if (vmm.virtToPhys(vaddr) catch unreachable != expected_phys) {
+                            panic(@errorReturnTrace(), "virtToPhys didn't return the correct physical address for 0x{X} (0x{X})\n", .{ vaddr, vmm.virtToPhys(vaddr) });
+                        }
+                        if (vmm.physToVirt(expected_phys) catch unreachable != vaddr) {
+                            panic(@errorReturnTrace(), "physToVirt didn't return the correct virtual address for 0x{X} (0x{X})\n", .{ expected_phys, vaddr });
+                        }
+                    }
                     should_be_set = true;
                     break;
                 }
