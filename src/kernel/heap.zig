@@ -421,8 +421,6 @@ const FreeListAllocator = struct {
         var free_list = &(try FreeListAllocator.init(start, size));
         var allocator = &free_list.allocator;
 
-        std.debug.warn("", .{});
-
         const alloc0 = try alloc(allocator, 64, 0, 0);
         const alloc0_addr = @ptrToInt(alloc0.ptr);
         // Should be at the start of the heap
