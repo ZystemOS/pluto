@@ -3,6 +3,7 @@ const testing = std.testing;
 const TailQueue = std.TailQueue;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
+const Device = @import("device.zig").Device;
 
 /// Flags specifying what to do when opening a file or directory
 pub const OpenFlags = enum {
@@ -114,7 +115,7 @@ pub const FileSystem = struct {
     ///     Allocator.Error.OutOfMemory - There wasn't enough memory to fulfill the request
     ///     Error.NoSuchFileOrDir - The file/dir by that name doesn't exist and the flags didn't specify to create it
     ///
-    const Open = fn (self: *const Self, node: *const DirNode, name: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*Node;
+    const Open = fn (self: *const Self, node: *const DirNode, name: []const u8, flags: OpenFlags) (Allocator.Error || Device.Error || Error)!*Node;
 
     ///
     /// Get the node representing the root of the filesystem. Used when mounting to bind the mount point to the root of the mounted fs
@@ -177,7 +178,7 @@ pub const DirNode = struct {
     mount: ?*const DirNode,
 
     /// See the documentation for FileSystem.Open
-    pub fn open(self: *const DirNode, name: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*Node {
+    pub fn open(self: *const DirNode, name: []const u8, flags: OpenFlags) (Allocator.Error || Device.Error || Error)!*Node {
         var fs = self.fs;
         var node = self;
         if (self.mount) |mnt| {
@@ -236,7 +237,7 @@ var root: *Node = undefined;
 ///     Error.NotADirectory - A segment within the path which is not at the end does not correspond to a directory
 ///     Error.NoSuchFileOrDir - The file/dir at the end of the path doesn't exist and the flags didn't specify to create it
 ///
-fn traversePath(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*Node {
+fn traversePath(path: []const u8, flags: OpenFlags) (Allocator.Error || Device.Error || Error)!*Node {
     if (!isAbsolute(path)) {
         return Error.NotAbsolutePath;
     }
@@ -246,7 +247,7 @@ fn traversePath(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*
         child: []const u8,
 
         const Self = @This();
-        fn func(split: *std.mem.SplitIterator, node: *Node, rec_flags: OpenFlags) (Allocator.Error || Error)!Self {
+        fn func(split: *std.mem.SplitIterator, node: *Node, rec_flags: OpenFlags) (Allocator.Error || Device.Error || Error)!Self {
             // Get segment string. This will not be unreachable as we've made sure the spliterator has more segments left
             const seg = split.next() orelse unreachable;
             if (split.rest().len == 0) {
@@ -311,7 +312,7 @@ pub fn mount(dir: *DirNode, fs: *const FileSystem) MountError!void {
 ///     Error.NotADirectory - A segment within the path which is not at the end does not correspond to a directory
 ///     Error.NoSuchFileOrDir - The file/dir at the end of the path doesn't exist and the flags didn't specify to create it
 ///
-pub fn open(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*Node {
+pub fn open(path: []const u8, flags: OpenFlags) (Allocator.Error || Device.Error || Error)!*Node {
     return try traversePath(path, flags);
 }
 
@@ -332,7 +333,7 @@ pub fn open(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*Node
 ///     Error.NoSuchFileOrDir - The file/dir at the end of the path doesn't exist and the flags didn't specify to create it
 ///     Error.IsADirectory - The path corresponds to a directory rather than a file
 ///
-pub fn openFile(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*const FileNode {
+pub fn openFile(path: []const u8, flags: OpenFlags) (Allocator.Error || Device.Error || Error)!*const FileNode {
     switch (flags) {
         .CREATE_DIR => return Error.InvalidFlags,
         .NO_CREATION, .CREATE_FILE => {},
@@ -361,7 +362,7 @@ pub fn openFile(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*
 ///     Error.NoSuchFileOrDir - The file/dir at the end of the path doesn't exist and the flags didn't specify to create it
 ///     Error.NotADirectory - The path corresponds to a file rather than a directory
 ///
-pub fn openDir(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*DirNode {
+pub fn openDir(path: []const u8, flags: OpenFlags) (Allocator.Error || Device.Error || Error)!*DirNode {
     switch (flags) {
         .CREATE_FILE => return Error.InvalidFlags,
         .NO_CREATION, .CREATE_DIR => {},
