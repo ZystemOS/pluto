@@ -1,5 +1,7 @@
 const arch = @import("arch.zig");
+const Cpu = arch.Cpu;
 const log = @import("../../log.zig");
+const rpi = @import("rpi.zig");
 
 pub extern var exception_table: *usize;
 
@@ -59,27 +61,44 @@ const ExceptionCategory = enum(u2) {
 
 const ExceptionClass = enum(u6) {
     instruction_abort = 0x21,
+    pc_alignment = 0x22,
     data_abort = 0x25,
     sp_alignment = 0x26,
     _,
 };
 
+pub var exception_handler_depth: u32 = undefined;
+
 export fn exceptionHandler() noreturn {
-    const exception_entry_offset = @truncate(u32, lr() & 0x780);
+    exception_handler_depth += 1;
+    if (exception_handler_depth > 1) {
+        if (exception_handler_depth == 2) {
+            log.logError("\n", .{});
+            log.logError("arm exception taken when already active!\n", .{});
+        }
+        rpi.spinLed(50);
+    }
+    const exception_entry_offset = @truncate(u32, Cpu.lr.read() & 0x780);
     var elr_elx: usize = undefined;
     var esr_elx: usize = undefined;
     var far_elx: usize = undefined;
+    var mair_elx: usize = undefined;
     var sctlr_elx: usize = undefined;
     var spsr_elx: usize = undefined;
+    var tcr_elx: usize = undefined;
+    var ttbr0_elx: usize = undefined;
     var vbar_elx: usize = undefined;
     inline for ([_]u32{ 1, 2, 3 }) |exception_level| {
         if (exception_level == currentExceptionLevel()) {
-            elr_elx = mrsEl("elr_el", exception_level);
-            esr_elx = mrsEl("esr_el", exception_level);
-            far_elx = mrsEl("far_el", exception_level);
-            sctlr_elx = mrsEl("sctlr_el", exception_level);
-            spsr_elx = mrsEl("spsr_el", exception_level);
-            vbar_elx = mrsEl("vbar_el", exception_level);
+            elr_elx = Cpu.elr.el(exception_level).read();
+            esr_elx = Cpu.esr.el(exception_level).read();
+            far_elx = Cpu.far.el(exception_level).read();
+            mair_elx = Cpu.mair.el(exception_level).read();
+            sctlr_elx = Cpu.sctlr.el(exception_level).read();
+            spsr_elx = Cpu.spsr.el(exception_level).read();
+            tcr_elx = Cpu.tcr.el(exception_level).read();
+            ttbr0_elx = Cpu.ttbr0.el(exception_level).read();
+            vbar_elx = Cpu.vbar.el(exception_level).read();
         }
     }
     const esr_elx_class = @intToEnum(ExceptionClass, @truncate(u6, esr_elx >> 26));
@@ -97,6 +116,24 @@ export fn exceptionHandler() noreturn {
                         log.logError("this exception has been seen previously in development\n", .{});
                         log.logError("    data abort in level {} (while using sp_el{} and not sp_el0)\n", .{ currentExceptionLevel(), currentExceptionLevel() });
                         log.logError("    32 bit instruction at 0x{x} accessing 0x{x}\n", .{ elr_elx, far_elx });
+                    },
+                    0x21 => {
+                        if (far_elx == 0x1) {
+                            seen_previously = true;
+                            log.logError("this exception has been seen previously in development\n", .{});
+                            log.logError("    data abort in level {} (while using sp_el{} and not sp_el0)\n", .{ currentExceptionLevel(), currentExceptionLevel() });
+                            log.logError("    32 bit instruction at 0x{x} accessing 0x{x}\n", .{ elr_elx, far_elx });
+                            log.logError("    test 32 bit read of address 0x1\n", .{});
+                        } else {
+                            seen_previously = true;
+                            log.logError("this exception has been seen previously in development\n", .{});
+                            log.logError("    data abort, read, alignment fault ...\n", .{});
+                        }
+                    },
+                    0x61 => {
+                        seen_previously = true;
+                        log.logError("this exception has been seen previously in development\n", .{});
+                        log.logError("    data abort, write, alignment\n", .{});
                     },
                     else => {},
                 }
@@ -123,59 +160,16 @@ export fn exceptionHandler() noreturn {
     log.logError("    esr_el{} 0x{x}: {}, 32 bit instruction {}, iss 0x{x}\n", .{ currentExceptionLevel(), esr_elx, esr_elx_class, esr_elx_instruction_is_32_bits, esr_elx_iss });
     log.logError("    exception entry offset 0x{x} {} {}\n", .{ exception_entry_offset, @intToEnum(ExceptionTakenFrom, @truncate(u2, exception_entry_offset >> 9)), @intToEnum(ExceptionCategory, @truncate(u2, exception_entry_offset >> 7)) });
     log.logError("    far_el{} 0x{x}\n", .{ currentExceptionLevel(), far_elx });
+    log.logError("    mair_el{} 0x{x}\n", .{ currentExceptionLevel(), mair_elx });
     log.logError("    sctlr_el{} 0x{x}\n", .{ currentExceptionLevel(), sctlr_elx });
     log.logError("    spsr_el{} 0x{x}\n", .{ currentExceptionLevel(), spsr_elx });
+    log.logError("    tcr_el{} 0x{x}\n", .{ currentExceptionLevel(), tcr_elx });
+    log.logError("    ttbr0_el{} 0x{x}\n", .{ currentExceptionLevel(), ttbr0_elx });
     log.logError("    vbar_el{} 0x{x}\n", .{ currentExceptionLevel(), vbar_elx });
-    while (true) {}
-}
-
-inline fn lr() usize {
-    return register("lr");
-}
-
-inline fn sp() usize {
-    return register("sp");
-}
-
-fn cpsr() usize {
-    return mrs("cpsr");
-}
-
-fn spsr() usize {
-    return mrs("spsr");
-}
-
-fn sctlr() usize {
-    var word = asm ("mrc p15, 0, %[word], c1, c0, 0"
-        : [word] "=r" (-> usize)
-    );
-    return word;
-}
-
-inline fn mrs(comptime register_name: []const u8) usize {
-    const word = asm ("mrs %[word], " ++ register_name
-        : [word] "=r" (-> usize)
-    );
-    return word;
-}
-
-inline fn register(comptime register_name: []const u8) usize {
-    const word = asm ("mov %[word], " ++ register_name
-        : [word] "=r" (-> usize)
-    );
-    return word;
-}
-
-inline fn mrsEl(comptime register_name: []const u8, comptime exception_level: u32) usize {
-    const exception_level_string = switch (exception_level) {
-        1 => "1",
-        2 => "2",
-        3 => "3",
-        else => unreachable,
-    };
-    return mrs(register_name ++ exception_level_string);
+    log.logError("exception done\n", .{});
+    rpi.spinLed(100);
 }
 
 pub inline fn currentExceptionLevel() u2 {
-    return @truncate(u2, mrs("CurrentEL") >> 2);
+    return @truncate(u2, Cpu.CurrentEL.read() >> 2);
 }

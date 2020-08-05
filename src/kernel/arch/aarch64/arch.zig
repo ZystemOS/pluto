@@ -22,9 +22,8 @@ pub const KERNEL_VMM_PAYLOAD: VmmPayload = 0;
 
 // The system clock frequency in Hz
 const SYSTEM_CLOCK: usize = 700000000;
-const UART_BAUD_RATE: usize = 115200;
 
-var mmio_addr: usize = undefined;
+pub var mmio_addr: usize = undefined;
 
 extern var KERNEL_PHYSADDR_START: *u32;
 extern var KERNEL_PHYSADDR_END: *u32;
@@ -33,52 +32,53 @@ pub fn initTTY(boot_payload: BootPayload) TTY {
     return undefined;
 }
 
-pub fn initSerial(board: BootPayload) Serial {
+pub fn initMmioAddress(board: *rpi.RaspberryPiBoard) void {
     mmio_addr = board.mmioAddress();
-    // Disable uart
-    mmio.write(mmio_addr, mmio.Register.UART_CONTROL, 0);
-    // Disable pull up/down for all GPIO pins
-    mmio.write(mmio_addr, mmio.Register.GPIO_PULL, 0);
-    // Disable pull up/down for pins 14 and 15
-    mmio.write(mmio_addr, mmio.Register.GPIO_PULL_CLK, (1 << 14) | (1 << 15));
-    // Apply pull up/down change for pins 14 and 15
-    mmio.write(mmio_addr, mmio.Register.GPIO_PULL_CLK, 0);
-    // Clear pending uart interrupts
-    mmio.write(mmio_addr, mmio.Register.UART_INT_CONTROL, 0x7FF);
+}
 
-    // For models after rpi 2 (those supporting aarch64) the uart clock is dependent on the system clock
-    // so set it to a known constant rather than calculating it
-    const cmd: []const volatile u32 align(16) = &[_]u32{ 36, 0, 0x38002, 12, 8, 2, SYSTEM_CLOCK, 0, 0 };
-    const cmd_addr = (@intCast(u32, @ptrToInt(&cmd)) & ~@as(u32, 0xF)) | 8;
-    // Wait until the mailbox isn't busy
-    while ((mmio.read(mmio_addr, mmio.Register.MBOX_STATUS) & 0x80000000) != 0) {}
-    mmio.write(mmio_addr, mmio.Register.MBOX_WRITE, cmd_addr);
-    // Wait for the correct response
-    while ((mmio.read(mmio_addr, mmio.Register.MBOX_STATUS) & 0x40000000) != 0 or mmio.read(mmio_addr, mmio.Register.MBOX_READ) != cmd_addr) {}
-
-    // Setup baudrate
-    const divisor: f32 = @intToFloat(f32, SYSTEM_CLOCK) / @intToFloat(f32, 16 * UART_BAUD_RATE);
-    const divisor_int: u32 = @floatToInt(u32, divisor);
-    const divisor_frac: u32 = @floatToInt(u32, (divisor - @intToFloat(f32, divisor_int)) * 64.0 + 0.5);
-    mmio.write(mmio_addr, mmio.Register.UART_BAUD_INT, divisor_int);
-    mmio.write(mmio_addr, mmio.Register.UART_BAUD_FRAC, divisor_frac);
-
-    // Enable FIFO, 8 bit words, 1 stop bit and no parity bit
-    mmio.write(mmio_addr, mmio.Register.UART_LINE_CONTROL, 1 << 4 | 1 << 5 | 1 << 6);
-    // Mask all interrupts
-    mmio.write(mmio_addr, mmio.Register.UART_INT_MASK, 1 << 1 | 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10);
-    // Enable UART0 receive and transmit
-    mmio.write(mmio_addr, mmio.Register.UART_CONTROL, 1 << 0 | 1 << 8 | 1 << 9);
-
+// The auxiliary uart (uart1) is the primary uart used for the console on pi3b and up.
+//  The main uart (uart0) is used for the on-board bluetooth device on these boards.
+//  See https://www.raspberrypi.org/documentation/configuration/uart.md
+//  Note that config.txt contains enable_uart=1 which locks the core clock frequency
+//   which is required for a stable baud rate on the auxiliary uart (uart1.)
+//
+// However, qemu does not implement uart1. Therefore on qemu we use uart0 for the text console.
+//  Furthermore uart0 on qemu does not need any initialization.
+//
+pub fn initSerial(board: BootPayload) Serial {
+    if (!Cpu.isQemu()) {
+        // On an actual rpi, initialize uart1 to 115200 baud on pins 14 and 15:
+        rpi.pinSetPullUpAndFunction(14, .None, .AlternateFunction5);
+        rpi.pinSetPullUpAndFunction(15, .None, .AlternateFunction5);
+        mmio.write(mmio_addr, .AUX_ENABLES, 1);
+        mmio.write(mmio_addr, .AUX_MU_IER_REG, 0);
+        mmio.write(mmio_addr, .AUX_MU_CNTL_REG, 0);
+        mmio.write(mmio_addr, .AUX_MU_LCR_REG, 3);
+        mmio.write(mmio_addr, .AUX_MU_MCR_REG, 0);
+        mmio.write(mmio_addr, .AUX_MU_IER_REG, 0);
+        mmio.write(mmio_addr, .AUX_MU_IIR_REG, 0xc6);
+        mmio.write(mmio_addr, .AUX_MU_BAUD_REG, 270);
+        mmio.write(mmio_addr, .AUX_MU_CNTL_REG, 3);
+    }
     return .{
         .write = uartWriteByte,
     };
 }
 
-fn uartWriteByte(byte: u8) void {
-    // Wait until the UART is ready to transmit
-    while ((mmio.read(mmio_addr, mmio.Register.UART_FLAGS) & (1 << 5)) != 0) {}
-    mmio.write(mmio_addr, mmio.Register.UART_DATA, byte);
+pub fn uartWriteByte(byte: u8) void {
+    // if ascii line feed then first send carriage return
+    if (byte == 10) {
+        uartWriteByte(13);
+    }
+    if (Cpu.isQemu()) {
+        // Since qemu does not implement uart1, qemu uses uart0 for the console:
+        while (mmio.read(mmio_addr, .UART_FLAGS) & (1 << 5) != 0) {}
+        mmio.write(mmio_addr, .UART_DATA, byte);
+    } else {
+        // On an actual rpi, use uart1:
+        while (mmio.read(mmio_addr, .AUX_MU_LSR_REG) & (1 << 5) == 0) {}
+        mmio.write(mmio_addr, .AUX_MU_IO_REG, byte);
+    }
 }
 
 pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
@@ -121,4 +121,109 @@ pub fn haltNoInterrupts() noreturn {
 // TODO: implement
 pub fn spinWait() noreturn {
     while (true) {}
+}
+
+pub const Cpu = struct {
+    pub const cntfrq = systemRegisterPerExceptionLevel("cntfrq");
+    pub const CurrentEL = systemRegister("CurrentEL");
+    pub const elr = systemRegisterPerExceptionLevel("elr");
+    pub const esr = systemRegisterPerExceptionLevel("esr");
+    pub const far = systemRegisterPerExceptionLevel("far");
+    pub const lr = cpuRegister("lr");
+    pub const mair = systemRegisterPerExceptionLevel("mair");
+    pub const midr = systemRegisterPerExceptionLevel("midr");
+    pub const mpidr = systemRegisterPerExceptionLevel("mpidr");
+    pub const sctlr = systemRegisterPerExceptionLevel("sctlr");
+    pub const sp = cpuRegister("sp");
+    pub const spsr = systemRegisterPerExceptionLevel("spsr");
+    pub const tcr = systemRegisterPerExceptionLevel("tcr");
+    pub const ttbr0 = systemRegisterPerExceptionLevel("ttbr0");
+    pub const vbar = systemRegisterPerExceptionLevel("vbar");
+
+    fn cpuRegister(comptime register_name: []const u8) type {
+        return struct {
+            pub inline fn read() usize {
+                const data = asm ("mov %[data], " ++ register_name
+                    : [data] "=r" (-> usize)
+                );
+                return data;
+            }
+            pub inline fn write(data: usize) void {
+                asm volatile ("mov " ++ register_name ++ ", %[data]"
+                    :
+                    : [data] "r" (data)
+                );
+            }
+        };
+    }
+    fn systemRegisterPerExceptionLevel(comptime register_name: []const u8) type {
+        return struct {
+            pub inline fn el(exception_level: u2) type {
+                const level_string = switch (exception_level) {
+                    0 => "0",
+                    1 => "1",
+                    2 => "2",
+                    3 => "3",
+                };
+                return systemRegister(register_name ++ "_el" ++ level_string);
+            }
+        };
+    }
+    fn systemRegister(comptime register_name: []const u8) type {
+        return struct {
+            pub inline fn read() usize {
+                const word = asm ("mrs %[word], " ++ register_name
+                    : [word] "=r" (-> usize)
+                );
+                return word;
+            }
+            pub inline fn readSetWrite(bits: usize) void {
+                write(read() | bits);
+            }
+            pub inline fn write(data: usize) void {
+                asm volatile ("msr " ++ register_name ++ ", %[data]"
+                    :
+                    : [data] "r" (data)
+                );
+            }
+        };
+    }
+    pub inline fn isb() void {
+        asm volatile (
+            \\ isb
+        );
+    }
+
+    pub fn isQemu() bool {
+        return cntfrq.el(0).read() != 0;
+    }
+
+    pub inline fn wfe() void {
+        asm volatile (
+            \\ wfe
+        );
+    }
+};
+
+// map 1GB to ram except last 16MB to mmio
+pub fn enableFlatMmu() void {
+    const level_2_table = @intToPtr([*]usize, 0x50000)[0..2];
+    level_2_table[0] = 0x60000 | 0x3;
+    level_2_table[1] = 0x70000 | 0x3;
+    const level_3_page_table = @intToPtr([*]usize, 0x60000)[0 .. 2 * 8 * 1024];
+    const page_size = 64 * 1024;
+    const start_of_mmio = level_3_page_table.len - (16 * 1024 * 1024 / page_size);
+    var index: usize = 0;
+    while (index < start_of_mmio) : (index += 1) {
+        level_3_page_table[index] = index * page_size + 0x0703; // normal pte=3 attr index=0 inner shareable=3 af=1
+    }
+    while (index < level_3_page_table.len) : (index += 1) {
+        level_3_page_table[index] = index * page_size + 0x0607; // device pte=3 attr index=1 outer shareable=2 af=1
+    }
+    Cpu.mair.el(3).write(0x04ff);
+    Cpu.tcr.el(3).readSetWrite(0x80804022);
+    Cpu.ttbr0.el(3).write(0x50000);
+    Cpu.isb();
+    Cpu.sctlr.el(3).readSetWrite(0x1);
+    Cpu.isb();
 }
