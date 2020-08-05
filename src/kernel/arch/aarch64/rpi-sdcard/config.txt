@@ -1,0 +1,4 @@
+arm_64bit=1
+disable_commandline_tags=1
+kernel=kernel8-load-at-zero.img
+old_kernel=1
