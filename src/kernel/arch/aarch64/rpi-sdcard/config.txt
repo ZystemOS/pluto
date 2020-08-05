@@ -1,0 +1,3 @@
+arm_64bit=1
+disable_commandline_tags=1
+old_kernel=1

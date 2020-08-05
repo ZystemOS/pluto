@@ -40,6 +40,8 @@
 
 # Zig
 zig-cache
+/rpi-sdcard*
+/rpi-sdcard/
 
 # Build dir
 bin/*

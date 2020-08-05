@@ -3,6 +3,7 @@ const vmm = @import("../../vmm.zig");
 const mem = @import("../../mem.zig");
 const Serial = @import("../../serial.zig").Serial;
 const TTY = @import("../../tty.zig").TTY;
+const interrupts = @import("interrupts.zig");
 const log = @import("../../log.zig");
 const rpi = @import("rpi.zig");
 const mmio = @import("mmio.zig");
@@ -22,8 +23,8 @@ pub const KERNEL_VMM_PAYLOAD: VmmPayload = 0;
 
 // The system clock frequency in Hz
 const SYSTEM_CLOCK: usize = 700000000;
-const UART_BAUD_RATE: usize = 115200;
 
+pub var is_qemu: bool = undefined;
 var mmio_addr: usize = undefined;
 
 extern var KERNEL_PHYSADDR_START: *u32;
@@ -35,50 +36,38 @@ pub fn initTTY(boot_payload: BootPayload) TTY {
 
 pub fn initSerial(board: BootPayload) Serial {
     mmio_addr = board.mmioAddress();
-    // Disable uart
-    mmio.write(mmio_addr, mmio.Register.UART_CONTROL, 0);
-    // Disable pull up/down for all GPIO pins
-    mmio.write(mmio_addr, mmio.Register.GPIO_PULL, 0);
-    // Disable pull up/down for pins 14 and 15
-    mmio.write(mmio_addr, mmio.Register.GPIO_PULL_CLK, (1 << 14) | (1 << 15));
-    // Apply pull up/down change for pins 14 and 15
-    mmio.write(mmio_addr, mmio.Register.GPIO_PULL_CLK, 0);
-    // Clear pending uart interrupts
-    mmio.write(mmio_addr, mmio.Register.UART_INT_CONTROL, 0x7FF);
-
-    // For models after rpi 2 (those supporting aarch64) the uart clock is dependent on the system clock
-    // so set it to a known constant rather than calculating it
-    const cmd: []const volatile u32 align(16) = &[_]u32{ 36, 0, 0x38002, 12, 8, 2, SYSTEM_CLOCK, 0, 0 };
-    const cmd_addr = (@intCast(u32, @ptrToInt(&cmd)) & ~@as(u32, 0xF)) | 8;
-    // Wait until the mailbox isn't busy
-    while ((mmio.read(mmio_addr, mmio.Register.MBOX_STATUS) & 0x80000000) != 0) {}
-    mmio.write(mmio_addr, mmio.Register.MBOX_WRITE, cmd_addr);
-    // Wait for the correct response
-    while ((mmio.read(mmio_addr, mmio.Register.MBOX_STATUS) & 0x40000000) != 0 or mmio.read(mmio_addr, mmio.Register.MBOX_READ) != cmd_addr) {}
-
-    // Setup baudrate
-    const divisor: f32 = @intToFloat(f32, SYSTEM_CLOCK) / @intToFloat(f32, 16 * UART_BAUD_RATE);
-    const divisor_int: u32 = @floatToInt(u32, divisor);
-    const divisor_frac: u32 = @floatToInt(u32, (divisor - @intToFloat(f32, divisor_int)) * 64.0 + 0.5);
-    mmio.write(mmio_addr, mmio.Register.UART_BAUD_INT, divisor_int);
-    mmio.write(mmio_addr, mmio.Register.UART_BAUD_FRAC, divisor_frac);
-
-    // Enable FIFO, 8 bit words, 1 stop bit and no parity bit
-    mmio.write(mmio_addr, mmio.Register.UART_LINE_CONTROL, 1 << 4 | 1 << 5 | 1 << 6);
-    // Mask all interrupts
-    mmio.write(mmio_addr, mmio.Register.UART_INT_MASK, 1 << 1 | 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7 | 1 << 8 | 1 << 9 | 1 << 10);
-    // Enable UART0 receive and transmit
-    mmio.write(mmio_addr, mmio.Register.UART_CONTROL, 1 << 0 | 1 << 8 | 1 << 9);
-
+    is_qemu = interrupts.mrs("cntfrq_el0") != 0;
+    if (!is_qemu) {
+        pinSetFunction(14, .AlternateFunction5);
+        pinSetPull(14, .None);
+        pinSetFunction(15, .AlternateFunction5);
+        pinSetPull(15, .None);
+        mmio.write(mmio_addr, .AUX_ENABLES, 1);
+        mmio.write(mmio_addr, .AUX_MU_IER_REG, 0);
+        mmio.write(mmio_addr, .AUX_MU_CNTL_REG, 0);
+        mmio.write(mmio_addr, .AUX_MU_LCR_REG, 3);
+        mmio.write(mmio_addr, .AUX_MU_MCR_REG, 0);
+        mmio.write(mmio_addr, .AUX_MU_IER_REG, 0);
+        mmio.write(mmio_addr, .AUX_MU_IIR_REG, 0xc6);
+        mmio.write(mmio_addr, .AUX_MU_BAUD_REG, 270);
+        mmio.write(mmio_addr, .AUX_MU_CNTL_REG, 3);
+    }
     return .{
         .write = uartWriteByte,
     };
 }
 
-fn uartWriteByte(byte: u8) void {
-    // Wait until the UART is ready to transmit
-    while ((mmio.read(mmio_addr, mmio.Register.UART_FLAGS) & (1 << 5)) != 0) {}
-    mmio.write(mmio_addr, mmio.Register.UART_DATA, byte);
+pub fn uartWriteByte(byte: u8) void {
+    if (byte == 10) {
+        uartWriteByte(13);
+    }
+    if (is_qemu) {
+        while (mmio.read(mmio_addr, .UART_FR) & (1 << 5) != 0) {}
+        mmio.write(mmio_addr, .UART_DR, byte);
+    } else {
+        while (mmio.read(mmio_addr, .AUX_MU_LSR_REG) & (1 << 5) == 0) {}
+        mmio.write(mmio_addr, .AUX_MU_IO_REG, byte);
+    }
 }
 
 pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
@@ -120,5 +109,133 @@ pub fn haltNoInterrupts() noreturn {
 
 // TODO: implement
 pub fn spinWait() noreturn {
-    while (true) {}
+    spinLed(500);
+}
+
+pub inline fn turnOnLed() void {
+    asm volatile (
+        \\ mov x0, #0x3f200000
+        \\ ldr w1, [x0, #0x08]
+        \\ mov x2, #0x38000000
+        \\ bic x1, x1, x2
+        \\ mov x2, #0x08000000
+        \\ orr x1, x1, x2
+        \\ str w1, [x0, #0x08]
+        \\ mov x1, #0x20000000
+        \\ str w1, [x0, #0x1c]
+        :
+        :
+        : "x0", "x1", "x2"
+    );
+}
+
+pub inline fn turnOffLed() void {
+    asm volatile (
+        \\ mov x0, #0x3f200000
+        \\ ldr w1, [x0, #0x08]
+        \\ mov x2, #0x38000000
+        \\ bic x1, x1, x2
+        \\ mov x2, #0x08000000
+        \\ orr x1, x1, x2
+        \\ str w1, [x0, #0x08]
+        \\ mov x1, #0x20000000
+        \\ str w1, [x0, #0x28]
+        :
+        :
+        : "x0", "x1", "x2"
+    );
+}
+
+pub fn spinLed(period: u32) noreturn {
+    const activity_led = 29;
+    pinSetFunction(activity_led, .Output);
+    var i: u32 = 0;
+    var j: u32 = 0;
+    while (true) : (j += 1) {
+        if (j % (period * 1000 / 2) == 0) {
+            i += 1;
+            pinWrite(activity_led, @truncate(u1, i));
+        }
+    }
+}
+
+fn pinSetFunction(pin_index: u6, f: PinFunction) void {
+    mmio.readModifyWriteField(mmio_addr, .GPIO_FSEL0, @enumToInt(f), pin_index);
+}
+
+fn pinSetPull(pin_index: u6, pull: PinPull) void {
+    mmio.write(mmio_addr, .GPIO_PUD, @enumToInt(pull));
+    delay(150);
+    mmio.writeClock(mmio_addr, .GPIO_PUDCLK0, @as(u1, 1), pin_index);
+    delay(150);
+    mmio.writeClock(mmio_addr, .GPIO_PUDCLK0, @as(u1, 0), pin_index);
+    mmio.write(mmio_addr, .GPIO_PUD, @enumToInt(PinPull.None));
+}
+
+fn pinWrite(pin_index: u6, zero_or_one: u1) void {
+    mmio.writeClock(mmio_addr, if (zero_or_one == 0) mmio.Register.GPIO_CLR0 else .GPIO_SET0, @as(u1, 1), pin_index);
+}
+
+const PinFunction = enum(u3) {
+    Input = 0,
+    Output = 1,
+    AlternateFunction0 = 4,
+    AlternateFunction1 = 5,
+    AlternateFunction2 = 6,
+    AlternateFunction3 = 7,
+    AlternateFunction4 = 3,
+    AlternateFunction5 = 2,
+};
+
+const PinPull = enum {
+    None,
+    Down,
+    Up,
+};
+
+fn delay(count: usize) void {
+    var i: usize = 0;
+    while (i < count) : (i += 1) {
+        asm volatile ("mov x0, x0");
+    }
+}
+
+// map 1GB to ram except last 16MB to mmio
+pub fn enableFlatMmu() void {
+    const level_2_table = @intToPtr([*]usize, 0x50000)[0..2];
+    level_2_table[0] = 0x60000 | 0x3;
+    level_2_table[1] = 0x70000 | 0x3;
+    const page_table = @intToPtr([*]usize, 0x60000)[0 .. 2 * 8 * 1024];
+    const page_size = 64 * 1024;
+    const start_of_mmio = page_table.len - (16 * 1024 * 1024 / page_size);
+    var index: usize = 0;
+    while (index < start_of_mmio) : (index += 1) {
+        page_table[index] = index * page_size + 0x0703; // normal pte=3 attr index=0 inner shareable=3 af=1
+    }
+    while (index < page_table.len) : (index += 1) {
+        page_table[index] = index * page_size + 0x0607; // device pte=3 attr index=1 outer shareable=2 af=1
+    }
+
+    asm volatile (
+        \\ mov x3, #0x04ff
+        \\ msr mair_el3, x3
+        \\
+        \\ mrs x3, tcr_el3
+        \\ mov x2, #0x4022 // tcr_el3 t0sz 34 tg0 64k
+        \\ orr x3, x3, x2
+        \\ mov x2, #0x80800000
+        \\ orr x3, x3, x2
+        \\ msr tcr_el3, x3
+        \\
+        \\ mov x1, #0x50000
+        \\ msr ttbr0_el3, x1
+        \\ isb
+        \\ mrs x0, sctlr_el3
+        \\ orr x0, x0, #1
+        \\ msr sctlr_el3, x0
+        \\ isb
+        :
+        :
+        : "x0", "x1", "x2", "x3"
+    );
 }

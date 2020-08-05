@@ -160,4 +160,49 @@ pub fn build(b: *Builder) !void {
         "target remote localhost:1234",
     });
     debug_step.dependOn(&debug_cmd.step);
+
+    const zip_folder = "rpi-sdcard";
+    const kernel = zip_folder ++ "/kernel8.img";
+    const zip_mkdir_cmd = b.addSystemCommand(&[_][]const u8{
+        "mkdir",
+        "-p",
+        zip_folder,
+    });
+    const zip_cp_files_cmd = b.addSystemCommand(&[_][]const u8{
+        "cp",
+        "-a",
+        "src/kernel/arch/aarch64/rpi-sdcard/config.txt",
+        zip_folder,
+    });
+    const zip_make_kernel_cmd = b.addSystemCommand(&[_][]const u8{
+        "/bin/bash",
+        "-c",
+        // armstub not yet working, therefore: b 0x80000 (which is 0x14020000) followed by 0 filler until 0x80000 followed by kernel that starts at 0x80000
+        "echo -ne \"\\x00\\x00\\x02\\x14\" > " ++ kernel ++ " && dd status=none bs=1 count=524284 if=/dev/zero >> " ++ kernel ++ " && cat zig-cache/kernel8.img >> " ++ kernel,
+    });
+    const firmware_version_tag = "1.20200601+arm64";
+    const firmware_url = "https://github.com/raspberrypi/firmware/raw/" ++ firmware_version_tag ++ "/boot/";
+    const zip_get_firmware_cmd = b.addSystemCommand(&[_][]const u8{
+        "wget",
+        "-Nq",
+        "-P",
+        zip_folder,
+        firmware_url ++ "bootcode.bin",
+        firmware_url ++ "fixup.dat",
+        firmware_url ++ "start.elf",
+    });
+    const zip_do_zip_cmd = b.addSystemCommand(&[_][]const u8{
+        "zip",
+        "-jqr",
+        zip_folder ++ ".zip",
+        zip_folder,
+    });
+
+    const zip_step = b.step("zip", "Create product zip file");
+    zip_step.dependOn(&make_iso.step);
+    zip_step.dependOn(&zip_mkdir_cmd.step);
+    zip_step.dependOn(&zip_cp_files_cmd.step);
+    zip_step.dependOn(&zip_make_kernel_cmd.step);
+    zip_step.dependOn(&zip_get_firmware_cmd.step);
+    zip_step.dependOn(&zip_do_zip_cmd.step);
 }
