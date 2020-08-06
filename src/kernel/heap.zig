@@ -543,6 +543,7 @@ const FreeListAllocator = struct {
     }
 
     test "resize" {
+        std.debug.warn("", .{});
         const size = 1024;
         var region = try testing.allocator.alloc(u8, size);
         defer testing.allocator.free(region);

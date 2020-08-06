@@ -8,6 +8,7 @@ const vmm = @import("vmm_mock.zig");
 const paging = @import("paging_mock.zig");
 const Serial = @import("../../../src/kernel/serial.zig").Serial;
 const TTY = @import("../../../src/kernel/tty.zig").TTY;
+const Keyboard = @import("../../../src/kernel/keyboard.zig").Keyboard;
 
 pub const task = @import("task_mock.zig");
 
@@ -140,6 +141,10 @@ pub fn initMem(payload: BootPayload) Allocator.Error!mem.MemProfile {
 pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!struct { stack: []u32, pointer: usize } {
     const ret = .{ .stack = &([_]u32{}), .pointer = 0 };
     return ret;
+}
+
+pub fn initKeyboard(allocator: *Allocator) Allocator.Error!?*Keyboard {
+    return null;
 }
 
 pub fn init(mem_profile: *const MemProfile) void {

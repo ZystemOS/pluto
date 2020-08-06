@@ -17,6 +17,7 @@ const heap = @import("heap.zig");
 const scheduler = @import("scheduler.zig");
 const vfs = @import("filesystem/vfs.zig");
 const initrd = @import("filesystem/initrd.zig");
+const keyboard = @import("keyboard.zig");
 
 comptime {
     if (!is_test) {
@@ -92,6 +93,12 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     };
 
     tty.init(&kernel_heap.allocator, boot_payload);
+    var arch_kb = keyboard.init(&fixed_allocator.allocator) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to inititalise keyboard: {}\n", .{e});
+    };
+    if (arch_kb) |kb| {
+        keyboard.addKeyboard(kb) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to add architecture keyboard: {}\n", .{e});
+    }
 
     scheduler.init(&kernel_heap.allocator) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise scheduler: {}\n", .{e});
@@ -169,6 +176,31 @@ fn initStage2() noreturn {
             std.log.info(.kmain, "SUCCESS\n", .{});
         },
         else => {},
+    }
+
+    const kb = keyboard.getKeyboard(0) orelse unreachable;
+    var shift = false;
+    while (true) {
+        if (kb.readKey()) |key| {
+            if (key.released) {
+                if (key.position == keyboard.KeyPosition.LEFT_SHIFT) {
+                    shift = false;
+                }
+                continue;
+            }
+            var char: ?u8 = switch (key.position) {
+                keyboard.KeyPosition.LEFT_SHIFT, keyboard.KeyPosition.RIGHT_SHIFT => blk: {
+                    shift = true;
+                    break :blk null;
+                },
+                keyboard.KeyPosition.Q => if (shift) @as(u8, 'Q') else @as(u8, 'q'),
+                keyboard.KeyPosition.W => if (shift) @as(u8, 'W') else @as(u8, 'w'),
+                else => null,
+            };
+            if (char) |ch| {
+                tty.print("{c}", .{ch});
+            }
+        }
     }
 
     // Can't return for now, later this can return maybe
