@@ -10,21 +10,20 @@ const mock_path = build_options.mock_path;
 const Allocator = std.mem.Allocator;
 const AutoHashMap = std.AutoHashMap;
 const vfs = @import("vfs.zig");
-const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
-const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("panic.zig").panic;
+const mem = if (is_test) @import("../" ++ mock_path ++ "mem_mock.zig") else @import("../mem.zig");
+const panic = if (is_test) @import("../" ++ mock_path ++ "panic_mock.zig").panic else @import("../panic.zig").panic;
 
 /// The Initrd file system struct.
 /// Format of raw ramdisk:
 /// (NumOfFiles:usize)[(name_length:usize)(name:u8[name_length])(content_length:usize)(content:u8[content_length])]*
 pub const InitrdFS = struct {
-    /// The ramdisk header that stores pointers to the raw ramdisk for the name and file content.
-    /// As the ramdisk is read only, these can be const pointers.
+    /// The ramdisk header that stores pointers for the name and file content.
     const InitrdHeader = struct {
         /// The name of the file
-        name: []const u8,
+        name: []u8,
 
         /// The content of the file
-        content: []const u8,
+        content: []u8,
     };
 
     /// The error set for the ramdisk file system.
@@ -121,71 +120,80 @@ pub const InitrdFS = struct {
         self.allocator.destroy(self.root_node);
         self.allocator.destroy(self.fs);
         self.opened_files.deinit();
+        for (self.files) |entry| {
+            self.allocator.free(entry.name);
+            self.allocator.free(entry.content);
+        }
         self.allocator.free(self.files);
         self.allocator.destroy(self);
     }
 
     ///
-    /// Initialise a ramdisk file system from a raw ramdisk in memory provided by the bootloader.
+    /// Initialise a ramdisk file system from a raw ramdisk in memory provided by the bootloader in a stream.
     /// Any memory allocated will be freed.
     ///
     /// Arguments:
-    ///     IN rd_module: mem.Module - The bootloader module that contains the raw ramdisk.
+    ///     IN stream: *std.io.FixedBufferStream([]u8) - The stream that contains the raw ramdisk data.
     ///     IN allocator: *Allocator - The allocator used for initialising any memory needed.
     ///
     /// Return: *InitrdFS
     ///     A pointer to the ram disk file system.
     ///
-    /// Error: Allocator.Error || Error
-    ///     error.OutOfMemory    - If there isn't enough memory for initialisation. Any memory
-    ///                            allocated will be freed.
+    /// Error: Error || error{EndOfStream} || Allocator.Error || std.io.FixedBufferStream([]u8).ReadError
     ///     error.InvalidRamDisk - If the provided raw ramdisk is invalid. This can be due to a
     ///                            mis-match of the number of files to the length of the raw
     ///                            ramdisk or the wrong length provided to cause undefined parsed
     ///                            lengths for other parts of the ramdisk.
+    ///     error.EndOfStream    - When reading from the stream, we reach the end of the stream
+    ///                            before completing the read.
+    ///     error.OutOfMemory    - If there isn't enough memory for initialisation. Any memory
+    ///                            allocated will be freed.
     ///
-    pub fn init(rd_module: mem.Module, allocator: *Allocator) (Allocator.Error || Error)!*InitrdFS {
+    pub fn init(stream: *std.io.FixedBufferStream([]u8), allocator: *Allocator) (Error || error{EndOfStream} || Allocator.Error)!*InitrdFS {
         std.log.info(.initrd, "Init\n", .{});
         defer std.log.info(.initrd, "Done\n", .{});
 
-        const rd_len: usize = rd_module.region.end - rd_module.region.start;
-        const ramdisk_bytes = @intToPtr([*]u8, rd_module.region.start)[0..rd_len];
         // First @sizeOf(usize) bytes is the number of files
-        const num_of_files = std.mem.readIntSlice(usize, ramdisk_bytes[0..], builtin.endian);
+        const num_of_files = try stream.reader().readIntNative(usize);
         var headers = try allocator.alloc(InitrdHeader, num_of_files);
         errdefer allocator.free(headers);
 
         // Populate the headers
         var i: usize = 0;
-        // Keep track of the offset into the ramdisk memory
-        var current_offset: usize = @sizeOf(usize);
+
+        // If we error, then free any headers that we allocated.
+        errdefer {
+            var j: usize = 0;
+            while (j < i) : (j += 1) {
+                allocator.free(headers[j].name);
+                allocator.free(headers[j].content);
+            }
+        }
+
         while (i < num_of_files) : (i += 1) {
-            // We don't need to store the name length any more as we have the name.len
-            const name_len = std.mem.readIntSlice(usize, ramdisk_bytes[current_offset..], builtin.endian);
-            current_offset += @sizeOf(usize);
-            if (current_offset >= rd_len) {
+            // We don't need to store the lengths any more as we have the slice.len
+            const name_len = try stream.reader().readIntNative(usize);
+            if (name_len == 0) {
                 return Error.InvalidRamDisk;
             }
-            headers[i].name = ramdisk_bytes[current_offset .. current_offset + name_len];
-            current_offset += name_len;
-            if (current_offset >= rd_len) {
+            headers[i].name = try allocator.alloc(u8, name_len);
+            errdefer allocator.free(headers[i].name);
+            if ((try stream.reader().readAll(headers[i].name)) != name_len) {
                 return Error.InvalidRamDisk;
             }
-            const content_len = std.mem.readIntSlice(usize, ramdisk_bytes[current_offset..], builtin.endian);
-            current_offset += @sizeOf(usize);
-            if (current_offset >= rd_len) {
+            const content_len = try stream.reader().readIntNative(usize);
+            if (content_len == 0) {
                 return Error.InvalidRamDisk;
             }
-            headers[i].content = ramdisk_bytes[current_offset .. current_offset + content_len];
-            current_offset += content_len;
-            // We could be at the end of the ramdisk, so only need to check for grater than.
-            if (current_offset > rd_len) {
+            headers[i].content = try allocator.alloc(u8, content_len);
+            errdefer allocator.free(headers[i].content);
+            if ((try stream.reader().readAll(headers[i].content)) != content_len) {
                 return Error.InvalidRamDisk;
             }
         }
 
-        // Make sure we are at the end
-        if (current_offset != rd_len) {
+        // If we aren't at the end, error.
+        if ((try stream.getPos()) != (try stream.getEndPos())) {
             return Error.InvalidRamDisk;
         }
 
@@ -229,10 +237,13 @@ pub const InitrdFS = struct {
 /// Error: Allocator.Error
 ///     error.OutOfMemory - If there isn't enough memory for the in memory ramdisk.
 ///
-fn createInitrd(allocator: *Allocator) Allocator.Error![]u8 {
+fn createInitrd(allocator: *Allocator) (Allocator.Error || std.io.FixedBufferStream([]u8).WriteError)![]u8 {
     // Create 3 valid ramdisk files in memory
     const file_names = [_][]const u8{ "test1.txt", "test2.txt", "test3.txt" };
     const file_contents = [_][]const u8{ "This is a test", "This is a test: part 2", "This is a test: the prequel" };
+
+    // Ensure these two arrays are the same length
+    std.debug.assert(file_names.len == file_contents.len);
 
     var sum: usize = 0;
     const files_length = for ([_]usize{ 0, 1, 2 }) |i| {
@@ -240,37 +251,33 @@ fn createInitrd(allocator: *Allocator) Allocator.Error![]u8 {
     } else sum;
 
     const total_ramdisk_len = @sizeOf(usize) + files_length;
-    var ramdisk_mem = try allocator.alloc(u8, total_ramdisk_len);
+    var ramdisk_bytes = try allocator.alloc(u8, total_ramdisk_len);
+    var ramdisk_stream = std.io.fixedBufferStream(ramdisk_bytes);
 
     // Copy the data into the allocated memory
-    std.mem.writeIntSlice(usize, ramdisk_mem[0..], 3, builtin.endian);
-    var current_offset: usize = @sizeOf(usize);
+    try ramdisk_stream.writer().writeIntNative(usize, file_names.len);
     inline for ([_]usize{ 0, 1, 2 }) |i| {
         // Name len
-        std.mem.writeIntSlice(usize, ramdisk_mem[current_offset..], file_names[i].len, builtin.endian);
-        current_offset += @sizeOf(usize);
+        try ramdisk_stream.writer().writeIntNative(usize, file_names[i].len);
         // Name
-        std.mem.copy(u8, ramdisk_mem[current_offset..], file_names[i]);
-        current_offset += file_names[i].len;
+        try ramdisk_stream.writer().writeAll(file_names[i]);
         // File len
-        std.mem.writeIntSlice(usize, ramdisk_mem[current_offset..], file_contents[i].len, builtin.endian);
-        current_offset += @sizeOf(usize);
+        try ramdisk_stream.writer().writeIntNative(usize, file_contents[i].len);
         // File content
-        std.mem.copy(u8, ramdisk_mem[current_offset..], file_contents[i]);
-        current_offset += file_contents[i].len;
+        try ramdisk_stream.writer().writeAll(file_contents[i]);
     }
     // Make sure we are full
-    expectEqual(current_offset, total_ramdisk_len);
-    return ramdisk_mem;
+    expectEqual(try ramdisk_stream.getPos(), total_ramdisk_len);
+    expectEqual(try ramdisk_stream.getPos(), try ramdisk_stream.getEndPos());
+    return ramdisk_bytes;
 }
 
 test "init with files valid" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     expectEqual(fs.files.len, 3);
@@ -280,18 +287,17 @@ test "init with files valid" {
 }
 
 test "init with files invalid - invalid number of files" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
     // Override the number of files
-    std.mem.writeIntSlice(usize, ramdisk_mem[0..], 10, builtin.endian);
-    defer std.testing.allocator.free(ramdisk_mem);
+    std.mem.writeIntSlice(usize, ramdisk_bytes[0..], 10, builtin.endian);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    expectError(error.InvalidRamDisk, InitrdFS.init(ramdisk_module, std.testing.allocator));
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    expectError(error.InvalidRamDisk, InitrdFS.init(&initrd_stream, std.testing.allocator));
 
     // Override the number of files
-    std.mem.writeIntSlice(usize, ramdisk_mem[0..], 0, builtin.endian);
-    expectError(error.InvalidRamDisk, InitrdFS.init(ramdisk_module, std.testing.allocator));
+    std.mem.writeIntSlice(usize, ramdisk_bytes[0..], 0, builtin.endian);
+    expectError(error.InvalidRamDisk, InitrdFS.init(&initrd_stream, std.testing.allocator));
 }
 
 test "init with files invalid - mix - bad" {
@@ -300,42 +306,42 @@ test "init with files invalid - mix - bad" {
     //       Challenge, make this a effective security vulnerability
     //       P.S. I don't know if adding magics will stop this
     {
-        var ramdisk_mem = try createInitrd(std.testing.allocator);
+        var ramdisk_bytes = try createInitrd(std.testing.allocator);
         // Override the first file name length, make is shorter
-        std.mem.writeIntSlice(usize, ramdisk_mem[4..], 2, builtin.endian);
-        defer std.testing.allocator.free(ramdisk_mem);
+        std.mem.writeIntSlice(usize, ramdisk_bytes[4..], 2, builtin.endian);
+        defer std.testing.allocator.free(ramdisk_bytes);
 
-        const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-        const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-        expectError(error.InvalidRamDisk, InitrdFS.init(ramdisk_module, std.testing.allocator));
+        var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+        expectError(error.InvalidRamDisk, InitrdFS.init(&initrd_stream, std.testing.allocator));
     }
 
     {
-        var ramdisk_mem = try createInitrd(std.testing.allocator);
+        var ramdisk_bytes = try createInitrd(std.testing.allocator);
         // Override the first file name length, make is 4 shorter
-        std.mem.writeIntSlice(usize, ramdisk_mem[4..], 5, builtin.endian);
+        std.mem.writeIntSlice(usize, ramdisk_bytes[4..], 5, builtin.endian);
         // Override the second file name length, make is 4 longer
-        std.mem.writeIntSlice(usize, ramdisk_mem[35..], 13, builtin.endian);
-        defer std.testing.allocator.free(ramdisk_mem);
+        std.mem.writeIntSlice(usize, ramdisk_bytes[35..], 13, builtin.endian);
+        defer std.testing.allocator.free(ramdisk_bytes);
 
-        const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-        const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-        expectError(error.InvalidRamDisk, InitrdFS.init(ramdisk_module, std.testing.allocator));
+        var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+        expectError(error.InvalidRamDisk, InitrdFS.init(&initrd_stream, std.testing.allocator));
     }
 }
 
+/// The number of allocations that the init function make.
+const init_allocations: usize = 10;
+
 test "init with files cleans memory if OutOfMemory" {
-    // There are 4 allocations
-    for ([_]usize{ 0, 1, 2, 3 }) |i| {
+    var i: usize = 0;
+    while (i < init_allocations) : (i += 1) {
         {
             var fa = std.testing.FailingAllocator.init(std.testing.allocator, i);
 
-            var ramdisk_mem = try createInitrd(std.testing.allocator);
-            defer std.testing.allocator.free(ramdisk_mem);
+            var ramdisk_bytes = try createInitrd(std.testing.allocator);
+            defer std.testing.allocator.free(ramdisk_bytes);
 
-            const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-            const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-            expectError(error.OutOfMemory, InitrdFS.init(ramdisk_module, &fa.allocator));
+            var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+            expectError(error.OutOfMemory, InitrdFS.init(&initrd_stream, &fa.allocator));
         }
 
         // Ensure we have freed any memory allocated
@@ -344,24 +350,22 @@ test "init with files cleans memory if OutOfMemory" {
 }
 
 test "getRootNode" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     expectEqual(fs.fs.getRootNode(fs.fs), &fs.root_node.Dir);
 }
 
 test "open valid file" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -389,12 +393,11 @@ test "open valid file" {
 }
 
 test "open fail with invalid flags" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -415,14 +418,13 @@ test "open fail with NoSuchFileOrDir" {
 }
 
 test "open a file, out of memory" {
-    var fa = std.testing.FailingAllocator.init(std.testing.allocator, 4);
+    var fa = std.testing.FailingAllocator.init(std.testing.allocator, init_allocations);
 
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, &fa.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, &fa.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -431,12 +433,11 @@ test "open a file, out of memory" {
 }
 
 test "open two of the same file" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -458,12 +459,11 @@ test "open two of the same file" {
 }
 
 test "close a file" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -491,12 +491,11 @@ test "close a file" {
 }
 
 test "close a non-opened file" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -519,12 +518,11 @@ test "close a non-opened file" {
 }
 
 test "read a file" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -544,14 +542,13 @@ test "read a file" {
 }
 
 test "read a file, out of memory" {
-    var fa = std.testing.FailingAllocator.init(std.testing.allocator, 6);
+    var fa = std.testing.FailingAllocator.init(std.testing.allocator, init_allocations + 2);
 
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, &fa.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, &fa.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -563,12 +560,11 @@ test "read a file, out of memory" {
 }
 
 test "read a file, invalid/not opened/crafted *const Node" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
@@ -592,12 +588,11 @@ test "read a file, invalid/not opened/crafted *const Node" {
 }
 
 test "write does nothing" {
-    var ramdisk_mem = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_mem);
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
 
-    const ramdisk_range = .{ .start = @ptrToInt(ramdisk_mem.ptr), .end = @ptrToInt(ramdisk_mem.ptr) + ramdisk_mem.len };
-    const ramdisk_module = .{ .region = ramdisk_range, .name = "ramdisk.initrd" };
-    var fs = try InitrdFS.init(ramdisk_module, std.testing.allocator);
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
     vfs.setRoot(fs.root_node);
