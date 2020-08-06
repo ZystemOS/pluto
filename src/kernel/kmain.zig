@@ -15,8 +15,8 @@ const panic_root = if (is_test) @import(mock_path ++ "panic_mock.zig") else @imp
 const task = if (is_test) @import(mock_path ++ "task_mock.zig") else @import("task.zig");
 const heap = @import("heap.zig");
 const scheduler = @import("scheduler.zig");
-const vfs = @import("vfs.zig");
-const initrd = @import("initrd.zig");
+const vfs = @import("filesystem/vfs.zig");
+const initrd = @import("filesystem/initrd.zig");
 
 comptime {
     if (!is_test) {
@@ -106,16 +106,18 @@ export fn kmain(boot_payload: arch.BootPayload) void {
 
     if (rd_module) |module| {
         // Load the ram disk
-        var ramdisk_filesystem = initrd.InitrdFS.init(module, &kernel_heap.allocator) catch |e| {
+        const rd_len: usize = module.region.end - module.region.start;
+        const ramdisk_bytes = @intToPtr([*]u8, module.region.start)[0..rd_len];
+        var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+        var ramdisk_filesystem = initrd.InitrdFS.init(&initrd_stream, &kernel_heap.allocator) catch |e| {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk: {}\n", .{e});
         };
-        defer {
-            ramdisk_filesystem.deinit();
-            // Free the raw ramdisk module as we are done
-            kernel_vmm.free(module.region.start) catch |e| {
-                panic_root.panic(@errorReturnTrace(), "Failed to free ramdisk: {}\n", .{e});
-            };
-        }
+        defer ramdisk_filesystem.deinit();
+
+        // Can now free the module as new memory is allocated for the ramdisk filesystem
+        kernel_vmm.free(module.region.start) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Failed to free ramdisk: {}\n", .{e});
+        };
 
         // Need to init the vfs after the ramdisk as we need the root node from the ramdisk filesystem
         vfs.setRoot(ramdisk_filesystem.root_node);

@@ -83,8 +83,8 @@ pub fn build(b: *Builder) !void {
     b.default_step.dependOn(&make_iso.step);
 
     const test_step = b.step("test", "Run tests");
-    const mock_path = "\"../../test/mock/kernel/\"";
-    const arch_mock_path = "\"../../../../test/mock/kernel/\"";
+    const mock_path = "../../test/mock/kernel/";
+    const arch_mock_path = "../../../../test/mock/kernel/";
     const unit_tests = b.addTest(main_src);
     unit_tests.setBuildMode(build_mode);
     unit_tests.setMainPkgPath(".");
