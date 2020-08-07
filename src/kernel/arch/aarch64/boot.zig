@@ -41,11 +41,13 @@ export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
     arch.enableFlatMmu();
 
     // The rpi puts the board part number in midr_el1
-    const board = rpi.RaspberryPiBoard.RaspberryPi3; // detectBoard();
+    board = detectBoard();
 
     kmain(&board);
     while (true) {}
 }
+
+var board: rpi.RaspberryPiBoard = undefined;
 
 fn detectBoard() rpi.RaspberryPiBoard {
     const part_number = @truncate(u12, asm ("mrs %[res], midr_el1"
