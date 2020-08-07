@@ -9,6 +9,8 @@ extern var KERNEL_STACK_END: *usize;
 
 export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
     // Halt all cores other than the primary core, until the kernel has multicore support
+    // This must be in assembly and not zig due to the fact the zig compiled code
+    //  requires the sp and the sp is not initialized (and cannot be initialized) at this point.,
     asm volatile (
         \\ mrs x0, mpidr_el1
         \\ mov x1, #3
