@@ -109,7 +109,7 @@ pub fn haltNoInterrupts() noreturn {
 
 // TODO: implement
 pub fn spinWait() noreturn {
-    spinLed(500);
+    while (true) {}
 }
 
 pub inline fn turnOnLed() void {
