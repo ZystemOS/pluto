@@ -1,5 +1,5 @@
-const arch = @import("arch.zig");
 const log = @import("../../log.zig");
+const rpi = @import("rpi.zig");
 
 pub extern var exception_table: *usize;
 
@@ -68,14 +68,14 @@ const ExceptionClass = enum(u6) {
 pub var exception_handler_depth: u32 = undefined;
 
 export fn exceptionHandler() noreturn {
-    arch.turnOnLed();
+    rpi.turnOnLed();
     exception_handler_depth += 1;
     if (exception_handler_depth > 1) {
         if (exception_handler_depth == 2) {
             log.logError("\n", .{});
             log.logError("arm exception taken when already active!\n", .{});
         }
-        arch.spinLed(25);
+        rpi.spinLed(25);
     }
     const exception_entry_offset = @truncate(u32, lr() & 0x780);
     var elr_elx: usize = undefined;
@@ -166,7 +166,7 @@ export fn exceptionHandler() noreturn {
     log.logError("    ttbr0_el{} 0x{x}\n", .{ currentExceptionLevel(), ttbr0_elx });
     log.logError("    vbar_el{} 0x{x}\n", .{ currentExceptionLevel(), vbar_elx });
     log.logError("exception done\n", .{});
-    arch.spinLed(100);
+    rpi.spinLed(100);
 }
 
 inline fn lr() usize {

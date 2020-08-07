@@ -1,3 +1,6 @@
+const arch = @import("arch.zig");
+const mmio = @import("mmio.zig");
+
 /// The supported aarch64-capable raspberry pi boards
 pub const RaspberryPiBoard = enum {
     RaspberryPi3,
@@ -25,3 +28,91 @@ pub const RaspberryPiBoard = enum {
         };
     }
 };
+
+pub inline fn turnOnLed() void {
+    asm volatile (
+        \\ mov x0, #0x3f200000
+        \\ ldr w1, [x0, #0x08]
+        \\ mov x2, #0x38000000
+        \\ bic x1, x1, x2
+        \\ mov x2, #0x08000000
+        \\ orr x1, x1, x2
+        \\ str w1, [x0, #0x08]
+        \\ mov x1, #0x20000000
+        \\ str w1, [x0, #0x1c]
+        :
+        :
+        : "x0", "x1", "x2"
+    );
+}
+
+pub inline fn turnOffLed() void {
+    asm volatile (
+        \\ mov x0, #0x3f200000
+        \\ ldr w1, [x0, #0x08]
+        \\ mov x2, #0x38000000
+        \\ bic x1, x1, x2
+        \\ mov x2, #0x08000000
+        \\ orr x1, x1, x2
+        \\ str w1, [x0, #0x08]
+        \\ mov x1, #0x20000000
+        \\ str w1, [x0, #0x28]
+        :
+        :
+        : "x0", "x1", "x2"
+    );
+}
+
+pub fn spinLed(period: u32) noreturn {
+    const activity_led = 29;
+    pinSetFunction(activity_led, .Output);
+    var i: u32 = 0;
+    var j: u32 = 0;
+    while (true) : (j += 1) {
+        if (j % (period * 1000 / 2) == 0) {
+            i += 1;
+            pinWrite(activity_led, @truncate(u1, i));
+        }
+    }
+}
+
+pub fn pinSetFunction(pin_index: u6, f: PinFunction) void {
+    mmio.readModifyWriteField(arch.mmio_addr, .GPIO_FSEL0, @enumToInt(f), pin_index);
+}
+
+pub fn pinSetPull(pin_index: u6, pull: PinPull) void {
+    mmio.write(arch.mmio_addr, .GPIO_PUD, @enumToInt(pull));
+    delay(150);
+    mmio.writeClock(arch.mmio_addr, .GPIO_PUDCLK0, @as(u1, 1), pin_index);
+    delay(150);
+    mmio.writeClock(arch.mmio_addr, .GPIO_PUDCLK0, @as(u1, 0), pin_index);
+    mmio.write(arch.mmio_addr, .GPIO_PUD, @enumToInt(PinPull.None));
+}
+
+fn pinWrite(pin_index: u6, zero_or_one: u1) void {
+    mmio.writeClock(arch.mmio_addr, if (zero_or_one == 0) mmio.Register.GPIO_CLR0 else .GPIO_SET0, @as(u1, 1), pin_index);
+}
+
+const PinFunction = enum(u3) {
+    Input = 0,
+    Output = 1,
+    AlternateFunction0 = 4,
+    AlternateFunction1 = 5,
+    AlternateFunction2 = 6,
+    AlternateFunction3 = 7,
+    AlternateFunction4 = 3,
+    AlternateFunction5 = 2,
+};
+
+const PinPull = enum {
+    None,
+    Down,
+    Up,
+};
+
+fn delay(count: usize) void {
+    var i: usize = 0;
+    while (i < count) : (i += 1) {
+        asm volatile ("mov x0, x0");
+    }
+}
