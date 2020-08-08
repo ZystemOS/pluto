@@ -275,7 +275,10 @@ fn traversePath(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*
 
     // Open the final segment of the path from whatever the parent is
     return switch (result.parent.*) {
-        .File => Error.NotADirectory,
+        .File => |*file| blk: {
+            file.close();
+            break :blk Error.NotADirectory;
+        },
         .Dir => |*dir| try dir.open(result.child, flags),
     };
 }
@@ -369,7 +372,10 @@ pub fn openDir(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*D
     }
     var node = try open(path, flags);
     return switch (node.*) {
-        .File => Error.NotADirectory,
+        .File => |*file| blk: {
+            file.close();
+            break :blk Error.NotADirectory;
+        },
         .Dir => &node.Dir,
     };
 }
@@ -423,6 +429,7 @@ const TestFS = struct {
     tree: TreeNode,
     fs: *FileSystem,
     allocator: *Allocator,
+    open_files_count: usize,
     instance: usize,
 
     const Self = @This();
@@ -466,7 +473,10 @@ const TestFS = struct {
         return &test_fs.tree.val.Dir;
     }
 
-    fn close(fs: *const FileSystem, node: *const FileNode) void {}
+    fn close(fs: *const FileSystem, node: *const FileNode) void {
+        var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
+        test_fs.open_files_count -= 1;
+    }
 
     fn read(fs: *const FileSystem, node: *const FileNode, len: usize) (Allocator.Error || Error)![]u8 {
         var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
@@ -495,6 +505,10 @@ const TestFS = struct {
         // Check if the children match the file wanted
         for (parent.children.items) |child| {
             if (std.mem.eql(u8, child.name, name)) {
+                // Increment the open files count
+                if (child.val.isFile()) {
+                    test_fs.open_files_count += 1;
+                }
                 return child.val;
             }
         }
@@ -527,6 +541,10 @@ const TestFS = struct {
             child_tree.children.* = ArrayList(*TreeNode).init(test_fs.allocator);
             // Add it to the tree
             try parent.children.append(child_tree);
+            // Increment the open files count
+            if (child.isFile()) {
+                test_fs.open_files_count += 1;
+            }
             return child;
         }
         return Error.NoSuchFileOrDir;
@@ -549,6 +567,7 @@ fn testInitFs(allocator: *Allocator) !*TestFS {
         },
         .fs = fs,
         .instance = 123,
+        .open_files_count = 0,
         .allocator = allocator,
     };
     testfs.tree.children.* = ArrayList(*TestFS.TreeNode).init(allocator);
@@ -604,13 +623,23 @@ test "traversePath" {
     testing.expectEqual(test_root, root);
     // Create a file in the root and try to traverse to it
     var child1 = try test_root.Dir.open("child1.txt", .CREATE_FILE);
-    testing.expectEqual(child1, try traversePath("/child1.txt", .NO_CREATION));
+    var child1_traversed = try traversePath("/child1.txt", .NO_CREATION);
+    testing.expectEqual(child1, child1_traversed);
+    // Close the open files
+    child1.File.close();
+    child1_traversed.File.close();
+
     // Same but with a directory
     var child2 = try test_root.Dir.open("child2", .CREATE_DIR);
     testing.expectEqual(child2, try traversePath("/child2", .NO_CREATION));
+
     // Again but with a file within that directory
     var child3 = try child2.Dir.open("child3.txt", .CREATE_FILE);
-    testing.expectEqual(child3, try traversePath("/child2/child3.txt", .NO_CREATION));
+    var child3_traversed = try traversePath("/child2/child3.txt", .NO_CREATION);
+    testing.expectEqual(child3, child3_traversed);
+    // Close the open files
+    child3.File.close();
+    child3_traversed.File.close();
 
     testing.expectError(Error.NotAbsolutePath, traversePath("abc", .NO_CREATION));
     testing.expectError(Error.NotAbsolutePath, traversePath("", .NO_CREATION));
@@ -618,6 +647,9 @@ test "traversePath" {
     testing.expectError(Error.NoSuchFileOrDir, traversePath("/notadir/abc.txt", .NO_CREATION));
     testing.expectError(Error.NoSuchFileOrDir, traversePath("/ ", .NO_CREATION));
     testing.expectError(Error.NotADirectory, traversePath("/child1.txt/abc.txt", .NO_CREATION));
+
+    // Since we've closed all the files, the open files count should be zero
+    testing.expectEqual(testfs.open_files_count, 0);
 }
 
 test "isAbsolute" {
