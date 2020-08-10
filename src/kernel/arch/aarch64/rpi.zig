@@ -30,6 +30,7 @@ pub const RaspberryPiBoard = enum {
 };
 
 pub inline fn turnOnLed() void {
+    // do not use zig here in order to side-step occasional compiler defects
     asm volatile (
         \\ mov x0, #0x3f200000
         \\ ldr w1, [x0, #0x08]
@@ -47,6 +48,7 @@ pub inline fn turnOnLed() void {
 }
 
 pub inline fn turnOffLed() void {
+    // do not use zig here in order to side-step occasional compiler defects
     asm volatile (
         \\ mov x0, #0x3f200000
         \\ ldr w1, [x0, #0x08]

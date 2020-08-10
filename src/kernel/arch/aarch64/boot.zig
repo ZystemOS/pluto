@@ -20,6 +20,9 @@ export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
         \\ wfe
         \\ b hang
         \\cpu0:
+        \\ mov x0, #0x3f200000
+        \\ mov w1, #67
+        \\ str w1, [x0, 0x1000]
     );
 
     // Setup the stack
