@@ -58,12 +58,13 @@ pub fn initSerial(board: BootPayload) Serial {
 }
 
 pub fn uartWriteByte(byte: u8) void {
-    if (byte == 10) {      // if ascii line feed
-        uartWriteByte(13); //  then first send carriage return
+    // if ascii line feed then first send carriage return
+    if (byte == 10) {
+        uartWriteByte(13);
     }
     if (is_qemu) {
-        while (mmio.read(mmio_addr, .UART_FR) & (1 << 5) != 0) {}
-        mmio.write(mmio_addr, .UART_DR, byte);
+        while (mmio.read(mmio_addr, .UART_FLAGS) & (1 << 5) != 0) {}
+        mmio.write(mmio_addr, .UART_DATA, byte);
     } else {
         while (mmio.read(mmio_addr, .AUX_MU_LSR_REG) & (1 << 5) == 0) {}
         mmio.write(mmio_addr, .AUX_MU_IO_REG, byte);
