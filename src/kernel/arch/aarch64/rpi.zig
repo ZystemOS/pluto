@@ -87,8 +87,6 @@ pub fn pinSetPull(pin_index: u6, pull: PinPull) void {
     delay(150);
     mmio.writeClock(arch.mmio_addr, .GPIO_PULL_CLK0, @as(u1, 1), pin_index);
     delay(150);
-    mmio.writeClock(arch.mmio_addr, .GPIO_PULL_CLK0, @as(u1, 1), pin_index);
-    mmio.write(arch.mmio_addr, .GPIO_PULL, @enumToInt(PinPull.None));
 }
 
 fn pinWrite(pin_index: u6, zero_or_one: u1) void {

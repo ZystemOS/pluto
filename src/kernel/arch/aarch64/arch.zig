@@ -3,7 +3,6 @@ const vmm = @import("../../vmm.zig");
 const mem = @import("../../mem.zig");
 const Serial = @import("../../serial.zig").Serial;
 const TTY = @import("../../tty.zig").TTY;
-const interrupts = @import("interrupts.zig");
 const log = @import("../../log.zig");
 const rpi = @import("rpi.zig");
 const mmio = @import("mmio.zig");
@@ -34,9 +33,12 @@ pub fn initTTY(boot_payload: BootPayload) TTY {
     return undefined;
 }
 
-pub fn initSerial(board: BootPayload) Serial {
+pub fn initMmioAddress(board: *rpi.RaspberryPiBoard) void {
     mmio_addr = board.mmioAddress();
-    is_qemu = interrupts.mrs("cntfrq_el0") != 0;
+}
+
+pub fn initSerial(board: BootPayload) Serial {
+    is_qemu = cpu.cntfrq_el0.read() != 0;
     if (!is_qemu) {
         rpi.pinSetFunction(14, .AlternateFunction5);
         rpi.pinSetPull(14, .None);
@@ -112,6 +114,74 @@ pub fn haltNoInterrupts() noreturn {
 pub fn spinWait() noreturn {
     while (true) {}
 }
+
+pub const cpu = struct {
+    pub const cntfrq_el0 = systemRegister("cntfrq_el0");
+    pub const CurrentEL = systemRegister("CurrentEL");
+    pub const elr = systemRegisterPerExceptionLevel("elr");
+    pub const esr = systemRegisterPerExceptionLevel("esr");
+    pub const far = systemRegisterPerExceptionLevel("far");
+    pub const lr = cpuRegister("lr");
+    pub const mair = systemRegisterPerExceptionLevel("mair");
+    pub const mpidr = systemRegisterPerExceptionLevel("mpidr");
+    pub const sctlr = systemRegisterPerExceptionLevel("sctlr");
+    pub const sp = cpuRegister("sp");
+    pub const spsr = systemRegisterPerExceptionLevel("spsr");
+    pub const tcr = systemRegisterPerExceptionLevel("tcr");
+    pub const ttbr0 = systemRegisterPerExceptionLevel("ttbr0");
+    pub const vbar = systemRegisterPerExceptionLevel("vbar");
+
+    fn cpuRegister(comptime register_name: []const u8) type {
+        return struct {
+            pub inline fn read() usize {
+                const data = asm ("mov %[data], " ++ register_name
+                    : [data] "=r" (-> usize)
+                );
+                return data;
+            }
+            pub inline fn write(data: usize) void {
+                asm volatile ("mov " ++ register_name ++ ", %[data]"
+                    :
+                    : [data] "r" (data)
+                );
+            }
+        };
+    }
+    fn systemRegisterPerExceptionLevel(comptime register_name: []const u8) type {
+        return struct {
+            pub inline fn el(exception_level: u2) type {
+                const level_string = switch (exception_level) {
+                    0 => "0",
+                    1 => "1",
+                    2 => "2",
+                    3 => "3",
+                };
+                return systemRegister(register_name ++ "_el" ++ level_string);
+            }
+        };
+    }
+    fn systemRegister(comptime register_name: []const u8) type {
+        return struct {
+            pub inline fn read() usize {
+                const word = asm ("mrs %[word], " ++ register_name
+                    : [word] "=r" (-> usize)
+                );
+                return word;
+            }
+            pub inline fn write(data: usize) void {
+                asm volatile ("msr " ++ register_name ++ ", %[data]"
+                    :
+                    : [data] "r" (data)
+                );
+            }
+        };
+    }
+    pub inline fn wfe() void {
+        asm volatile (
+            \\ wfe
+        );
+    }
+};
 
 // map 1GB to ram except last 16MB to mmio
 pub fn enableFlatMmu() void {
