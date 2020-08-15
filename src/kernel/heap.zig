@@ -182,8 +182,10 @@ const FreeListAllocator = struct {
     /// Arguments:
     ///     IN allocator: *std.Allocator - The allocator to resize within.
     ///     IN old_mem: []u8 - The buffer to resize.
+    ///     IN old_align: u29 - The original alignment for old_mem.
     ///     IN new_size: usize - What to resize to.
     ///     IN size_alignment: u29 - The alignment that the size should have.
+    ///     IN ret_addr: usize - The return address passed by the high-level Allocator API. This is ignored
     ///
     /// Return: usize
     ///     The new size of the buffer, which will be new_size if the operation was successful.
@@ -191,7 +193,7 @@ const FreeListAllocator = struct {
     /// Error: std.Allocator.Error
     ///     std.Allocator.Error.OutOfMemory - If there wasn't enough free memory to expand into
     ///
-    fn resize(allocator: *Allocator, old_mem: []u8, new_size: usize, size_alignment: u29) Allocator.Error!usize {
+    fn resize(allocator: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, size_alignment: u29, ret_addr: usize) Allocator.Error!usize {
         var self = @fieldParentPtr(FreeListAllocator, "allocator", allocator);
         if (new_size == 0) {
             self.free(old_mem);
@@ -304,6 +306,7 @@ const FreeListAllocator = struct {
     ///     IN size: usize - The amount of memory requested
     ///     IN alignment: u29 - The alignment that the address of the allocated memory should have
     ///     IN size_alignment: u29 - The alignment that the length of the allocated memory should have
+    ///     IN ret_addr: usize - The return address passed by the high-level Allocator API. This is ignored
     ///
     /// Return: []u8
     ///     The allocated memory
@@ -311,7 +314,7 @@ const FreeListAllocator = struct {
     /// Error: std.Allocator.Error
     ///     std.Allocator.Error.OutOfMemory - There wasn't enough memory left to fulfill the request
     ///
-    pub fn alloc(allocator: *Allocator, size: usize, alignment: u29, size_alignment: u29) Allocator.Error![]u8 {
+    pub fn alloc(allocator: *Allocator, size: usize, alignment: u29, size_alignment: u29, ret_addr: usize) Allocator.Error![]u8 {
         var self = @fieldParentPtr(FreeListAllocator, "allocator", allocator);
         if (self.first_free == null) return Allocator.Error.OutOfMemory;
 
@@ -433,7 +436,7 @@ const FreeListAllocator = struct {
 
         std.debug.warn("", .{});
 
-        const alloc0 = try alloc(allocator, 64, 0, 0);
+        const alloc0 = try alloc(allocator, 64, 0, 0, @returnAddress());
         const alloc0_addr = @ptrToInt(alloc0.ptr);
         // Should be at the start of the heap
         testing.expectEqual(alloc0_addr, start);
@@ -446,7 +449,7 @@ const FreeListAllocator = struct {
         std.debug.warn("", .{});
 
         // 64 bytes aligned to 4 bytes
-        const alloc1 = try alloc(allocator, 64, 4, 0);
+        const alloc1 = try alloc(allocator, 64, 4, 0, @returnAddress());
         const alloc1_addr = @ptrToInt(alloc1.ptr);
         const alloc1_end = alloc1_addr + alloc1.len;
         // Should be to the right of the first allocation, with some alignment padding in between
@@ -459,7 +462,7 @@ const FreeListAllocator = struct {
         testing.expectEqual(header.next_free, null);
         testing.expectEqual(free_list.first_free, header);
 
-        const alloc2 = try alloc(allocator, 64, 256, 0);
+        const alloc2 = try alloc(allocator, 64, 256, 0, @returnAddress());
         const alloc2_addr = @ptrToInt(alloc2.ptr);
         const alloc2_end = alloc2_addr + alloc2.len;
         testing.expect(alloc1_end < alloc2_addr);
@@ -475,7 +478,7 @@ const FreeListAllocator = struct {
         }
 
         // Try allocating something smaller than @sizeOf(Header). This should scale up to @sizeOf(Header)
-        var alloc3 = try alloc(allocator, 1, 0, 0);
+        var alloc3 = try alloc(allocator, 1, 0, 0, @returnAddress());
         const alloc3_addr = @ptrToInt(alloc3.ptr);
         const alloc3_end = alloc3_addr + @sizeOf(Header);
         const header2 = @intToPtr(*Header, alloc3_end);
@@ -486,10 +489,10 @@ const FreeListAllocator = struct {
 
         // Attempting to allocate more than the size of the largest free node should fail
         const remaining_size = second_header.size + @sizeOf(Header);
-        testing.expectError(Allocator.Error.OutOfMemory, alloc(&free_list.allocator, remaining_size + 1, 0, 0));
+        testing.expectError(Allocator.Error.OutOfMemory, alloc(&free_list.allocator, remaining_size + 1, 0, 0, @returnAddress()));
 
         // Alloc a non aligned to header
-        var alloc4 = try alloc(allocator, 13, 1, 0);
+        var alloc4 = try alloc(allocator, 13, 1, 0, @returnAddress());
         const alloc4_addr = @ptrToInt(alloc4.ptr);
         const alloc4_end = alloc4_addr + std.mem.alignForward(13, @alignOf(Header));
         const header3 = @intToPtr(*Header, alloc4_end);
@@ -512,9 +515,9 @@ const FreeListAllocator = struct {
         var free_list = &(try FreeListAllocator.init(start, size));
         var allocator = &free_list.allocator;
 
-        var alloc0 = try alloc(allocator, 128, 0, 0);
-        var alloc1 = try alloc(allocator, 256, 0, 0);
-        var alloc2 = try alloc(allocator, 64, 0, 0);
+        var alloc0 = try alloc(allocator, 128, 0, 0, @returnAddress());
+        var alloc1 = try alloc(allocator, 256, 0, 0, @returnAddress());
+        var alloc2 = try alloc(allocator, 64, 0, 0, @returnAddress());
 
         // There should be a single free node after alloc2
         const free_node3 = @intToPtr(*Header, @ptrToInt(alloc2.ptr) + alloc2.len);
@@ -551,14 +554,14 @@ const FreeListAllocator = struct {
         var free_list = &(try FreeListAllocator.init(start, size));
         var allocator = &free_list.allocator;
 
-        var alloc0 = try alloc(allocator, 128, 0, 0);
-        var alloc1 = try alloc(allocator, 256, 0, 0);
+        var alloc0 = try alloc(allocator, 128, 0, 0, @returnAddress());
+        var alloc1 = try alloc(allocator, 256, 0, 0, @returnAddress());
 
         // Expanding alloc0 should fail as alloc1 is right next to it
-        testing.expectError(Allocator.Error.OutOfMemory, resize(&free_list.allocator, alloc0, 136, 0));
+        testing.expectError(Allocator.Error.OutOfMemory, resize(&free_list.allocator, alloc0, 0, 136, 0, @returnAddress()));
 
         // Expanding alloc1 should succeed
-        testing.expectEqual(try resize(allocator, alloc1, 512, 0), 512);
+        testing.expectEqual(try resize(allocator, alloc1, 0, 512, 0, @returnAddress()), 512);
         alloc1 = alloc1.ptr[0..512];
         // And there should be a free node on the right of it
         var header = @intToPtr(*Header, @ptrToInt(alloc1.ptr) + 512);
@@ -567,7 +570,7 @@ const FreeListAllocator = struct {
         testing.expectEqual(free_list.first_free, header);
 
         // Shrinking alloc1 should produce a big free node on the right
-        testing.expectEqual(try resize(allocator, alloc1, 128, 0), 128);
+        testing.expectEqual(try resize(allocator, alloc1, 0, 128, 0, @returnAddress()), 128);
         alloc1 = alloc1.ptr[0..128];
         header = @intToPtr(*Header, @ptrToInt(alloc1.ptr) + 128);
         testing.expectEqual(header.size, size - 128 - 128 - @sizeOf(Header));
@@ -575,9 +578,9 @@ const FreeListAllocator = struct {
         testing.expectEqual(free_list.first_free, header);
 
         // Shrinking by less space than would allow for a new Header shouldn't work
-        testing.expectEqual(resize(allocator, alloc1, alloc1.len - @sizeOf(Header) / 2, 0), 128);
+        testing.expectEqual(resize(allocator, alloc1, 0, alloc1.len - @sizeOf(Header) / 2, 0, @returnAddress()), 128);
         // Shrinking to less space than would allow for a new Header shouldn't work
-        testing.expectEqual(resize(allocator, alloc1, @sizeOf(Header) / 2, 0), @sizeOf(Header));
+        testing.expectEqual(resize(allocator, alloc1, 0, @sizeOf(Header) / 2, 0, @returnAddress()), @sizeOf(Header));
     }
 };
 

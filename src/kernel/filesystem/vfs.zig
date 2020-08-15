@@ -246,6 +246,7 @@ fn traversePath(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*
         child: []const u8,
 
         const Self = @This();
+
         fn func(split: *std.mem.SplitIterator, node: *Node, rec_flags: OpenFlags) (Allocator.Error || Error)!Self {
             // Get segment string. This will not be unreachable as we've made sure the spliterator has more segments left
             const seg = split.next() orelse unreachable;
@@ -560,8 +561,8 @@ test "mount" {
 
     // The root fs
     var testfs = try testInitFs(allocator);
-    defer testfs.deinit();
     defer allocator.destroy(testfs);
+    defer testfs.deinit();
 
     testfs.instance = 1;
     root = testfs.tree.val;
@@ -594,8 +595,8 @@ test "mount" {
 test "traversePath" {
     var allocator = testing.allocator;
     var testfs = try testInitFs(allocator);
-    defer testfs.deinit();
     defer allocator.destroy(testfs);
+    defer testfs.deinit();
     root = testfs.tree.val;
 
     // Get the root
@@ -649,8 +650,8 @@ test "isFile" {
 
 test "open" {
     var testfs = try testInitFs(testing.allocator);
-    defer testfs.deinit();
     defer testing.allocator.destroy(testfs);
+    defer testfs.deinit();
     root = testfs.tree.val;
 
     // Creating a file
@@ -698,8 +699,8 @@ test "open" {
 
 test "read" {
     var testfs = try testInitFs(testing.allocator);
-    defer testfs.deinit();
     defer testing.allocator.destroy(testfs);
+    defer testfs.deinit();
     root = testfs.tree.val;
 
     var test_file = try openFile("/foo.txt", .CREATE_FILE);
@@ -736,8 +737,8 @@ test "read" {
 
 test "write" {
     var testfs = try testInitFs(testing.allocator);
-    defer testfs.deinit();
     defer testing.allocator.destroy(testfs);
+    defer testfs.deinit();
     root = testfs.tree.val;
 
     var test_file = try openFile("/foo.txt", .CREATE_FILE);

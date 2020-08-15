@@ -345,7 +345,7 @@ test "init with files cleans memory if OutOfMemory" {
         }
 
         // Ensure we have freed any memory allocated
-        try std.testing.allocator_instance.validate();
+        std.testing.expectEqual(false, std.testing.allocator_instance.detectLeaks());
     }
 }
 
@@ -413,6 +413,14 @@ test "open fail with invalid flags" {
 }
 
 test "open fail with NoSuchFileOrDir" {
+    var ramdisk_bytes = try createInitrd(std.testing.allocator);
+    defer std.testing.allocator.free(ramdisk_bytes);
+
+    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+    var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
+    defer fs.deinit();
+
+    vfs.setRoot(fs.root_node);
     expectError(error.NoSuchFileOrDir, vfs.openFile("/text10.txt", .NO_CREATION));
     expectError(error.NoSuchFileOrDir, vfs.openDir("/temp/", .NO_CREATION));
 }
