@@ -1,5 +1,5 @@
 const arch = @import("arch.zig");
-const cpu = arch.cpu;
+const Cpu = arch.Cpu;
 const interrupts = @import("interrupts.zig");
 const rpi = @import("rpi.zig");
 
@@ -30,17 +30,17 @@ export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
 }
 
 fn start() noreturn {
-    // Halt all cores other than the core 0, until the kernel has multicore support
-    if (cpu.mpidr.el(1).read() & 0x3 != 0) {
+    // Halt all cores other than core 0, until the kernel has multicore support
+    if (Cpu.mpidr.el(1).read() & 0x3 != 0) {
         while (true) {
-            cpu.wfe();
+            Cpu.wfe();
         }
     }
 
     // Give all exception levels the same vector table
-    cpu.vbar.el(1).write(@ptrToInt(&interrupts.exception_table));
-    cpu.vbar.el(2).write(@ptrToInt(&interrupts.exception_table));
-    cpu.vbar.el(3).write(@ptrToInt(&interrupts.exception_table));
+    Cpu.vbar.el(1).write(@ptrToInt(&interrupts.exception_table));
+    Cpu.vbar.el(2).write(@ptrToInt(&interrupts.exception_table));
+    Cpu.vbar.el(3).write(@ptrToInt(&interrupts.exception_table));
 
     interrupts.exception_handler_depth = 0;
 
@@ -49,10 +49,6 @@ fn start() noreturn {
     board = detectBoard();
     arch.initMmioAddress(&board);
 
-    // invoke alignment exception
-    // var addr: usize = 1;
-    // @intToPtr(*volatile u32, addr).* = 0;
-
     kmain(&board);
     while (true) {}
 }
@@ -60,8 +56,6 @@ fn start() noreturn {
 var board: rpi.RaspberryPiBoard = undefined;
 
 fn detectBoard() rpi.RaspberryPiBoard {
-    const part_number = @truncate(u12, asm ("mrs %[res], midr_el1"
-        : [res] "=r" (-> usize)
-    ) >> 4);
+    const part_number = @truncate(u12, Cpu.midr.el(1).read() >> 4);
     return rpi.RaspberryPiBoard.fromPartNumber(part_number) orelse @panic("Unrecognised part number");
 }

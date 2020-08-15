@@ -1,5 +1,5 @@
 const arch = @import("arch.zig");
-const cpu = arch.cpu;
+const Cpu = arch.Cpu;
 const log = @import("../../log.zig");
 const rpi = @import("rpi.zig");
 
@@ -79,7 +79,7 @@ export fn exceptionHandler() noreturn {
         }
         rpi.spinLed(50);
     }
-    const exception_entry_offset = @truncate(u32, cpu.lr.read() & 0x780);
+    const exception_entry_offset = @truncate(u32, Cpu.lr.read() & 0x780);
     var elr_elx: usize = undefined;
     var esr_elx: usize = undefined;
     var far_elx: usize = undefined;
@@ -91,15 +91,15 @@ export fn exceptionHandler() noreturn {
     var vbar_elx: usize = undefined;
     inline for ([_]u32{ 1, 2, 3 }) |exception_level| {
         if (exception_level == currentExceptionLevel()) {
-            elr_elx = cpu.elr.el(exception_level).read();
-            esr_elx = cpu.esr.el(exception_level).read();
-            far_elx = cpu.far.el(exception_level).read();
-            mair_elx = cpu.mair.el(exception_level).read();
-            sctlr_elx = cpu.sctlr.el(exception_level).read();
-            spsr_elx = cpu.spsr.el(exception_level).read();
-            tcr_elx = cpu.tcr.el(exception_level).read();
-            ttbr0_elx = cpu.ttbr0.el(exception_level).read();
-            vbar_elx = cpu.vbar.el(exception_level).read();
+            elr_elx = Cpu.elr.el(exception_level).read();
+            esr_elx = Cpu.esr.el(exception_level).read();
+            far_elx = Cpu.far.el(exception_level).read();
+            mair_elx = Cpu.mair.el(exception_level).read();
+            sctlr_elx = Cpu.sctlr.el(exception_level).read();
+            spsr_elx = Cpu.spsr.el(exception_level).read();
+            tcr_elx = Cpu.tcr.el(exception_level).read();
+            ttbr0_elx = Cpu.ttbr0.el(exception_level).read();
+            vbar_elx = Cpu.vbar.el(exception_level).read();
         }
     }
     const esr_elx_class = @intToEnum(ExceptionClass, @truncate(u6, esr_elx >> 26));
@@ -172,5 +172,5 @@ export fn exceptionHandler() noreturn {
 }
 
 pub inline fn currentExceptionLevel() u2 {
-    return @truncate(u2, cpu.CurrentEL.read() >> 2);
+    return @truncate(u2, Cpu.CurrentEL.read() >> 2);
 }

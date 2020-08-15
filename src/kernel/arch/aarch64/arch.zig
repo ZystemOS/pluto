@@ -38,12 +38,14 @@ pub fn initMmioAddress(board: *rpi.RaspberryPiBoard) void {
 }
 
 pub fn initSerial(board: BootPayload) Serial {
-    is_qemu = cpu.cntfrq_el0.read() != 0;
+    is_qemu = Cpu.cntfrq_el0.read() != 0;
     if (!is_qemu) {
-        rpi.pinSetFunction(14, .AlternateFunction5);
-        rpi.pinSetPull(14, .None);
-        rpi.pinSetFunction(15, .AlternateFunction5);
-        rpi.pinSetPull(15, .None);
+        rpi.pinSetPullUpAndFunction(14, .None, .AlternateFunction5);
+        rpi.pinSetPullUpAndFunction(15, .None, .AlternateFunction5);
+        // rpi.pinSetPull(14, .None);
+        // rpi.pinSetFunction(14, .AlternateFunction5);
+        // rpi.pinSetPull(15, .None);
+        // rpi.pinSetFunction(15, .AlternateFunction5);
         mmio.write(mmio_addr, .AUX_ENABLES, 1);
         mmio.write(mmio_addr, .AUX_MU_IER_REG, 0);
         mmio.write(mmio_addr, .AUX_MU_CNTL_REG, 0);
@@ -115,7 +117,7 @@ pub fn spinWait() noreturn {
     while (true) {}
 }
 
-pub const cpu = struct {
+pub const Cpu = struct {
     pub const cntfrq_el0 = systemRegister("cntfrq_el0");
     pub const CurrentEL = systemRegister("CurrentEL");
     pub const elr = systemRegisterPerExceptionLevel("elr");
@@ -123,6 +125,7 @@ pub const cpu = struct {
     pub const far = systemRegisterPerExceptionLevel("far");
     pub const lr = cpuRegister("lr");
     pub const mair = systemRegisterPerExceptionLevel("mair");
+    pub const midr = systemRegisterPerExceptionLevel("midr");
     pub const mpidr = systemRegisterPerExceptionLevel("mpidr");
     pub const sctlr = systemRegisterPerExceptionLevel("sctlr");
     pub const sp = cpuRegister("sp");
@@ -168,6 +171,9 @@ pub const cpu = struct {
                 );
                 return word;
             }
+            pub inline fn bitSet(bits: usize) void {
+                write(read() | bits);
+            }
             pub inline fn write(data: usize) void {
                 asm volatile ("msr " ++ register_name ++ ", %[data]"
                     :
@@ -175,6 +181,11 @@ pub const cpu = struct {
                 );
             }
         };
+    }
+    pub inline fn isb() void {
+        asm volatile (
+            \\ isb
+        );
     }
     pub inline fn wfe() void {
         asm volatile (
@@ -198,27 +209,10 @@ pub fn enableFlatMmu() void {
     while (index < page_table.len) : (index += 1) {
         page_table[index] = index * page_size + 0x0607; // device pte=3 attr index=1 outer shareable=2 af=1
     }
-
-    asm volatile (
-        \\ mov x3, #0x04ff
-        \\ msr mair_el3, x3
-        \\
-        \\ mrs x3, tcr_el3
-        \\ mov x2, #0x4022 // tcr_el3 t0sz 34 tg0 64k
-        \\ orr x3, x3, x2
-        \\ mov x2, #0x80800000
-        \\ orr x3, x3, x2
-        \\ msr tcr_el3, x3
-        \\
-        \\ mov x1, #0x50000
-        \\ msr ttbr0_el3, x1
-        \\ isb
-        \\ mrs x0, sctlr_el3
-        \\ orr x0, x0, #1
-        \\ msr sctlr_el3, x0
-        \\ isb
-        :
-        :
-        : "x0", "x1", "x2", "x3"
-    );
+    Cpu.mair.el(3).write(0x04ff);
+    Cpu.tcr.el(3).bitSet(0x80804022);
+    Cpu.ttbr0.el(3).write(0x50000);
+    Cpu.isb();
+    Cpu.sctlr.el(3).bitSet(0x1);
+    Cpu.isb();
 }

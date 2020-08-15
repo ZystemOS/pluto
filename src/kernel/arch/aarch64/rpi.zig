@@ -78,8 +78,8 @@ pub fn spinLed(period: u32) noreturn {
     }
 }
 
-pub fn pinSetFunction(pin_index: u6, f: PinFunction) void {
-    mmio.readModifyWriteField(arch.mmio_addr, .GPIO_FSEL0, @enumToInt(f), pin_index);
+pub fn pinSetFunction(pin_index: u6, function: PinFunction) void {
+    mmio.readModifyWriteField(arch.mmio_addr, .GPIO_FSEL0, @enumToInt(function), pin_index);
 }
 
 pub fn pinSetPull(pin_index: u6, pull: PinPull) void {
@@ -87,6 +87,11 @@ pub fn pinSetPull(pin_index: u6, pull: PinPull) void {
     delay(150);
     mmio.writeClock(arch.mmio_addr, .GPIO_PULL_CLK0, @as(u1, 1), pin_index);
     delay(150);
+}
+
+pub fn pinSetPullUpAndFunction(pin_index: u6, pull: PinPull, function: PinFunction) void {
+    pinSetPull(pin_index, pull);
+    pinSetFunction(pin_index, function);
 }
 
 fn pinWrite(pin_index: u6, zero_or_one: u1) void {
