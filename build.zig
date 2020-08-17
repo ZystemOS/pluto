@@ -67,9 +67,20 @@ pub fn build(b: *Builder) !void {
     exec.setLinkerScriptPath(linker_script_path);
     exec.setTarget(target);
 
+    const zip_folder = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard" });
+    const kernel = try fs.path.join(b.allocator, &[_][]const u8{ zip_folder, "kernel8.img" });
+    const firmware_version_tag = "1.20200601+arm64";
+    const firmware_url = "https://github.com/raspberrypi/firmware/raw/" ++ firmware_version_tag ++ "/boot/";
+    const image_file_name = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "kernel8.img" });
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso }),
-        .aarch64 => b.addSystemCommand(&[_][]const u8{ "aarch64-linux-gnu-objcopy", exec.getOutputPath(), "-O", "binary", try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "kernel8.img" }) }),
+        .aarch64 =>
+        // armstub not yet working, therefore: b 0x80000 (which is 0x14020000) followed by 0 filler until 0x80000 followed by kernel that starts at 0x80000
+        b.addSystemCommand(&[_][]const u8{
+            "/bin/bash",
+            "-c",
+            try std.fmt.allocPrint(b.allocator, "aarch64-linux-gnu-objcopy {} -O binary {} && mkdir --parents {} && cp --archive src/kernel/arch/aarch64/rpi-sdcard/config.txt {} && echo -ne \"\\x00\\x00\\x02\\x14\" > {} && dd status=none bs=1 count=524284 if=/dev/zero >> {} && cat {}/kernel8.img >> {} && wget --directory-prefix={} --quiet --timestamp {}/bootcode.bin {}/fixup.dat {}/start.elf && zip --junk-paths --quiet --recurse-paths {}.zip {}", .{ exec.getOutputPath(), image_file_name, zip_folder, zip_folder, kernel, kernel, b.cache_root, kernel, zip_folder, firmware_url, firmware_url, firmware_url, zip_folder, zip_folder }),
+        }),
         else => unreachable,
     };
     make_iso.step.dependOn(&exec.step);
@@ -160,49 +171,4 @@ pub fn build(b: *Builder) !void {
         "target remote localhost:1234",
     });
     debug_step.dependOn(&debug_cmd.step);
-
-    const zip_folder = "rpi-sdcard";
-    const kernel = zip_folder ++ "/kernel8.img";
-    const zip_mkdir_cmd = b.addSystemCommand(&[_][]const u8{
-        "mkdir",
-        "-p",
-        zip_folder,
-    });
-    const zip_cp_files_cmd = b.addSystemCommand(&[_][]const u8{
-        "cp",
-        "-a",
-        "src/kernel/arch/aarch64/rpi-sdcard/config.txt",
-        zip_folder,
-    });
-    const zip_make_kernel_cmd = b.addSystemCommand(&[_][]const u8{
-        "/bin/bash",
-        "-c",
-        // armstub not yet working, therefore: b 0x80000 (which is 0x14020000) followed by 0 filler until 0x80000 followed by kernel that starts at 0x80000
-        "echo -ne \"\\x00\\x00\\x02\\x14\" > " ++ kernel ++ " && dd status=none bs=1 count=524284 if=/dev/zero >> " ++ kernel ++ " && cat zig-cache/kernel8.img >> " ++ kernel,
-    });
-    const firmware_version_tag = "1.20200601+arm64";
-    const firmware_url = "https://github.com/raspberrypi/firmware/raw/" ++ firmware_version_tag ++ "/boot/";
-    const zip_get_firmware_cmd = b.addSystemCommand(&[_][]const u8{
-        "wget",
-        "-Nq",
-        "-P",
-        zip_folder,
-        firmware_url ++ "bootcode.bin",
-        firmware_url ++ "fixup.dat",
-        firmware_url ++ "start.elf",
-    });
-    const zip_do_zip_cmd = b.addSystemCommand(&[_][]const u8{
-        "zip",
-        "-jqr",
-        zip_folder ++ ".zip",
-        zip_folder,
-    });
-
-    const zip_step = b.step("zip", "Create product zip file");
-    zip_step.dependOn(&make_iso.step);
-    zip_step.dependOn(&zip_mkdir_cmd.step);
-    zip_step.dependOn(&zip_cp_files_cmd.step);
-    zip_step.dependOn(&zip_make_kernel_cmd.step);
-    zip_step.dependOn(&zip_get_firmware_cmd.step);
-    zip_step.dependOn(&zip_do_zip_cmd.step);
 }

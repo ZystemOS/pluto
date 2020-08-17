@@ -38,14 +38,10 @@ pub fn initMmioAddress(board: *rpi.RaspberryPiBoard) void {
 }
 
 pub fn initSerial(board: BootPayload) Serial {
-    is_qemu = Cpu.cntfrq_el0.read() != 0;
+    is_qemu = Cpu.cntfrq.el(0).read() != 0;
     if (!is_qemu) {
         rpi.pinSetPullUpAndFunction(14, .None, .AlternateFunction5);
         rpi.pinSetPullUpAndFunction(15, .None, .AlternateFunction5);
-        // rpi.pinSetPull(14, .None);
-        // rpi.pinSetFunction(14, .AlternateFunction5);
-        // rpi.pinSetPull(15, .None);
-        // rpi.pinSetFunction(15, .AlternateFunction5);
         mmio.write(mmio_addr, .AUX_ENABLES, 1);
         mmio.write(mmio_addr, .AUX_MU_IER_REG, 0);
         mmio.write(mmio_addr, .AUX_MU_CNTL_REG, 0);
@@ -118,7 +114,7 @@ pub fn spinWait() noreturn {
 }
 
 pub const Cpu = struct {
-    pub const cntfrq_el0 = systemRegister("cntfrq_el0");
+    pub const cntfrq = systemRegisterPerExceptionLevel("cntfrq");
     pub const CurrentEL = systemRegister("CurrentEL");
     pub const elr = systemRegisterPerExceptionLevel("elr");
     pub const esr = systemRegisterPerExceptionLevel("esr");
@@ -199,15 +195,15 @@ pub fn enableFlatMmu() void {
     const level_2_table = @intToPtr([*]usize, 0x50000)[0..2];
     level_2_table[0] = 0x60000 | 0x3;
     level_2_table[1] = 0x70000 | 0x3;
-    const page_table = @intToPtr([*]usize, 0x60000)[0 .. 2 * 8 * 1024];
+    const level_3_page_table = @intToPtr([*]usize, 0x60000)[0 .. 2 * 8 * 1024];
     const page_size = 64 * 1024;
-    const start_of_mmio = page_table.len - (16 * 1024 * 1024 / page_size);
+    const start_of_mmio = level_3_page_table.len - (16 * 1024 * 1024 / page_size);
     var index: usize = 0;
     while (index < start_of_mmio) : (index += 1) {
-        page_table[index] = index * page_size + 0x0703; // normal pte=3 attr index=0 inner shareable=3 af=1
+        level_3_page_table[index] = index * page_size + 0x0703; // normal pte=3 attr index=0 inner shareable=3 af=1
     }
-    while (index < page_table.len) : (index += 1) {
-        page_table[index] = index * page_size + 0x0607; // device pte=3 attr index=1 outer shareable=2 af=1
+    while (index < level_3_page_table.len) : (index += 1) {
+        level_3_page_table[index] = index * page_size + 0x0607; // device pte=3 attr index=1 outer shareable=2 af=1
     }
     Cpu.mair.el(3).write(0x04ff);
     Cpu.tcr.el(3).bitSet(0x80804022);
