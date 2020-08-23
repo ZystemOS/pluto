@@ -4,6 +4,7 @@ const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const log = std.log.scoped(.x86_isr);
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const syscalls = @import("syscalls.zig");
@@ -158,7 +159,7 @@ export fn isrHandler(ctx: *arch.CpuState) usize {
                 // Regular ISR exception, if there is one registered.
                 ret_esp = handler(ctx);
             } else {
-                std.log.info(.isr, "State: {X}\n", .{ctx});
+                log.info("State: {X}\n", .{ctx});
                 panic(@errorReturnTrace(), "ISR {} ({}) triggered with error code 0x{X} but not registered\n", .{ exception_msg[isr_num], isr_num, ctx.error_code });
             }
         }
@@ -237,8 +238,8 @@ pub fn registerIsr(isr_num: u16, handler: IsrHandler) IsrError!void {
 /// Initialise the exception and opening up all the IDT interrupt gates for each exception.
 ///
 pub fn init() void {
-    std.log.info(.isr, "Init\n", .{});
-    defer std.log.info(.isr, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     comptime var i = 0;
     inline while (i < 32) : (i += 1) {
@@ -384,7 +385,7 @@ fn rt_unregisteredHandlers() void {
         panic(@errorReturnTrace(), "FAILURE: Pre-testing failed for syscall: {}\n", .{h});
     }
 
-    std.log.info(.isr, "Tested registered handlers\n", .{});
+    log.info("Tested registered handlers\n", .{});
 }
 
 ///
@@ -402,7 +403,7 @@ fn rt_openedIdtEntries() void {
         }
     }
 
-    std.log.info(.isr, "Tested opened IDT entries\n", .{});
+    log.info("Tested opened IDT entries\n", .{});
 }
 
 ///

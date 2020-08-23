@@ -446,23 +446,26 @@ const TestFS = struct {
         }
         // Form a list containing all directory nodes to check via a breadth-first search
         // This is inefficient but good for testing as it's clear and easy to modify
-        var to_check = TailQueue(*TreeNode).init();
-        var root_node = try to_check.createNode(&test_fs.tree, test_fs.allocator);
+        var to_check = TailQueue(*TreeNode){};
+        var root_node = try test_fs.allocator.create(TailQueue(*TreeNode).Node);
+        root_node.* = .{ .data = &test_fs.tree };
         to_check.append(root_node);
 
         while (to_check.popFirst()) |queue_node| {
             var tree_node = queue_node.data;
-            to_check.destroyNode(queue_node, test_fs.allocator);
+            test_fs.allocator.destroy(queue_node);
             if ((@TypeOf(node) == *const FileNode and tree_node.val.isFile() and &tree_node.val.File == node) or (@TypeOf(node) == *const DirNode and tree_node.val.isDir() and &tree_node.val.Dir == node) or (@TypeOf(node) == *const Node and &tree_node.val == node)) {
                 // Clean up any unused queue nodes
                 while (to_check.popFirst()) |t_node| {
-                    to_check.destroyNode(t_node, test_fs.allocator);
+                    test_fs.allocator.destroy(t_node);
                 }
                 return tree_node;
             }
             for (tree_node.children.items) |child| {
                 // It's not the parent so add its children to the list for checking
-                to_check.append(try to_check.createNode(child, test_fs.allocator));
+                var n = try test_fs.allocator.create(TailQueue(*TreeNode).Node);
+                n.* = .{ .data = child };
+                to_check.append(n);
             }
         }
         return null;

@@ -1,6 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
+const log = std.log.scoped(.x86_pic);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
@@ -431,8 +432,8 @@ pub fn clearMask(irq_num: u8) void {
 /// by Intel up to 0x1F. So this will move the IRQs from 0x00-0x0F to 0x20-0x2F.
 ///
 pub fn init() void {
-    std.log.info(.pic, "Init\n", .{});
-    defer std.log.info(.pic, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     // Initiate
     sendCommandMaster(ICW1_INITIALISATION | ICW1_EXPECT_ICW4);
@@ -823,7 +824,7 @@ fn rt_picAllMasked() void {
         panic(@errorReturnTrace(), "FAILURE: Slave masks are not set, found: {}\n", .{readDataSlave()});
     }
 
-    std.log.info(.pic, "Tested masking\n", .{});
+    log.info("Tested masking\n", .{});
 }
 
 ///

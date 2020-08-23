@@ -5,6 +5,7 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const expectEqualSlices = std.testing.expectEqualSlices;
+const log = std.log.scoped(.initrd);
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const Allocator = std.mem.Allocator;
@@ -150,8 +151,8 @@ pub const InitrdFS = struct {
     ///                            allocated will be freed.
     ///
     pub fn init(stream: *std.io.FixedBufferStream([]u8), allocator: *Allocator) (Error || error{EndOfStream} || Allocator.Error)!*InitrdFS {
-        std.log.info(.initrd, "Init\n", .{});
-        defer std.log.info(.initrd, "Done\n", .{});
+        log.info("Init\n", .{});
+        defer log.info("Done\n", .{});
 
         // First @sizeOf(usize) bytes is the number of files
         const num_of_files = try stream.reader().readIntNative(usize);
@@ -658,7 +659,7 @@ fn rt_openReadClose(allocator: *Allocator) void {
         error.NoSuchFileOrDir => {},
         else => panic(@errorReturnTrace(), "FAILURE: Expected error\n", .{}),
     };
-    std.log.info(.initrd, "Opened, read and closed\n", .{});
+    log.info("Opened, read and closed\n", .{});
 }
 
 ///

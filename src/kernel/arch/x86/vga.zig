@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
+const log = std.log.scoped(.x86_vga);
 const build_options = @import("build_options");
 const arch = if (is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
 const panic = @import("../../panic.zig").panic;
@@ -283,8 +284,8 @@ pub fn setCursorShape(shape: CursorShape) void {
 /// Initialise the VGA text mode. This sets the cursor and underline shape.
 ///
 pub fn init() void {
-    std.log.info(.vga, "Init\n", .{});
-    defer std.log.info(.vga, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     // Set the maximum scan line to 0x0F
     sendPortData(REG_MAXIMUM_SCAN_LINE, CURSOR_SCANLINE_END);
@@ -536,7 +537,7 @@ fn rt_correctMaxScanLine() void {
         panic(@errorReturnTrace(), "FAILURE: Max scan line not {}, found {}\n", .{ CURSOR_SCANLINE_END, max_scan_line });
     }
 
-    std.log.info(.vga, "Tested max scan line\n", .{});
+    log.info("Tested max scan line\n", .{});
 }
 
 ///
@@ -555,7 +556,7 @@ fn rt_correctCursorShape() void {
         panic(@errorReturnTrace(), "FAILURE: Cursor scanline are incorrect. Start: {}, end: {}\n", .{ cursor_start, cursor_end });
     }
 
-    std.log.info(.vga, "Tested cursor shape\n", .{});
+    log.info("Tested cursor shape\n", .{});
 }
 
 ///
@@ -587,7 +588,7 @@ fn rt_setCursorGetCursor() void {
     // Restore the previous x and y
     updateCursor(prev_x_loc, prev_y_loc);
 
-    std.log.info(.vga, "Tested updating cursor\n", .{});
+    log.info("Tested updating cursor\n", .{});
 }
 
 ///
