@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.x86_arch);
 const builtin = @import("builtin");
 const cmos = @import("cmos.zig");
 const gdt = @import("gdt.zig");
@@ -326,16 +327,16 @@ pub fn initTTY(boot_payload: BootPayload) TTY {
 ///     Allocator.Error.OutOfMemory - There wasn't enough memory in the allocated created to populate the memory profile, consider increasing mem.FIXED_ALLOC_SIZE
 ///
 pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
-    std.log.info(.arch_x86, "Init\n", .{});
-    defer std.log.info(.arch_x86, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
-    std.log.debug(.arch_x86, "KERNEL_ADDR_OFFSET:    0x{X}\n", .{@ptrToInt(&KERNEL_ADDR_OFFSET)});
-    std.log.debug(.arch_x86, "KERNEL_STACK_START:    0x{X}\n", .{@ptrToInt(&KERNEL_STACK_START)});
-    std.log.debug(.arch_x86, "KERNEL_STACK_END:      0x{X}\n", .{@ptrToInt(&KERNEL_STACK_END)});
-    std.log.debug(.arch_x86, "KERNEL_VADDR_START:    0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_START)});
-    std.log.debug(.arch_x86, "KERNEL_VADDR_END:      0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_END)});
-    std.log.debug(.arch_x86, "KERNEL_PHYSADDR_START: 0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_START)});
-    std.log.debug(.arch_x86, "KERNEL_PHYSADDR_END:   0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_END)});
+    log.debug("KERNEL_ADDR_OFFSET:    0x{X}\n", .{@ptrToInt(&KERNEL_ADDR_OFFSET)});
+    log.debug("KERNEL_STACK_START:    0x{X}\n", .{@ptrToInt(&KERNEL_STACK_START)});
+    log.debug("KERNEL_STACK_END:      0x{X}\n", .{@ptrToInt(&KERNEL_STACK_END)});
+    log.debug("KERNEL_VADDR_START:    0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_START)});
+    log.debug("KERNEL_VADDR_END:      0x{X}\n", .{@ptrToInt(&KERNEL_VADDR_END)});
+    log.debug("KERNEL_PHYSADDR_START: 0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_START)});
+    log.debug("KERNEL_PHYSADDR_END:   0x{X}\n", .{@ptrToInt(&KERNEL_PHYSADDR_END)});
 
     const mods_count = mb_info.mods_count;
     mem.ADDR_OFFSET = @ptrToInt(&KERNEL_ADDR_OFFSET);

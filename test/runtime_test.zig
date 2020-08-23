@@ -255,7 +255,7 @@ pub const RuntimeStep = struct {
 
             // put line in the queue
             var node = self.builder.allocator.create(Node) catch unreachable;
-            node.* = Node.init(line);
+            node.* = .{ .next = null, .data = line };
             self.msg_queue.put(node);
         }
     }

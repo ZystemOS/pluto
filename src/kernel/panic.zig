@@ -8,6 +8,7 @@ const build_options = @import("build_options");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
+const log = std.log.scoped(.panic);
 
 /// The possible errors from panic code
 const PanicError = error{
@@ -111,7 +112,7 @@ var symbol_map: ?SymbolMap = null;
 ///
 fn logTraceAddress(addr: usize) void {
     const str = if (symbol_map) |syms| syms.search(addr) orelse "?????" else "(no symbols available)";
-    std.log.emerg(.panic, "{x}: {}\n", .{ addr, str });
+    log.emerg("{x}: {}\n", .{ addr, str });
 }
 
 ///
@@ -278,7 +279,7 @@ fn parseMapEntry(start: *[*]const u8, end: *const u8) (PanicError || std.fmt.Par
 
 pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
-    std.log.emerg(.panic, "Kernel panic: " ++ format ++ "\n", args);
+    log.emerg("Kernel panic: " ++ format ++ "\n", args);
     if (trace) |trc| {
         var last_addr: u64 = 0;
         for (trc.instruction_addresses) |ret_addr| {
@@ -312,8 +313,8 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: any
 ///     std.fmt.ParseIntError - See parseMapEntry.
 ///
 pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) (PanicError || Allocator.Error || std.fmt.ParseIntError)!void {
-    std.log.info(.panic, "Init\n", .{});
-    defer std.log.info(.panic, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     // Exit if we haven't loaded all debug modules
     if (mem_profile.modules.len < 1) {

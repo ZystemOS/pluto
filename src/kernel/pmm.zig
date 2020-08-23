@@ -1,5 +1,6 @@
 const is_test = @import("builtin").is_test;
 const std = @import("std");
+const log = std.log.scoped(.pmm);
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig").internals;
@@ -98,8 +99,8 @@ pub fn blocksFree() usize {
 ///     IN allocator: *Allocator - The allocator to use to allocate the bitmaps.
 ///
 pub fn init(mem_profile: *const MemProfile, allocator: *Allocator) void {
-    std.log.info(.pmm, "Init\n", .{});
-    defer std.log.info(.pmm, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     bitmap = PmmBitmap.init(mem_profile.mem_kb * 1024 / BLOCK_SIZE, allocator) catch |e| {
         panic(@errorReturnTrace(), "Bitmap allocation failed: {}\n", .{e});
@@ -232,5 +233,5 @@ fn runtimeTests(mem_profile: *const MemProfile, allocator: *Allocator) void {
             panic(@errorReturnTrace(), "FAILURE: Failed freeing allocation in PMM rt test: {}", .{e});
         };
     }
-    std.log.info(.pmm, "Tested allocation\n", .{});
+    log.info("Tested allocation\n", .{});
 }

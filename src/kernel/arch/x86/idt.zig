@@ -2,6 +2,7 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const log = std.log.scoped(.x86_idt);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const panic = @import("../../panic.zig").panic;
@@ -178,8 +179,8 @@ pub fn openInterruptGate(index: u8, handler: InterruptHandler) IdtError!void {
 /// Initialise the Interrupt descriptor table
 ///
 pub fn init() void {
-    std.log.info(.idt, "Init\n", .{});
-    defer std.log.info(.idt, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     idt_ptr.base = @ptrToInt(&idt_entries);
 
@@ -333,7 +334,7 @@ fn rt_loadedIDTSuccess() void {
     if (idt_ptr.base != loaded_idt.base) {
         panic(@errorReturnTrace(), "FAILURE: IDT not loaded properly: 0x{X} != {X}\n", .{ idt_ptr.base, loaded_idt.base });
     }
-    std.log.info(.idt, " Tested loading IDT\n", .{});
+    log.info("Tested loading IDT\n", .{});
 }
 
 ///

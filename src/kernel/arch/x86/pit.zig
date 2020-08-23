@@ -5,6 +5,7 @@ const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const log = std.log.scoped(.x86_pit);
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
@@ -362,8 +363,8 @@ pub fn getFrequency() u32 {
 /// Initialise the PIT with a handler to IRQ 0.
 ///
 pub fn init() void {
-    std.log.info(.pit, "Init\n", .{});
-    defer std.log.info(.pit, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     // Set up counter 0 at 10000hz in a square wave mode counting in binary
     const freq: u32 = 10000;
@@ -371,7 +372,7 @@ pub fn init() void {
         panic(@errorReturnTrace(), "Invalid frequency: {}\n", .{freq});
     };
 
-    std.log.debug(.pit, "Set frequency at: {}Hz, real frequency: {}Hz\n", .{ freq, getFrequency() });
+    log.debug("Set frequency at: {}Hz, real frequency: {}Hz\n", .{ freq, getFrequency() });
 
     // Installs 'pitHandler' to IRQ0 (pic.IRQ_PIT)
     irq.registerIrq(pic.IRQ_PIT, pitHandler) catch |err| switch (err) {
@@ -549,7 +550,7 @@ fn rt_waitTicks() void {
         panic(@errorReturnTrace(), "FAILURE: Waiting failed. difference: {}, previous_count: {}. Epsilon: {}\n", .{ difference, previous_count, epsilon });
     }
 
-    std.log.info(.pit, "Tested wait ticks\n", .{});
+    log.info("Tested wait ticks\n", .{});
 }
 
 ///
@@ -576,7 +577,7 @@ fn rt_waitTicks2() void {
     // Reset ticks
     ticks = 0;
 
-    std.log.info(.pit, "Tested wait ticks 2\n", .{});
+    log.info("Tested wait ticks 2\n", .{});
 }
 
 ///
@@ -621,7 +622,7 @@ fn rt_initCounter_0() void {
         panic(@errorReturnTrace(), "FAILURE: Operating mode don't not set properly. Found: {}, expecting: {}\n", .{ actual_mode, expected_mode });
     }
 
-    std.log.info(.pit, "Tested init\n", .{});
+    log.info("Tested init\n", .{});
 }
 
 ///

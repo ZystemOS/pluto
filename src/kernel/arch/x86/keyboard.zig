@@ -3,10 +3,10 @@ const build_options = @import("build_options");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
+const log = std.log.scoped(.x86_keyboard);
 const irq = @import("irq.zig");
 const pic = @import("pic.zig");
 const arch = if (builtin.is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const log = if (builtin.is_test) @import(build_options.arch_mock_path ++ "log_mock.zig") else @import("../../log.zig");
 const panic = @import("../../panic.zig").panic;
 const kb = @import("../../keyboard.zig");
 const Keyboard = kb.Keyboard;
@@ -164,7 +164,7 @@ fn onKeyEvent(ctx: *arch.CpuState) usize {
     const scan_code = readKeyboardBuffer();
     if (parseScanCode(scan_code)) |action| {
         if (!keyboard.writeKey(action)) {
-            std.log.notice(.x86_keyboard, "No room for keyboard action {}\n", .{action});
+            log.notice("No room for keyboard action {}\n", .{action});
         }
     }
     return @ptrToInt(ctx);

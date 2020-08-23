@@ -4,6 +4,7 @@ const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const log = std.log.scoped(.x86_irq);
 const build_options = @import("build_options");
 const panic = @import("../../panic.zig").panic;
 const mock_path = build_options.arch_mock_path;
@@ -130,8 +131,8 @@ pub fn registerIrq(irq_num: u8, handler: IrqHandler) IrqError!void {
 /// the IDT interrupt gates for each IRQ.
 ///
 pub fn init() void {
-    std.log.info(.irq, "Init\n", .{});
-    defer std.log.info(.irq, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     comptime var i = IRQ_OFFSET;
     inline while (i < IRQ_OFFSET + 16) : (i += 1) {
@@ -246,7 +247,7 @@ fn rt_unregisteredHandlers() void {
         }
     }
 
-    std.log.info(.irq, "Tested registered handlers\n", .{});
+    log.info("Tested registered handlers\n", .{});
 }
 
 ///
@@ -264,7 +265,7 @@ fn rt_openedIdtEntries() void {
         }
     }
 
-    std.log.info(.irq, "Tested opened IDT entries\n", .{});
+    log.info("Tested opened IDT entries\n", .{});
 }
 
 ///

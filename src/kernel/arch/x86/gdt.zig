@@ -1,6 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
+const log = std.log.scoped(.x86_gdt);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const panic = @import("../../panic.zig").panic;
@@ -405,8 +406,8 @@ fn makeGdtEntry(base: u32, limit: u20, access: AccessBits, flags: FlagBits) GdtE
 /// Initialise the Global Descriptor table.
 ///
 pub fn init() void {
-    std.log.info(.gdt, "Init\n", .{});
-    defer std.log.info(.gdt, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
     // Initiate TSS
     gdt_entries[TSS_INDEX] = makeGdtEntry(@ptrToInt(&main_tss_entry), @sizeOf(Tss) - 1, TSS_SEGMENT, NULL_FLAGS);
 
@@ -567,7 +568,7 @@ fn rt_loadedGDTSuccess() void {
     if (gdt_ptr.base != loaded_gdt.base) {
         panic(@errorReturnTrace(), "FAILURE: GDT not loaded properly: 0x{X} != {X}\n", .{ gdt_ptr.base, loaded_gdt.base });
     }
-    std.log.info(.gdt, "Tested loading GDT\n", .{});
+    log.info("Tested loading GDT\n", .{});
 }
 
 ///

@@ -4,6 +4,7 @@ const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const log = std.log.scoped(.x86_rtc);
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
@@ -265,8 +266,8 @@ fn enableInterrupts() void {
 /// Initialise the RTC.
 ///
 pub fn init() void {
-    std.log.info(.rtc, "Init\n", .{});
-    defer std.log.info(.rtc, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     // Register the interrupt handler
     irq.registerIrq(pic.IRQ_REAL_TIME_CLOCK, rtcHandler) catch |err| switch (err) {
@@ -726,7 +727,7 @@ fn rt_init() void {
         panic(@errorReturnTrace(), "FAILURE: Interrupts not enabled\n", .{});
     }
 
-    std.log.info(.rtc, "Tested init\n", .{});
+    log.info("Tested init\n", .{});
 }
 
 ///
@@ -741,7 +742,7 @@ fn rt_interrupts() void {
         panic(@errorReturnTrace(), "FAILURE: No interrupt happened\n", .{});
     }
 
-    std.log.info(.rtc, "Tested interrupts\n", .{});
+    log.info("Tested interrupts\n", .{});
 }
 
 ///

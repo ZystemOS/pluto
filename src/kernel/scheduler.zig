@@ -2,6 +2,7 @@ const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const assert = std.debug.assert;
+const log = std.log.scoped(.scheduler);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
@@ -98,7 +99,8 @@ pub fn pickNextTask(ctx: *arch.CpuState) usize {
 ///                   be freed on return.
 ///
 pub fn scheduleTask(new_task: *Task, allocator: *Allocator) Allocator.Error!void {
-    var task_node = try tasks.createNode(new_task, allocator);
+    var task_node = try allocator.create(TailQueue(*Task).Node);
+    task_node.* = .{ .data = new_task };
     tasks.prepend(task_node);
 }
 
@@ -116,11 +118,11 @@ pub fn scheduleTask(new_task: *Task, allocator: *Allocator) Allocator.Error!void
 ///
 pub fn init(allocator: *Allocator) Allocator.Error!void {
     // TODO: Maybe move the task init here?
-    std.log.info(.scheduler, "Init\n", .{});
-    defer std.log.info(.scheduler, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     // Init the task list for round robin
-    tasks = TailQueue(*Task).init();
+    tasks = TailQueue(*Task){};
 
     // Set up the init task to continue execution
     current_task = try allocator.create(Task);
@@ -181,7 +183,7 @@ test "pickNextTask" {
     var ctx: arch.CpuState = std.mem.zeroes(arch.CpuState);
 
     var allocator = std.testing.allocator;
-    tasks = TailQueue(*Task).init();
+    tasks = TailQueue(*Task){};
 
     // Set up a current task
     current_task = try allocator.create(Task);
@@ -229,7 +231,7 @@ test "pickNextTask" {
 
     // Free the queue
     while (tasks.pop()) |elem| {
-        tasks.destroyNode(elem, allocator);
+        allocator.destroy(elem);
     }
 }
 
@@ -244,7 +246,7 @@ test "createNewTask add new task" {
     var allocator = std.testing.allocator;
 
     // Init the task list
-    tasks = TailQueue(*Task).init();
+    tasks = TailQueue(*Task){};
 
     var test_fn1_task = try Task.create(test_fn1, allocator);
     defer test_fn1_task.destroy(allocator);
@@ -253,7 +255,7 @@ test "createNewTask add new task" {
     expectEqual(tasks.len, 1);
 
     // Free the memory
-    tasks.destroyNode(tasks.first.?, allocator);
+    allocator.destroy(tasks.first.?);
 }
 
 test "init" {
@@ -276,7 +278,7 @@ test "init" {
     current_task.destroy(allocator);
     while (tasks.pop()) |elem| {
         elem.data.destroy(allocator);
-        tasks.destroyNode(elem, allocator);
+        allocator.destroy(elem);
     }
 }
 
@@ -288,7 +290,7 @@ var is_set: *volatile bool = undefined;
 /// The test task function.
 ///
 fn task_function() noreturn {
-    std.log.info(.scheduler, "Switched\n", .{});
+    log.info("Switched\n", .{});
     is_set.* = false;
     while (true) {}
 }
@@ -343,7 +345,7 @@ fn rt_variable_preserved(allocator: *Allocator) void {
         panic(@errorReturnTrace(), "FAILED: z not 3, but: {}\n", .{z});
     }
 
-    std.log.info(.scheduler, "SUCCESS: Scheduler variables preserved\n", .{});
+    log.info("SUCCESS: Scheduler variables preserved\n", .{});
 }
 
 ///

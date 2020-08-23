@@ -1,4 +1,5 @@
 const std = @import("std");
+const log = std.log.scoped(.x86_syscalls);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
@@ -57,10 +58,10 @@ fn handle(ctx: *arch.CpuState) u32 {
         if (handlers[syscall]) |handler| {
             ctx.eax = handler(ctx, syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
         } else {
-            std.log.warn(.syscall, "Syscall {} triggered but not registered\n", .{syscall});
+            log.warn("Syscall {} triggered but not registered\n", .{syscall});
         }
     } else {
-        std.log.warn(.syscall, "Syscall {} is invalid\n", .{syscall});
+        log.warn("Syscall {} is invalid\n", .{syscall});
     }
     return @ptrToInt(ctx);
 }
@@ -242,8 +243,8 @@ inline fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) u32 {
 /// Initialise syscalls. Registers the isr associated with INTERRUPT.
 ///
 pub fn init() void {
-    std.log.info(.syscall, "Init\n", .{});
-    defer std.log.info(.syscall, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
 
     isr.registerIsr(INTERRUPT, handle) catch unreachable;
 
@@ -330,5 +331,5 @@ fn runtimeTests() void {
         panic(@errorReturnTrace(), "FAILURE syscall5\n", .{});
     }
 
-    std.log.info(.syscall, "Tested all args\n", .{});
+    log.info("Tested all args\n", .{});
 }

@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
+const log = std.log.scoped(.heap);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
@@ -601,8 +602,8 @@ const FreeListAllocator = struct {
 ///     Allocator.Error.OutOfMemory - heap_vmm's allocator didn't have enough memory available to fulfill the request
 ///
 pub fn init(comptime vmm_payload: type, heap_vmm: *vmm.VirtualMemoryManager(vmm_payload), attributes: vmm.Attributes, heap_size: usize) (FreeListAllocator.Error || Allocator.Error)!FreeListAllocator {
-    std.log.info(.heap, "Init\n", .{});
-    defer std.log.info(.heap, "Done\n", .{});
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
     var heap_start = (try heap_vmm.alloc(heap_size / vmm.BLOCK_SIZE, attributes)) orelse panic(null, "Not enough contiguous virtual memory blocks to allocate to kernel heap\n", .{});
     // This free call cannot error as it is guaranteed to have been allocated above
     errdefer heap_vmm.free(heap_start) catch unreachable;

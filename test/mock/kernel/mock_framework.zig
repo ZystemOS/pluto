@@ -434,7 +434,7 @@ fn Mock() type {
                 expectEqual(@as(DataElementType, action.data), expect_type);
 
                 // Free the node
-                action_list.*.destroyNode(action_node, GlobalAllocator);
+                GlobalAllocator.destroy(action_node);
 
                 return ret;
             } else {
@@ -456,7 +456,7 @@ fn Mock() type {
         pub fn addAction(self: *Self, comptime fun_name: []const u8, data: anytype, action_type: ActionType) void {
             // Add a new mapping if one doesn't exist.
             if (!self.named_actions.contains(fun_name)) {
-                self.named_actions.put(fun_name, TailQueue(Action).init()) catch unreachable;
+                self.named_actions.put(fun_name, .{}) catch unreachable;
             }
 
             // Get the function mapping to add the parameter to.
@@ -466,7 +466,8 @@ fn Mock() type {
                     .action = action_type,
                     .data = createDataElement(data),
                 };
-                var a = action_list.createNode(action, GlobalAllocator) catch unreachable;
+                var a = GlobalAllocator.create(TailQueue(Action).Node) catch unreachable;
+                a.* = .{ .data = action };
                 action_list.append(a);
                 // Need to re-assign the value as it isn't updated when we just append
                 actions_kv.value = action_list;
@@ -510,7 +511,7 @@ fn Mock() type {
                                 expectTest(param_type, param, test_action.data);
 
                                 // Free the node
-                                action_list.destroyNode(test_node, GlobalAllocator);
+                                GlobalAllocator.destroy(test_node);
                             }
                             break :ret expectGetValue(fun_name, &action_list, RetType);
                         },
@@ -550,7 +551,7 @@ fn Mock() type {
                             const actual_function = getDataValue(expected_function, test_element);
 
                             // Free the node
-                            action_list.destroyNode(test_node, GlobalAllocator);
+                            GlobalAllocator.destroy(test_node);
 
                             // The data element will contain the function to call
                             const r = switch (params.len) {
@@ -649,7 +650,7 @@ fn Mock() type {
                         ActionType.RepeatFunctionCall => {
                             // As this is a repeat action, the function will still be here
                             // So need to free it
-                            action_list.destroyNode(action_node, GlobalAllocator);
+                            GlobalAllocator.destroy(action_node);
                             next.value = action_list;
                         },
                     }

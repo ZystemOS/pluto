@@ -1,4 +1,5 @@
 const std = @import("std");
+const logger = std.log.scoped(.kmain);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
@@ -78,9 +79,9 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
     };
 
-    std.log.info(.kmain, "Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+    logger.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
     arch.init(&mem_profile);
-    std.log.info(.kmain, "Arch init done\n", .{});
+    logger.info("Arch init done\n", .{});
 
     // Give the kernel heap 10% of the available memory. This can be fine-tuned as time goes on.
     var heap_size = mem_profile.mem_kb / 10 * 1024;
@@ -133,12 +134,12 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     }
 
     // Initialisation is finished, now does other stuff
-    std.log.info(.kmain, "Init\n", .{});
+    logger.info("Init\n", .{});
 
     // Main initialisation finished so can enable interrupts
     arch.enableInterrupts();
 
-    std.log.info(.kmain, "Creating init2\n", .{});
+    logger.info("Creating init2\n", .{});
 
     // Create a init2 task
     var idle_task = task.Task.create(initStage2, &kernel_heap.allocator) catch |e| {
@@ -173,7 +174,7 @@ fn initStage2() noreturn {
 
     switch (build_options.test_mode) {
         .Initialisation => {
-            std.log.info(.kmain, "SUCCESS\n", .{});
+            logger.info("SUCCESS\n", .{});
         },
         else => {},
     }
