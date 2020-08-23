@@ -1,5 +1,6 @@
 const mem = @import("mem_mock.zig");
 const bitmap = @import("../../../src/kernel/bitmap.zig");
+const vmm = @import("../../../src/kernel/vmm.zig");
 const arch = @import("arch_mock.zig");
 const std = @import("std");
 
@@ -8,20 +9,34 @@ pub const VmmError = error{
     NotAllocated,
 };
 
-pub const Attributes = struct {
-    kernel: bool,
-    writable: bool,
-    cachable: bool,
-};
+pub const Attributes = vmm.Attributes;
+
 pub const BLOCK_SIZE: u32 = 1024;
 
-pub fn Mapper(comptime Payload: type) type {
-    return struct {};
-}
+pub const Mapper = vmm.Mapper;
+
+pub const MapperError = error{
+    InvalidVirtualAddress,
+    InvalidPhysicalAddress,
+    AddressMismatch,
+    MisalignedVirtualAddress,
+    MisalignedPhysicalAddress,
+    NotMapped,
+};
+
+pub var kernel_vmm: VirtualMemoryManager(arch.VmmPayload) = undefined;
 
 pub fn VirtualMemoryManager(comptime Payload: type) type {
     return struct {
         const Self = @This();
+
+        pub fn init(start: usize, end: usize, allocator: *std.mem.Allocator, mapper: Mapper(Payload), payload: Payload) std.mem.Allocator.Error!Self {
+            return Self{};
+        }
+
+        pub fn virtToPhys(self: *const Self, virt: usize) VmmError!usize {
+            return 0;
+        }
 
         pub fn alloc(self: *Self, num: u32, attrs: Attributes) std.mem.Allocator.Error!?usize {
             return std.mem.Allocator.Error.OutOfMemory;

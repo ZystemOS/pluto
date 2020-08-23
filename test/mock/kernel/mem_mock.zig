@@ -29,12 +29,13 @@ pub const MemProfile = struct {
 };
 
 const FIXED_ALLOC_SIZE = 1024 * 1024;
+const ADDR_OFFSET: usize = 100;
 
 pub fn virtToPhys(virt: anytype) @TypeOf(virt) {
     const T = @TypeOf(virt);
     return switch (@typeInfo(T)) {
-        .Pointer => @intToPtr(T, @ptrToInt(virt) - KERNEL_ADDR_OFFSET),
-        .Int => virt - KERNEL_ADDR_OFFSET,
+        .Pointer => @intToPtr(T, @ptrToInt(virt) - ADDR_OFFSET),
+        .Int => virt - ADDR_OFFSET,
         else => @compileError("Only pointers and integers are supported"),
     };
 }
@@ -42,8 +43,8 @@ pub fn virtToPhys(virt: anytype) @TypeOf(virt) {
 pub fn physToVirt(phys: anytype) @TypeOf(phys) {
     const T = @TypeOf(phys);
     return switch (@typeInfo(T)) {
-        .Pointer => @intToPtr(T, @ptrToInt(phys) + KERNEL_ADDR_OFFSET),
-        .Int => phys + KERNEL_ADDR_OFFSET,
+        .Pointer => @intToPtr(T, @ptrToInt(phys) + ADDR_OFFSET),
+        .Int => phys + ADDR_OFFSET,
         else => @compileError("Only pointers and integers are supported"),
     };
 }

@@ -360,6 +360,20 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
         }
     }
 
+    // Map the kernel code
+    const kernel_virt = mem.Range{
+        .start = @ptrToInt(&KERNEL_VADDR_START),
+        .end = @ptrToInt(&KERNEL_STACK_START),
+    };
+    const kernel_phy = mem.Range{
+        .start = mem.virtToPhys(kernel_virt.start),
+        .end = mem.virtToPhys(kernel_virt.end),
+    };
+    try reserved_virtual_mem.append(.{
+        .virtual = kernel_virt,
+        .physical = kernel_phy,
+    });
+
     // Map the multiboot info struct itself
     const mb_region = mem.Range{
         .start = @ptrToInt(mb_info),
@@ -422,20 +436,6 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
     try reserved_virtual_mem.append(.{
         .virtual = kernel_stack_virt,
         .physical = kernel_stack_phy,
-    });
-
-    // Map the rest of the kernel
-    const kernel_virt = mem.Range{
-        .start = @ptrToInt(&KERNEL_VADDR_START),
-        .end = @ptrToInt(&KERNEL_STACK_START),
-    };
-    const kernel_phy = mem.Range{
-        .start = mem.virtToPhys(kernel_virt.start),
-        .end = mem.virtToPhys(kernel_virt.end),
-    };
-    try reserved_virtual_mem.append(.{
-        .virtual = kernel_virt,
-        .physical = kernel_phy,
     });
 
     return MemProfile{
