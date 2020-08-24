@@ -67,20 +67,79 @@ pub fn build(b: *Builder) !void {
     exec.setLinkerScriptPath(linker_script_path);
     exec.setTarget(target);
 
-    const zip_folder = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard" });
-    const kernel = try fs.path.join(b.allocator, &[_][]const u8{ zip_folder, "kernel8.img" });
-    const firmware_version_tag = "1.20200601+arm64";
-    const firmware_url = "https://github.com/raspberrypi/firmware/raw/" ++ firmware_version_tag ++ "/boot/";
-    const image_file_name = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "kernel8.img" });
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso }),
-        .aarch64 =>
-        // armstub not yet working, therefore: b 0x80000 (which is 0x14020000) followed by 0 filler until 0x80000 followed by kernel that starts at 0x80000
-        b.addSystemCommand(&[_][]const u8{
-            "/bin/bash",
-            "-c",
-            try std.fmt.allocPrint(b.allocator, "aarch64-linux-gnu-objcopy {} -O binary {} && mkdir --parents {} && cp --archive src/kernel/arch/aarch64/rpi-sdcard/config.txt {} && echo -ne \"\\x00\\x00\\x02\\x14\" > {} && dd status=none bs=1 count=524284 if=/dev/zero >> {} && cat {}/kernel8.img >> {} && wget --directory-prefix={} --quiet --timestamp {}/bootcode.bin {}/fixup.dat {}/start.elf && zip --junk-paths --quiet --recurse-paths {}.zip {}", .{ exec.getOutputPath(), image_file_name, zip_folder, zip_folder, kernel, kernel, b.cache_root, kernel, zip_folder, firmware_url, firmware_url, firmware_url, zip_folder, zip_folder }),
-        }),
+        .aarch64 => zipSequence: {
+            const zip_folder = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard" });
+            const elf = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "pluto.elf" });
+            const firmware_version_tag = "1.20200601+arm64";
+            const firmware_url = "https://github.com/raspberrypi/firmware/raw/" ++ firmware_version_tag ++ "/boot/";
+            const kernel = try fs.path.join(b.allocator, &[_][]const u8{ zip_folder, "kernel8.img" });
+
+            const mkdir = b.addSystemCommand(&[_][]const u8{
+                "mkdir",
+                "--parents",
+                zip_folder,
+            });
+            mkdir.step.dependOn(&exec.step);
+
+            const objcopy = b.addSystemCommand(&[_][]const u8{
+                "aarch64-linux-gnu-objcopy",
+                elf,
+                "-O",
+                "binary",
+                try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8.img" }),
+            });
+            objcopy.step.dependOn(&mkdir.step);
+
+            const cp_config = b.addSystemCommand(&[_][]const u8{
+                "cp",
+                "--archive",
+                "src/kernel/arch/aarch64/rpi-sdcard/config.txt",
+                zip_folder,
+            });
+            cp_config.step.dependOn(&objcopy.step);
+
+            const emulate_armstub = armstubSequence: {
+                // armstub not yet working, therefore: b 0x80000 (which is 0x14020000)
+                const create_b_0x80000 = bash(b, "echo -ne \"\\x00\\x00\\x02\\x14\" > {}", .{kernel});
+                create_b_0x80000.step.dependOn(&cp_config.step);
+
+                // followed by 0 filler until 0x80000
+                const dd = bash(b, "dd status=none bs=1 count=524284 if=/dev/zero >> {}", .{kernel});
+                dd.step.dependOn(&create_b_0x80000.step);
+
+                // followed finally by kernel that starts at 0x80000
+                const cat = bash(b, "cat {}/kernel8.img >> {}", .{ b.cache_root, kernel });
+                cat.step.dependOn(&dd.step);
+
+                break :armstubSequence cat;
+            };
+            emulate_armstub.step.dependOn(&cp_config.step);
+
+            const wget = b.addSystemCommand(&[_][]const u8{
+                "wget",
+                try std.fmt.allocPrint(b.allocator, "--directory-prefix={}", .{zip_folder}),
+                "--quiet",
+                "--timestamp",
+                try std.fmt.allocPrint(b.allocator, "{}/bootcode.bin", .{firmware_url}),
+                try std.fmt.allocPrint(b.allocator, "{}/fixup.dat", .{firmware_url}),
+                try std.fmt.allocPrint(b.allocator, "{}/start.elf", .{firmware_url}),
+            });
+            wget.step.dependOn(&emulate_armstub.step);
+
+            const zip = b.addSystemCommand(&[_][]const u8{
+                "zip",
+                "--junk-paths",
+                "--quiet",
+                "--recurse-paths",
+                try std.fmt.allocPrint(b.allocator, "{}.zip", .{zip_folder}),
+                zip_folder,
+            });
+            zip.step.dependOn(&wget.step);
+
+            break :zipSequence zip;
+        },
         else => unreachable,
     };
     make_iso.step.dependOn(&exec.step);
@@ -171,4 +230,12 @@ pub fn build(b: *Builder) !void {
         "target remote localhost:1234",
     });
     debug_step.dependOn(&debug_cmd.step);
+}
+
+fn bash(b: *Builder, comptime fmt: []const u8, args: anytype) *std.build.RunStep {
+    return b.addSystemCommand(&[_][]const u8{
+        "bash",
+        "-c",
+        std.fmt.allocPrint(b.allocator, fmt, args) catch unreachable,
+    });
 }

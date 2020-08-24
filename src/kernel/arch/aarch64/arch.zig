@@ -167,7 +167,7 @@ pub const Cpu = struct {
                 );
                 return word;
             }
-            pub inline fn bitSet(bits: usize) void {
+            pub inline fn readSetWrite(bits: usize) void {
                 write(read() | bits);
             }
             pub inline fn write(data: usize) void {
@@ -206,9 +206,9 @@ pub fn enableFlatMmu() void {
         level_3_page_table[index] = index * page_size + 0x0607; // device pte=3 attr index=1 outer shareable=2 af=1
     }
     Cpu.mair.el(3).write(0x04ff);
-    Cpu.tcr.el(3).bitSet(0x80804022);
+    Cpu.tcr.el(3).readSetWrite(0x80804022);
     Cpu.ttbr0.el(3).write(0x50000);
     Cpu.isb();
-    Cpu.sctlr.el(3).bitSet(0x1);
+    Cpu.sctlr.el(3).readSetWrite(0x1);
     Cpu.isb();
 }
