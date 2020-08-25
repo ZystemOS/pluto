@@ -12,8 +12,9 @@ const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("ar
 const isr = @import("isr.zig");
 const MemProfile = @import("../../mem.zig").MemProfile;
 const tty = @import("../../tty.zig");
-const mem = @import("../../mem.zig");
-const vmm = @import("../../vmm.zig");
+const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("../../mem.zig");
+const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("../../vmm.zig");
+const pmm = @import("../../pmm.zig");
 const multiboot = @import("multiboot.zig");
 const Allocator = std.mem.Allocator;
 
@@ -208,7 +209,9 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
         // Create a table and put the physical address in the dir entry
         table = &(try allocator.alignedAlloc(Table, @truncate(u29, PAGE_SIZE_4KB), 1))[0];
         @memset(@ptrCast([*]u8, table), 0, @sizeOf(Table));
-        const table_phys_addr = @ptrToInt(mem.virtToPhys(table));
+        const table_phys_addr = vmm.kernel_vmm.virtToPhys(@ptrToInt(table)) catch |e| {
+            panic(@errorReturnTrace(), "Failed getting the physical address for an allocated page table: {}\n", .{e});
+        };
         dir_entry.* |= DENTRY_PAGE_ADDR & table_phys_addr;
         dir.tables[entry] = table;
     }
@@ -499,29 +502,33 @@ test "virtToTableEntryIdx" {
 test "mapDirEntry" {
     var allocator = std.heap.page_allocator;
     var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
+    const attrs = vmm.Attributes{ .kernel = false, .writable = false, .cachable = false };
+    vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(PAGE_SIZE_4MB, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, undefined);
     {
         const phys: usize = 0 * PAGE_SIZE_4MB;
         const phys_end: usize = phys + PAGE_SIZE_4MB;
         const virt: usize = 1 * PAGE_SIZE_4MB;
         const virt_end: usize = virt + PAGE_SIZE_4MB;
-        try mapDirEntry(&dir, virt, virt_end, phys, phys_end, .{ .kernel = true, .writable = true, .cachable = true }, allocator);
+
+        try mapDirEntry(&dir, virt, virt_end, phys, phys_end, attrs, allocator);
 
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
         const table = dir.tables[entry_idx] orelse unreachable;
-        checkDirEntry(entry, virt, virt_end, phys, .{ .kernel = true, .writable = true, .cachable = true }, table, true);
+        checkDirEntry(entry, virt, virt_end, phys, attrs, table, true);
     }
     {
         const phys: usize = 7 * PAGE_SIZE_4MB;
         const phys_end: usize = phys + PAGE_SIZE_4MB;
         const virt: usize = 8 * PAGE_SIZE_4MB;
         const virt_end: usize = virt + PAGE_SIZE_4MB;
-        try mapDirEntry(&dir, virt, virt_end, phys, phys_end, .{ .kernel = false, .writable = false, .cachable = false }, allocator);
+
+        try mapDirEntry(&dir, virt, virt_end, phys, phys_end, attrs, allocator);
 
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
         const table = dir.tables[entry_idx] orelse unreachable;
-        checkDirEntry(entry, virt, virt_end, phys, .{ .kernel = false, .writable = false, .cachable = false }, table, true);
+        checkDirEntry(entry, virt, virt_end, phys, attrs, table, true);
     }
 }
 

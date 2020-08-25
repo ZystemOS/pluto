@@ -29,9 +29,6 @@ comptime {
     }
 }
 
-/// The virtual memory manager associated with the kernel address space
-var kernel_vmm: vmm.VirtualMemoryManager(arch.VmmPayload) = undefined;
-
 // This is for unit testing as we need to export KERNEL_ADDR_OFFSET as it is no longer available
 // from the linker script
 // These will need to be kept up to date with the debug logs in the mem init.
@@ -75,7 +72,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     };
 
     pmm.init(&mem_profile, &fixed_allocator.allocator);
-    kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
+    var kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
     };
 
@@ -89,7 +86,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     if (!std.math.isPowerOfTwo(heap_size)) {
         heap_size = std.math.floorPowerOfTwo(usize, heap_size);
     }
-    var kernel_heap = heap.init(arch.VmmPayload, &kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
+    var kernel_heap = heap.init(arch.VmmPayload, kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
     };
 

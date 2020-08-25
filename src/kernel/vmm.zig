@@ -9,7 +9,7 @@ const pmm = @import("pmm.zig");
 const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
 const tty = @import("tty.zig");
 const panic = @import("panic.zig").panic;
-const arch = @import("arch.zig").internals;
+const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig").internals;
 const Allocator = std.mem.Allocator;
 
 /// Attributes for a virtual memory allocation
@@ -113,6 +113,9 @@ pub const VmmError = error{
 /// This is the start of the memory owned by the kernel and so is where the kernel VMM starts
 extern var KERNEL_ADDR_OFFSET: *u32;
 
+/// The virtual memory manager associated with the kernel address space
+pub var kernel_vmm: VirtualMemoryManager(arch.VmmPayload) = undefined;
+
 ///
 /// Construct a virtual memory manager to keep track of allocated and free virtual memory regions within a certain space
 ///
@@ -193,10 +196,6 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         pub fn virtToPhys(self: *const Self, virt: usize) VmmError!usize {
             for (self.allocations.unmanaged.entries.items) |entry| {
                 const vaddr = entry.key;
-                // If we've gone past the address without finding a covering region then it hasn't been mapped
-                if (vaddr > virt) {
-                    break;
-                }
 
                 const allocation = entry.value;
                 // If this allocation range covers the virtual address then figure out the corresponding physical block
@@ -308,15 +307,19 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             }
 
             if (physical) |p| {
-                try self.mapper.mapFn(virtual.start, virtual.end, p.start, p.end, attrs, self.allocator, self.payload);
-
                 var phys = p.start;
                 while (phys < p.end) : (phys += BLOCK_SIZE) {
                     try pmm.setAddr(phys);
                     try phys_list.append(phys);
                 }
             }
+
+            // Do this before mapping as the mapper may depend on the allocation being tracked
             _ = try self.allocations.put(virtual.start, Allocation{ .physical = phys_list });
+
+            if (physical) |p| {
+                try self.mapper.mapFn(virtual.start, virtual.end, p.start, p.end, attrs, self.allocator, self.payload);
+            }
         }
 
         ///
@@ -418,11 +421,11 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
 /// Error: Allocator.Error
 ///     error.OutOfMemory - The allocator cannot allocate the memory required
 ///
-pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator.Error!VirtualMemoryManager(arch.VmmPayload) {
+pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator.Error!*VirtualMemoryManager(arch.VmmPayload) {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 
-    var vmm = try VirtualMemoryManager(arch.VmmPayload).init(@ptrToInt(&KERNEL_ADDR_OFFSET), 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
+    kernel_vmm = try VirtualMemoryManager(arch.VmmPayload).init(@ptrToInt(&KERNEL_ADDR_OFFSET), 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
 
     // Map all the reserved virtual addresses.
     for (mem_profile.virtual_reserved) |entry| {
@@ -437,17 +440,17 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator
             }
         else
             null;
-        vmm.set(virtual, physical, .{ .kernel = true, .writable = true, .cachable = true }) catch |e| switch (e) {
+        kernel_vmm.set(virtual, physical, .{ .kernel = true, .writable = true, .cachable = true }) catch |e| switch (e) {
             VmmError.AlreadyAllocated => {},
             else => panic(@errorReturnTrace(), "Failed mapping region in VMM {X}: {}\n", .{ entry, e }),
         };
     }
 
     switch (build_options.test_mode) {
-        .Initialisation => runtimeTests(arch.VmmPayload, vmm, mem_profile),
+        .Initialisation => runtimeTests(arch.VmmPayload, kernel_vmm, mem_profile),
         else => {},
     }
-    return vmm;
+    return &kernel_vmm;
 }
 
 test "virtToPhys" {
