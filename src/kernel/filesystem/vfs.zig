@@ -591,8 +591,8 @@ test "mount" {
 
     // The fs that is to be mounted
     var testfs2 = try testInitFs(allocator);
-    defer testfs2.deinit();
     defer allocator.destroy(testfs2);
+    defer testfs2.deinit();
 
     testfs2.instance = 2;
     // Create the dir to mount to
