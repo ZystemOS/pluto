@@ -72,8 +72,6 @@ pub fn build(b: *Builder) !void {
         .aarch64 => zipSequence: {
             const zip_folder = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard" });
             const elf = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "pluto.elf" });
-            const firmware_version_tag = "1.20200601+arm64";
-            const firmware_url = "https://github.com/raspberrypi/firmware/raw/" ++ firmware_version_tag ++ "/boot/";
             const kernel = try fs.path.join(b.allocator, &[_][]const u8{ zip_folder, "kernel8.img" });
 
             const mkdir = b.addSystemCommand(&[_][]const u8{
@@ -92,18 +90,21 @@ pub fn build(b: *Builder) !void {
             });
             objcopy.step.dependOn(&mkdir.step);
 
-            const cp_config = b.addSystemCommand(&[_][]const u8{
+            const cp_sdcard_files = b.addSystemCommand(&[_][]const u8{
                 "cp",
                 "--archive",
+                "src/kernel/arch/aarch64/rpi-sdcard/bootcode.bin",
                 "src/kernel/arch/aarch64/rpi-sdcard/config.txt",
+                "src/kernel/arch/aarch64/rpi-sdcard/fixup.dat",
+                "src/kernel/arch/aarch64/rpi-sdcard/start.elf",
                 zip_folder,
             });
-            cp_config.step.dependOn(&objcopy.step);
+            cp_sdcard_files.step.dependOn(&objcopy.step);
 
             const emulate_armstub = armstubSequence: {
                 // armstub not yet working, therefore: b 0x80000 (which is 0x14020000)
                 const create_b_0x80000 = bash(b, "echo -ne \"\\x00\\x00\\x02\\x14\" > {}", .{kernel});
-                create_b_0x80000.step.dependOn(&cp_config.step);
+                create_b_0x80000.step.dependOn(&cp_sdcard_files.step);
 
                 // followed by 0 filler until 0x80000
                 const dd = bash(b, "dd status=none bs=1 count=524284 if=/dev/zero >> {}", .{kernel});
@@ -115,18 +116,7 @@ pub fn build(b: *Builder) !void {
 
                 break :armstubSequence cat;
             };
-            emulate_armstub.step.dependOn(&cp_config.step);
-
-            const wget = b.addSystemCommand(&[_][]const u8{
-                "wget",
-                try std.fmt.allocPrint(b.allocator, "--directory-prefix={}", .{zip_folder}),
-                "--quiet",
-                "--timestamp",
-                try std.fmt.allocPrint(b.allocator, "{}/bootcode.bin", .{firmware_url}),
-                try std.fmt.allocPrint(b.allocator, "{}/fixup.dat", .{firmware_url}),
-                try std.fmt.allocPrint(b.allocator, "{}/start.elf", .{firmware_url}),
-            });
-            wget.step.dependOn(&emulate_armstub.step);
+            emulate_armstub.step.dependOn(&cp_sdcard_files.step);
 
             const zip = b.addSystemCommand(&[_][]const u8{
                 "zip",
@@ -136,7 +126,7 @@ pub fn build(b: *Builder) !void {
                 try std.fmt.allocPrint(b.allocator, "{}.zip", .{zip_folder}),
                 zip_folder,
             });
-            zip.step.dependOn(&wget.step);
+            zip.step.dependOn(&emulate_armstub.step);
 
             break :zipSequence zip;
         },
