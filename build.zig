@@ -70,14 +70,14 @@ pub fn build(b: *Builder) !void {
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso }),
         .aarch64 => zipSequence: {
-            const zip_folder = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard" });
+            const sdcard_folder = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard" });
             const elf = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "pluto.elf" });
-            const kernel = try fs.path.join(b.allocator, &[_][]const u8{ zip_folder, "kernel8.img" });
+            const kernel = try fs.path.join(b.allocator, &[_][]const u8{ sdcard_folder, "kernel8.img" });
 
             const mkdir = b.addSystemCommand(&[_][]const u8{
                 "mkdir",
                 "--parents",
-                zip_folder,
+                sdcard_folder,
             });
             mkdir.step.dependOn(&exec.step);
 
@@ -97,36 +97,25 @@ pub fn build(b: *Builder) !void {
                 "src/kernel/arch/aarch64/rpi-sdcard/config.txt",
                 "src/kernel/arch/aarch64/rpi-sdcard/fixup.dat",
                 "src/kernel/arch/aarch64/rpi-sdcard/start.elf",
-                zip_folder,
+                sdcard_folder,
             });
             cp_sdcard_files.step.dependOn(&objcopy.step);
 
-            const emulate_armstub = armstubSequence: {
-                // armstub not yet working, therefore: b 0x80000 (which is 0x14020000)
-                const create_b_0x80000 = bash(b, "echo -ne \"\\x00\\x00\\x02\\x14\" > {}", .{kernel});
-                create_b_0x80000.step.dependOn(&cp_sdcard_files.step);
-
-                // followed by 0 filler until 0x80000
-                const dd = bash(b, "dd status=none bs=1 count=524284 if=/dev/zero >> {}", .{kernel});
-                dd.step.dependOn(&create_b_0x80000.step);
-
-                // followed finally by kernel that starts at 0x80000
-                const cat = bash(b, "cat {}/kernel8.img >> {}", .{ b.cache_root, kernel });
-                cat.step.dependOn(&dd.step);
-
-                break :armstubSequence cat;
-            };
-            emulate_armstub.step.dependOn(&cp_sdcard_files.step);
+            const make_armstub = addCustomStep(b, MakeArmstubStep{
+                .input_name = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8.img" }),
+                .output_name = kernel,
+            });
+            make_armstub.step.dependOn(&cp_sdcard_files.step);
 
             const zip = b.addSystemCommand(&[_][]const u8{
                 "zip",
                 "--junk-paths",
                 "--quiet",
                 "--recurse-paths",
-                try std.fmt.allocPrint(b.allocator, "{}.zip", .{zip_folder}),
-                zip_folder,
+                try std.fmt.allocPrint(b.allocator, "{}.zip", .{sdcard_folder}),
+                sdcard_folder,
             });
-            zip.step.dependOn(&emulate_armstub.step);
+            zip.step.dependOn(&make_armstub.step);
 
             break :zipSequence zip;
         },
@@ -222,10 +211,39 @@ pub fn build(b: *Builder) !void {
     debug_step.dependOn(&debug_cmd.step);
 }
 
-fn bash(b: *Builder, comptime fmt: []const u8, args: anytype) *std.build.RunStep {
-    return b.addSystemCommand(&[_][]const u8{
-        "bash",
-        "-c",
-        std.fmt.allocPrint(b.allocator, fmt, args) catch unreachable,
-    });
+const MakeArmstubStep = struct {
+    step: std.build.Step = undefined,
+    input_name: []const u8,
+    output_name: []const u8,
+    pub fn make(step: *std.build.Step) anyerror!void {
+        const self = @fieldParentPtr(MakeArmstubStep, "step", step);
+        const cwd = fs.cwd();
+        const image = try cwd.openFile(self.input_name, fs.File.OpenFlags{});
+        defer image.close();
+        const armstub_image = try cwd.createFile(self.output_name, fs.File.CreateFlags{});
+        defer armstub_image.close();
+        // armstub not yet working, therefore: b 0x80000 (which is 0x14020000)
+        _ = try armstub_image.write(&[4]u8{ 0x00, 0x00, 0x02, 0x14 });
+        // followed by 0 filler until 0x80000
+        var i: usize = 4;
+        while (i < 0x80000) : (i += 1) {
+            _ = try armstub_image.write(&[1]u8{0x00});
+        }
+        // followed finally by kernel that starts at 0x80000
+        var read_buf: [1]u8 = undefined;
+        while (true) {
+            var n = try image.read(&read_buf);
+            if (n == 0) {
+                break;
+            }
+            _ = try armstub_image.write(&read_buf);
+        }
+    }
+};
+
+pub fn addCustomStep(self: *std.build.Builder, customStep: anytype) *@TypeOf(customStep) {
+    var allocated = self.allocator.create(@TypeOf(customStep)) catch unreachable;
+    allocated.* = customStep;
+    allocated.*.step = std.build.Step.init(.Custom, @typeName(@TypeOf(customStep)), self.allocator, @TypeOf(customStep).make);
+    return allocated;
 }
