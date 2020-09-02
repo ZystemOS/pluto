@@ -69,55 +69,89 @@ pub fn build(b: *Builder) !void {
 
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), output_iso }),
-        .aarch64 => zipSequence: {
-            const sdcard_folder = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard" });
+        .aarch64 => makeRpiImage: {
             const elf = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "pluto.elf" });
-            const kernel = try fs.path.join(b.allocator, &[_][]const u8{ sdcard_folder, "kernel8.img" });
-
-            const mkdir = b.addSystemCommand(&[_][]const u8{
-                "mkdir",
-                "--parents",
-                sdcard_folder,
-            });
-            mkdir.step.dependOn(&exec.step);
+            const kernel_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8.img" });
+            const kernel_load_at_zero_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8-load-at-zero.img" });
+            const sdcard_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard.img" });
 
             const objcopy = b.addSystemCommand(&[_][]const u8{
                 "aarch64-linux-gnu-objcopy",
                 elf,
                 "-O",
                 "binary",
-                try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8.img" }),
+                kernel_image,
             });
-            objcopy.step.dependOn(&mkdir.step);
+            objcopy.step.dependOn(&exec.step);
 
-            const cp_sdcard_files = b.addSystemCommand(&[_][]const u8{
-                "cp",
-                "--archive",
+            const make_kernel_load_at_zero = addCustomStep(b, MakeKernelLoadAtZeroStep{
+                .input_name = kernel_image,
+                .output_name = kernel_load_at_zero_image,
+            });
+            make_kernel_load_at_zero.step.dependOn(&objcopy.step);
+
+            const allocate_sdcard_image = b.addSystemCommand(&[_][]const u8{
+                "fallocate",
+                "-l",
+                "64M",
+                sdcard_image,
+            });
+            allocate_sdcard_image.step.dependOn(&make_kernel_load_at_zero.step);
+
+            const format_sdcard_image = b.addSystemCommand(&[_][]const u8{
+                "mformat",
+                "-i",
+                sdcard_image,
+                "-F",
+            });
+            format_sdcard_image.step.dependOn(&allocate_sdcard_image.step);
+
+            const copy_bootcode = b.addSystemCommand(&[_][]const u8{
+                "mcopy",
+                "-i",
+                sdcard_image,
                 "src/kernel/arch/aarch64/rpi-sdcard/bootcode.bin",
+                "::bootcode.bin",
+            });
+            copy_bootcode.step.dependOn(&format_sdcard_image.step);
+
+            const copy_config = b.addSystemCommand(&[_][]const u8{
+                "mcopy",
+                "-i",
+                sdcard_image,
                 "src/kernel/arch/aarch64/rpi-sdcard/config.txt",
+                "::config.txt",
+            });
+            copy_config.step.dependOn(&copy_bootcode.step);
+
+            const copy_fixup = b.addSystemCommand(&[_][]const u8{
+                "mcopy",
+                "-i",
+                sdcard_image,
                 "src/kernel/arch/aarch64/rpi-sdcard/fixup.dat",
+                "::fixup.dat",
+            });
+            copy_fixup.step.dependOn(&copy_config.step);
+
+            const copy_kernel = b.addSystemCommand(&[_][]const u8{
+                "mcopy",
+                "-i",
+                sdcard_image,
+                kernel_load_at_zero_image,
+                "::kernel8-load-at-zero.img",
+            });
+            copy_kernel.step.dependOn(&copy_fixup.step);
+
+            const copy_start = b.addSystemCommand(&[_][]const u8{
+                "mcopy",
+                "-i",
+                sdcard_image,
                 "src/kernel/arch/aarch64/rpi-sdcard/start.elf",
-                sdcard_folder,
+                "::start.elf",
             });
-            cp_sdcard_files.step.dependOn(&objcopy.step);
+            copy_start.step.dependOn(&copy_kernel.step);
 
-            const make_armstub = addCustomStep(b, MakeArmstubStep{
-                .input_name = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8.img" }),
-                .output_name = kernel,
-            });
-            make_armstub.step.dependOn(&cp_sdcard_files.step);
-
-            const zip = b.addSystemCommand(&[_][]const u8{
-                "zip",
-                "--junk-paths",
-                "--quiet",
-                "--recurse-paths",
-                try std.fmt.allocPrint(b.allocator, "{}.zip", .{sdcard_folder}),
-                sdcard_folder,
-            });
-            zip.step.dependOn(&make_armstub.step);
-
-            break :zipSequence zip;
+            break :makeRpiImage copy_start;
         },
         else => unreachable,
     };
@@ -211,23 +245,23 @@ pub fn build(b: *Builder) !void {
     debug_step.dependOn(&debug_cmd.step);
 }
 
-const MakeArmstubStep = struct {
+const MakeKernelLoadAtZeroStep = struct {
     step: std.build.Step = undefined,
     input_name: []const u8,
     output_name: []const u8,
     pub fn make(step: *std.build.Step) anyerror!void {
-        const self = @fieldParentPtr(MakeArmstubStep, "step", step);
+        const self = @fieldParentPtr(MakeKernelLoadAtZeroStep, "step", step);
         const cwd = fs.cwd();
         const image = try cwd.openFile(self.input_name, fs.File.OpenFlags{});
         defer image.close();
-        const armstub_image = try cwd.createFile(self.output_name, fs.File.CreateFlags{});
-        defer armstub_image.close();
+        const kernel_load_at_zero_image = try cwd.createFile(self.output_name, fs.File.CreateFlags{});
+        defer kernel_load_at_zero_image.close();
         // armstub not yet working, therefore: b 0x80000 (which is 0x14020000)
-        _ = try armstub_image.write(&[4]u8{ 0x00, 0x00, 0x02, 0x14 });
+        _ = try kernel_load_at_zero_image.write(&[4]u8{ 0x00, 0x00, 0x02, 0x14 });
         // followed by 0 filler until 0x80000
         var i: usize = 4;
         while (i < 0x80000) : (i += 1) {
-            _ = try armstub_image.write(&[1]u8{0x00});
+            _ = try kernel_load_at_zero_image.write(&[1]u8{0x00});
         }
         // followed finally by kernel that starts at 0x80000
         var read_buf: [1]u8 = undefined;
@@ -236,7 +270,7 @@ const MakeArmstubStep = struct {
             if (n == 0) {
                 break;
             }
-            _ = try armstub_image.write(&read_buf);
+            _ = try kernel_load_at_zero_image.write(&read_buf);
         }
     }
 };
