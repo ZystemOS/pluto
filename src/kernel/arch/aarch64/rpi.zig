@@ -29,42 +29,6 @@ pub const RaspberryPiBoard = enum {
     }
 };
 
-pub inline fn turnOnLed() void {
-    // do not use zig here in order to side-step occasional compiler defects
-    asm volatile (
-        \\ mov x0, #0x3f200000
-        \\ ldr w1, [x0, #0x08]
-        \\ mov x2, #0x38000000
-        \\ bic x1, x1, x2
-        \\ mov x2, #0x08000000
-        \\ orr x1, x1, x2
-        \\ str w1, [x0, #0x08]
-        \\ mov x1, #0x20000000
-        \\ str w1, [x0, #0x1c]
-        :
-        :
-        : "x0", "x1", "x2"
-    );
-}
-
-pub inline fn turnOffLed() void {
-    // do not use zig here in order to side-step occasional compiler defects
-    asm volatile (
-        \\ mov x0, #0x3f200000
-        \\ ldr w1, [x0, #0x08]
-        \\ mov x2, #0x38000000
-        \\ bic x1, x1, x2
-        \\ mov x2, #0x08000000
-        \\ orr x1, x1, x2
-        \\ str w1, [x0, #0x08]
-        \\ mov x1, #0x20000000
-        \\ str w1, [x0, #0x28]
-        :
-        :
-        : "x0", "x1", "x2"
-    );
-}
-
 pub fn spinLed(period: u32) noreturn {
     const activity_led = 29;
     pinSetFunction(activity_led, .Output);

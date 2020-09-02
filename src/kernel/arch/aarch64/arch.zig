@@ -23,7 +23,6 @@ pub const KERNEL_VMM_PAYLOAD: VmmPayload = 0;
 // The system clock frequency in Hz
 const SYSTEM_CLOCK: usize = 700000000;
 
-pub var is_qemu: bool = undefined;
 pub var mmio_addr: usize = undefined;
 
 extern var KERNEL_PHYSADDR_START: *u32;
@@ -37,9 +36,18 @@ pub fn initMmioAddress(board: *rpi.RaspberryPiBoard) void {
     mmio_addr = board.mmioAddress();
 }
 
+// The auxiliary uart (uart1) is the primary uart used for the console on pi3b and up.
+//  The main uart (uart0) is used for the on-board bluetooth device on these boards.
+//  See https://www.raspberrypi.org/documentation/configuration/uart.md
+//  Note that config.txt contains enable_uart=1 which locks the core clock frequency
+//   which is required for a stable baud rate on the auxiliary uart (uart1.)
+//
+// However, qemu does not implement uart1. Therefore on qemu we use uart0 for the text console.
+//  Furthermore uart0 on qemu does not need any initialization.
+//
 pub fn initSerial(board: BootPayload) Serial {
-    is_qemu = Cpu.cntfrq.el(0).read() != 0;
-    if (!is_qemu) {
+    if (!Cpu.isQemu()) {
+        // On an actual rpi, initialize uart1 to 115200 baud on pins 14 and 15:
         rpi.pinSetPullUpAndFunction(14, .None, .AlternateFunction5);
         rpi.pinSetPullUpAndFunction(15, .None, .AlternateFunction5);
         mmio.write(mmio_addr, .AUX_ENABLES, 1);
@@ -62,10 +70,12 @@ pub fn uartWriteByte(byte: u8) void {
     if (byte == 10) {
         uartWriteByte(13);
     }
-    if (is_qemu) {
+    if (Cpu.isQemu()) {
+        // Since qemu does not implement uart1, qemu uses uart0 for the console:
         while (mmio.read(mmio_addr, .UART_FLAGS) & (1 << 5) != 0) {}
         mmio.write(mmio_addr, .UART_DATA, byte);
     } else {
+        // On an actual rpi, use uart1:
         while (mmio.read(mmio_addr, .AUX_MU_LSR_REG) & (1 << 5) == 0) {}
         mmio.write(mmio_addr, .AUX_MU_IO_REG, byte);
     }
@@ -183,6 +193,11 @@ pub const Cpu = struct {
             \\ isb
         );
     }
+
+    pub fn isQemu() bool {
+        returncntfrq.el(0).read() != 0;
+    }
+
     pub inline fn wfe() void {
         asm volatile (
             \\ wfe

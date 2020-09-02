@@ -70,7 +70,6 @@ const ExceptionClass = enum(u6) {
 pub var exception_handler_depth: u32 = undefined;
 
 export fn exceptionHandler() noreturn {
-    rpi.turnOnLed();
     exception_handler_depth += 1;
     if (exception_handler_depth > 1) {
         if (exception_handler_depth == 2) {
