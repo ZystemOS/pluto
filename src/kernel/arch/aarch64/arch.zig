@@ -195,7 +195,7 @@ pub const Cpu = struct {
     }
 
     pub fn isQemu() bool {
-        returncntfrq.el(0).read() != 0;
+        return cntfrq.el(0).read() != 0;
     }
 
     pub inline fn wfe() void {
