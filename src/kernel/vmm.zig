@@ -194,7 +194,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     VmmError.NotAllocated - The virtual address hasn't been mapped within the VMM
         ///
         pub fn virtToPhys(self: *const Self, virt: usize) VmmError!usize {
-            for (self.allocations.unmanaged.entries.items) |entry| {
+            var it = self.allocations.iterator();
+            while (it.next()) |entry| {
                 const vaddr = entry.key;
 
                 const allocation = entry.value;
@@ -222,7 +223,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     VmmError.NotAllocated - The physical address hasn't been mapped within the VMM
         ///
         pub fn physToVirt(self: *const Self, phys: usize) VmmError!usize {
-            for (self.allocations.unmanaged.entries.items) |entry| {
+            var it = self.allocations.iterator();
+            while (it.next()) |entry| {
                 const vaddr = entry.key;
                 const allocation = entry.value;
 

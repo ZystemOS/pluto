@@ -117,7 +117,7 @@ pub const InitrdFS = struct {
     ///
     pub fn deinit(self: *Self) void {
         // If there are any files open, then we have a error.
-        std.debug.assert(self.opened_files.items().len == 0);
+        std.debug.assert(self.opened_files.count() == 0);
         self.allocator.destroy(self.root_node);
         self.allocator.destroy(self.fs);
         self.opened_files.deinit();
@@ -284,7 +284,7 @@ test "init with files valid" {
     expectEqual(fs.files.len, 3);
     expectEqualSlices(u8, fs.files[0].name, "test1.txt");
     expectEqualSlices(u8, fs.files[1].content, "This is a test: part 2");
-    expectEqual(fs.opened_files.items().len, 0);
+    expectEqual(fs.opened_files.count(), 0);
 }
 
 test "init with files invalid - invalid number of files" {
@@ -376,13 +376,13 @@ test "open valid file" {
 
     var file1_node = @ptrCast(*const vfs.Node, file1);
 
-    expectEqual(fs.opened_files.items().len, 1);
+    expectEqual(fs.opened_files.count(), 1);
     expectEqualSlices(u8, fs.opened_files.get(file1_node).?.name, "test1.txt");
 
     var file3_node = try vfs.open("/test3.txt", .NO_CREATION);
     defer file3_node.File.close();
 
-    expectEqual(fs.opened_files.items().len, 2);
+    expectEqual(fs.opened_files.count(), 2);
     expectEqualSlices(u8, fs.opened_files.get(file3_node).?.content, "This is a test: the prequel");
 
     var dir1 = try vfs.openDir("/", .NO_CREATION);
@@ -390,7 +390,7 @@ test "open valid file" {
     var file2 = &(try dir1.open("test2.txt", .NO_CREATION)).File;
     defer file2.close();
 
-    expectEqual(fs.opened_files.items().len, 3);
+    expectEqual(fs.opened_files.count(), 3);
 }
 
 test "open fail with invalid flags" {
@@ -457,7 +457,7 @@ test "open two of the same file" {
     const file2 = try vfs.openFile("/test1.txt", .NO_CREATION);
     defer file2.close();
 
-    expectEqual(fs.opened_files.items().len, 2);
+    expectEqual(fs.opened_files.count(), 2);
     expect(file1 != file2);
 
     const b1 = try file1.read(128);
@@ -481,22 +481,22 @@ test "close a file" {
 
     var file1_node = @ptrCast(*const vfs.Node, file1);
 
-    expectEqual(fs.opened_files.items().len, 1);
+    expectEqual(fs.opened_files.count(), 1);
 
     var file3_node = try vfs.open("/test3.txt", .NO_CREATION);
 
-    expectEqual(fs.opened_files.items().len, 2);
+    expectEqual(fs.opened_files.count(), 2);
     file1.close();
-    expectEqual(fs.opened_files.items().len, 1);
+    expectEqual(fs.opened_files.count(), 1);
 
     var dir1 = try vfs.openDir("/", .NO_CREATION);
     expectEqual(&fs.root_node.Dir, dir1);
     var file2 = &(try dir1.open("test2.txt", .NO_CREATION)).File;
     defer file2.close();
 
-    expectEqual(fs.opened_files.items().len, 2);
+    expectEqual(fs.opened_files.count(), 2);
     file3_node.File.close();
-    expectEqual(fs.opened_files.items().len, 1);
+    expectEqual(fs.opened_files.count(), 1);
 }
 
 test "close a non-opened file" {
@@ -514,7 +514,7 @@ test "close a non-opened file" {
     defer file1.close();
 
     // Only one file open
-    expectEqual(fs.opened_files.items().len, 1);
+    expectEqual(fs.opened_files.count(), 1);
 
     // Craft a Node
     var fake_node = try std.testing.allocator.create(vfs.Node);
@@ -523,7 +523,7 @@ test "close a non-opened file" {
     fake_node.File.close();
 
     // Still only one file open
-    expectEqual(fs.opened_files.items().len, 1);
+    expectEqual(fs.opened_files.count(), 1);
 }
 
 test "read a file" {
@@ -583,7 +583,7 @@ test "read a file, invalid/not opened/crafted *const Node" {
     defer file1.close();
 
     // Only one file open
-    expectEqual(fs.opened_files.items().len, 1);
+    expectEqual(fs.opened_files.count(), 1);
 
     // Craft a Node
     var fake_node = try std.testing.allocator.create(vfs.Node);
@@ -593,7 +593,7 @@ test "read a file, invalid/not opened/crafted *const Node" {
     expectError(error.NotOpened, fake_node.File.read(128));
 
     // Still only one file open
-    expectEqual(fs.opened_files.items().len, 1);
+    expectEqual(fs.opened_files.count(), 1);
 }
 
 test "write does nothing" {
@@ -673,7 +673,7 @@ fn runtimeTests(rd_fs: *InitrdFS) void {
     // Need to init the VFS. This will be overridden after the tests.
     vfs.setRoot(rd_fs.root_node);
     rt_openReadClose(rd_fs.allocator);
-    if (rd_fs.opened_files.items().len != 0) {
+    if (rd_fs.opened_files.count() != 0) {
         panic(@errorReturnTrace(), "FAILURE: Didn't close all files\n", .{});
     }
 }
