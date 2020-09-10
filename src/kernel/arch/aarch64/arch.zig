@@ -3,9 +3,9 @@ const vmm = @import("../../vmm.zig");
 const mem = @import("../../mem.zig");
 const Serial = @import("../../serial.zig").Serial;
 const TTY = @import("../../tty.zig").TTY;
-const log = @import("../../log.zig");
 const rpi = @import("rpi.zig");
 const mmio = @import("mmio.zig");
+const log = std.log.scoped(.aarch64_arch);
 /// The type of the payload passed to a virtual memory mapper.
 // TODO: implement
 pub const VmmPayload = usize;
@@ -82,19 +82,18 @@ pub fn uartWriteByte(byte: u8) void {
 }
 
 pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
-    log.logInfo("Init mem\n", .{});
-    defer log.logInfo("Done mem\n", .{});
+    log.info("Init mem\n", .{});
+    defer log.info("Done mem\n", .{});
     mem.ADDR_OFFSET = 0;
     const phys_start = @ptrCast([*]u8, &KERNEL_PHYSADDR_START);
     const phys_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END);
     const virt_start = phys_start;
     const virt_end = phys_end;
-    var allocator = std.heap.FixedBufferAllocator.init(virt_end[0..mem.FIXED_ALLOC_SIZE]);
+    var allocator = &mem.fixed_buffer_allocator.allocator;
 
-    var allocator_region = mem.Map{ .virtual = .{ .start = @ptrToInt(virt_end), .end = @ptrToInt(virt_end) + mem.FIXED_ALLOC_SIZE }, .physical = null };
-    allocator_region.physical = .{ .start = mem.virtToPhys(allocator_region.virtual.start), .end = mem.virtToPhys(allocator_region.virtual.end) };
+    var allocator_region = mem.Map{ .virtual = .{ .start = @ptrToInt(virt_end), .end = @ptrToInt(virt_end) }, .physical = null };
 
-    return mem.MemProfile{ .vaddr_end = virt_end, .vaddr_start = virt_start, .physaddr_start = phys_start, .physaddr_end = phys_end, .mem_kb = payload.memoryKB(), .modules = &[_]mem.Module{}, .virtual_reserved = &[_]mem.Map{allocator_region}, .physical_reserved = &[_]mem.Range{}, .fixed_allocator = allocator };
+    return mem.MemProfile{ .vaddr_end = virt_end, .vaddr_start = virt_start, .physaddr_start = phys_start, .physaddr_end = phys_end, .mem_kb = payload.memoryKB(), .modules = &[_]mem.Module{}, .virtual_reserved = &[_]mem.Map{}, .physical_reserved = &[_]mem.Range{}, .fixed_allocator = mem.fixed_buffer_allocator };
 }
 
 // TODO: implement
