@@ -448,6 +448,7 @@ const RamdiskStep = struct {
         const self = @fieldParentPtr(RamdiskStep, "step", step);
         switch (self.target.getCpuArch()) {
             .i386 => try writeRamdisk(u32, self),
+            .aarch64 => try writeRamdisk(u64, self),
             else => unreachable,
         }
     }
