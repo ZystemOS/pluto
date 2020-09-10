@@ -2,12 +2,12 @@ const std = @import("std");
 const arch = @import("arch.zig");
 const TTY = @import("../../tty.zig").TTY;
 const panic = @import("../../panic.zig").panic;
-const log = @import("../../log.zig");
+const log = @import("../../log.zig").log;
 const mailbox = @import("mailbox.zig");
 const Tag = mailbox.Tag;
 
-const CHAR_WIDTH: u8 = 8;
-const CHAR_HEIGHT: u8 = 8;
+pub const CHAR_WIDTH: u8 = 8;
+pub const CHAR_HEIGHT: u8 = 8;
 const BLACK = Pixel{ .red = 0, .blue = 0, .green = 0 };
 const WHITE = Pixel{ .red = 255, .blue = 255, .green = 255 };
 
@@ -45,7 +45,7 @@ const font = [_][]const u1{
 var framebuffer: Framebuffer = undefined;
 
 fn writePixel(x: usize, y: usize, pixel: Pixel) void {
-    log.logDebug("Writing pixel {} to ({}, {}) at fb {}, which is address {x}\n", .{ pixel, x, y, @ptrToInt(framebuffer.buffer), @ptrToInt(&framebuffer.buffer[y * framebuffer.columns + x]) });
+    log(std.log.Level.debug, "Writing pixel {} to ({}, {}) at fb {}, which is address {x}\n", .{ pixel, x, y, @ptrToInt(framebuffer.buffer), @ptrToInt(&framebuffer.buffer[y * framebuffer.columns + x]) });
     framebuffer.buffer[y * framebuffer.columns + x] = pixel;
 }
 
@@ -67,7 +67,7 @@ fn writeChar(x: usize, y: usize, char: u8) void {
     }
 }
 
-fn writeString(str: []const u8) !void {
+pub fn writeString(str: []const u8) !void {
     for (str) |ch| {
         if (ch == '\n') {
             setCursor(0, framebuffer.y + 1);
@@ -83,7 +83,9 @@ fn writeString(str: []const u8) !void {
     }
 }
 
-fn setCursor(x: u8, y: u8) void {
+pub fn clearScreen() void {}
+
+pub fn setCursor(x: u8, y: u8) void {
     framebuffer.x = x;
     framebuffer.y = y;
 }
