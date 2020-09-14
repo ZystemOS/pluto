@@ -4,6 +4,7 @@ const TTY = @import("../../tty.zig").TTY;
 const panic = @import("../../panic.zig").panic;
 const log = @import("../../log.zig").log;
 const mailbox = @import("mailbox.zig");
+const mem = @import("../../mem.zig");
 const Tag = mailbox.Tag;
 
 pub const CHAR_WIDTH: u8 = 8;
@@ -45,7 +46,7 @@ const font = [_][]const u1{
 var framebuffer: Framebuffer = undefined;
 
 fn writePixel(x: usize, y: usize, pixel: Pixel) void {
-    log(std.log.Level.debug, "Writing pixel {} to ({}, {}) at fb {}, which is address {x}\n", .{ pixel, x, y, @ptrToInt(framebuffer.buffer), @ptrToInt(&framebuffer.buffer[y * framebuffer.columns + x]) });
+    log(.debug, "Writing pixel {} to ({}, {}) at fb {}, which is address {x}\n", .{ pixel, x, y, @ptrToInt(framebuffer.buffer), @ptrToInt(&framebuffer.buffer[y * framebuffer.columns + x]) });
     framebuffer.buffer[y * framebuffer.columns + x] = pixel;
 }
 
@@ -90,7 +91,7 @@ pub fn setCursor(x: u8, y: u8) void {
     framebuffer.y = y;
 }
 
-pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
+pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload) TTY {
     var alloc_buff = [_]u8{0} ** (4 * 1024);
     var fixed_allocator = std.heap.FixedBufferAllocator.init(alloc_buff[0..]);
     var allocator = &fixed_allocator.allocator;
@@ -123,7 +124,7 @@ pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
     };
     const mmio_addr = board.mmioAddress();
     var pkg = mailbox.send(mmio_addr, allocate_fb, allocator) catch |e| panic(@errorReturnTrace(), "Failed to configure TTY: {}\n", .{e});
-    log.logDebug("Data is {}\n", .{pkg.data[0..]});
+    log(.debug, "Data is {}\n", .{pkg.data[0..]});
     defer allocator.free(pkg.data);
     var msg = mailbox.read(mmio_addr);
 
@@ -147,8 +148,8 @@ pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
     if (pkg.data[17] != 8) panic(null, "SET_VIRT_DIMENSIONS size wasn't as expected in response\n", .{});
     if (pkg.data[18] != @enumToInt(mailbox.Code.RESPONSE_SUCCESS) | 8) panic(null, "SET_VIRT_DIMENSIONS code wasn't as expected in response\n", .{});
 
-    log.logDebug("FB is at {} and is of size {}\n", .{ pkg.data[4], pkg.data[5] });
-    log.logDebug("Data is {}\n", .{pkg.data[0..]});
+    log(.debug, "FB is at {} and is of size {}\n", .{ pkg.data[4], pkg.data[5] });
+    log(.debug, "Data is {}\n", .{pkg.data[0..]});
 
     framebuffer = .{
         .width = 640,
