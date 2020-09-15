@@ -48,7 +48,8 @@ const font = [_][]const u1{
 var framebuffer: Framebuffer = undefined;
 
 fn writePixel(x: usize, y: usize, pixel: Pixel) void {
-    log.debug("Writing pixel {} to ({}, {}) at fb 0x{x}, which is address {x}\n", .{ pixel, x, y, @ptrToInt(framebuffer.buffer), @ptrToInt(&framebuffer.buffer[y * framebuffer.bytes_per_row + x]) });
+    //  log.debug("Writing pixel {}\n", .{pixel});
+    //  log.debug("    to ({}, {}) at fb 0x{x}, which is address {x}\n", .{ x, y, @ptrToInt(framebuffer.buffer), @ptrToInt(&framebuffer.buffer[y * framebuffer.bytes_per_row + x]) });
     framebuffer.buffer[y * framebuffer.bytes_per_row + x] = pixel;
 }
 
@@ -159,6 +160,7 @@ pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload)
     if (pkg.data[22] != 4) panic(null, "GET_BYTES_PER_ROW size wasn't as expected in response\n", .{});
     if (pkg.data[23] != @enumToInt(mailbox.Code.RESPONSE_SUCCESS) | 4) panic(null, "GET_BYTES_PER_ROW code wasn't as expected in response\n", .{});
 
+    pkg.data[5] &= 0x3fffffff;
     log.debug("FB is at 0x{x} and is of size {}\n", .{ pkg.data[5], pkg.data[6] });
     log.debug("bytes per row is {}\n", .{pkg.data[24]});
     log.debug("Data is {}\n", .{pkg.data[0..]});
@@ -177,6 +179,10 @@ pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload)
     writePixel(0, 1, WHITE);
     writePixel(1, 0, WHITE);
     writePixel(1, 1, WHITE);
+    var i: u32 = 0;
+    while (i < 1000) : (i += 1) {
+        writePixel(i % 640, 100 + i / 640, WHITE);
+    }
     return .{
         .print = writeString,
         .setCursor = setCursor,
