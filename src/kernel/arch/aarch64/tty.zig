@@ -2,7 +2,7 @@ const std = @import("std");
 const arch = @import("arch.zig");
 const TTY = @import("../../tty.zig").TTY;
 const panic = @import("../../panic.zig").panic;
-const log = @import("../../log.zig").log;
+const log = std.log.scoped(.aarch64_tty);
 const mailbox = @import("mailbox.zig");
 const mem = @import("../../mem.zig");
 const Tag = mailbox.Tag;
@@ -15,10 +15,11 @@ const WHITE = Pixel{ .red = 255, .blue = 255, .green = 255 };
 const Framebuffer = struct {
     width: usize,
     height: usize,
-    columns: u8,
-    rows: u8,
-    x: u8,
-    y: u8,
+    bytes_per_row: usize,
+    text_columns: u8,
+    text_rows: u8,
+    text_cursor_x: u8,
+    text_cursor_y: u8,
     buffer: [*]Pixel,
 };
 
@@ -26,6 +27,7 @@ const Pixel = packed struct {
     red: u8,
     green: u8,
     blue: u8,
+    alpha: u8 = 0,
 };
 
 const font = [_][]const u1{
@@ -46,24 +48,26 @@ const font = [_][]const u1{
 var framebuffer: Framebuffer = undefined;
 
 fn writePixel(x: usize, y: usize, pixel: Pixel) void {
-    log(.debug, "Writing pixel {} to ({}, {}) at fb {}, which is address {x}\n", .{ pixel, x, y, @ptrToInt(framebuffer.buffer), @ptrToInt(&framebuffer.buffer[y * framebuffer.columns + x]) });
-    framebuffer.buffer[y * framebuffer.columns + x] = pixel;
+    log.debug("Writing pixel {} to ({}, {}) at fb 0x{x}, which is address {x}\n", .{ pixel, x, y, @ptrToInt(framebuffer.buffer), @ptrToInt(&framebuffer.buffer[y * framebuffer.bytes_per_row + x]) });
+    framebuffer.buffer[y * framebuffer.bytes_per_row + x] = pixel;
 }
 
 fn writeChar(x: usize, y: usize, char: u8) void {
     var ch = char;
     if (char < ' ' or char > '~')
         ch = ' ';
-    const bitmap = font[ch - ' '];
-    var x2 = x;
-    var y2 = y;
+    // const bitmap = font[ch - ' '];
+    const bitmap = font[0];
+    const left = x * CHAR_WIDTH;
+    const top = y * CHAR_HEIGHT;
+    var pixel_x = left;
+    var pixel_y = top;
     for (bitmap) |bit, i| {
-        const pixel = if (bit == 0) BLACK else WHITE;
-        writePixel(x2, y2, pixel);
-        x2 += 1;
-        if (x2 >= CHAR_WIDTH) {
-            x2 = x;
-            y2 += 1;
+        writePixel(pixel_x, pixel_y, if (bit == 0) BLACK else WHITE);
+        pixel_x += 1;
+        if (pixel_x >= left + CHAR_WIDTH) {
+            pixel_x = left;
+            pixel_y += CHAR_HEIGHT;
         }
     }
 }
@@ -71,24 +75,22 @@ fn writeChar(x: usize, y: usize, char: u8) void {
 pub fn writeString(str: []const u8) !void {
     for (str) |ch| {
         if (ch == '\n') {
-            setCursor(0, framebuffer.y + 1);
+            setCursor(0, framebuffer.text_cursor_y + 1);
         } else {
-            if (framebuffer.y < framebuffer.rows and framebuffer.x < framebuffer.columns) {
-                writeChar(framebuffer.x, framebuffer.y, ch);
-                setCursor(framebuffer.x + 1, framebuffer.y);
-                if (framebuffer.x >= framebuffer.columns) {
-                    setCursor(0, framebuffer.y + 1);
+            if (framebuffer.text_cursor_y < framebuffer.text_rows and framebuffer.text_cursor_x < framebuffer.text_columns) {
+                writeChar(framebuffer.text_cursor_x, framebuffer.text_cursor_y, ch);
+                setCursor(framebuffer.text_cursor_x + 1, framebuffer.text_cursor_y);
+                if (framebuffer.text_cursor_x >= framebuffer.text_columns) {
+                    setCursor(0, framebuffer.text_cursor_y + 1);
                 }
             }
         }
     }
 }
 
-pub fn clearScreen() void {}
-
 pub fn setCursor(x: u8, y: u8) void {
-    framebuffer.x = x;
-    framebuffer.y = y;
+    framebuffer.text_cursor_x = x;
+    framebuffer.text_cursor_y = y;
 }
 
 pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload) TTY {
@@ -110,7 +112,7 @@ pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload)
         @enumToInt(Tag.SET_BITS_PER_PIXEL),
         4,
         0,
-        24,
+        32,
         @enumToInt(Tag.SET_PHYS_DIMENSIONS),
         8,
         0,
@@ -121,10 +123,14 @@ pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload)
         0,
         640,
         480,
+        @enumToInt(Tag.GET_BYTES_PER_ROW),
+        4,
+        0,
+        0,
     };
     const mmio_addr = board.mmioAddress();
     var pkg = mailbox.send(mmio_addr, allocate_fb, allocator) catch |e| panic(@errorReturnTrace(), "Failed to configure TTY: {}\n", .{e});
-    log(.debug, "Data is {}\n", .{pkg.data[0..]});
+    log.debug("Data is {}\n", .{pkg.data[0..]});
     defer allocator.free(pkg.data);
     var msg = mailbox.read(mmio_addr);
 
@@ -139,6 +145,7 @@ pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload)
     if (pkg.data[7] != @enumToInt(Tag.SET_BITS_PER_PIXEL)) panic(null, "SET_BITS_PER_PIXEL tag wasn't present in response\n", .{});
     if (pkg.data[8] != 4) panic(null, "SET_BITS_PER_PIXEL size wasn't as expected in response\n", .{});
     if (pkg.data[9] != @enumToInt(mailbox.Code.RESPONSE_SUCCESS) | 4) panic(null, "SET_BITS_PER_PIXEL code wasn't as expected in response\n", .{});
+    if (pkg.data[10] != allocate_fb[8]) panic(null, "SET_BITS_PER_PIXEL depth is {} and not {}\n", .{ pkg.data[10], allocate_fb[8] });
 
     if (pkg.data[11] != @enumToInt(Tag.SET_PHYS_DIMENSIONS)) panic(null, "SET_PHYS_DIMENSIONS tag wasn't present in response\n", .{});
     if (pkg.data[12] != 8) panic(null, "SET_PHYS_DIMENSIONS size wasn't as expected in response\n", .{});
@@ -148,17 +155,23 @@ pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload)
     if (pkg.data[17] != 8) panic(null, "SET_VIRT_DIMENSIONS size wasn't as expected in response\n", .{});
     if (pkg.data[18] != @enumToInt(mailbox.Code.RESPONSE_SUCCESS) | 8) panic(null, "SET_VIRT_DIMENSIONS code wasn't as expected in response\n", .{});
 
-    log(.debug, "FB is at {} and is of size {}\n", .{ pkg.data[4], pkg.data[5] });
-    log(.debug, "Data is {}\n", .{pkg.data[0..]});
+    if (pkg.data[21] != @enumToInt(Tag.GET_BYTES_PER_ROW)) panic(null, "GET_BYTES_PER_ROW tag wasn't present in response\n", .{});
+    if (pkg.data[22] != 4) panic(null, "GET_BYTES_PER_ROW size wasn't as expected in response\n", .{});
+    if (pkg.data[23] != @enumToInt(mailbox.Code.RESPONSE_SUCCESS) | 4) panic(null, "GET_BYTES_PER_ROW code wasn't as expected in response\n", .{});
+
+    log.debug("FB is at 0x{x} and is of size {}\n", .{ pkg.data[5], pkg.data[6] });
+    log.debug("bytes per row is {}\n", .{pkg.data[24]});
+    log.debug("Data is {}\n", .{pkg.data[0..]});
 
     framebuffer = .{
         .width = 640,
         .height = 480,
-        .columns = @truncate(u8, 640) / CHAR_WIDTH,
-        .rows = @truncate(u8, 480) / CHAR_HEIGHT,
-        .x = 0,
-        .y = 0,
-        .buffer = @intToPtr([*]Pixel, pkg.data[4]),
+        .bytes_per_row = pkg.data[24],
+        .text_columns = @truncate(u8, @as(u32, 640) / CHAR_WIDTH),
+        .text_rows = @truncate(u8, @as(u32, 480) / CHAR_HEIGHT),
+        .text_cursor_x = 0,
+        .text_cursor_y = 0,
+        .buffer = @intToPtr([*]Pixel, pkg.data[5]),
     };
     writePixel(0, 0, WHITE);
     writePixel(0, 1, WHITE);
@@ -167,8 +180,8 @@ pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload)
     return .{
         .print = writeString,
         .setCursor = setCursor,
-        .cols = framebuffer.columns,
-        .rows = framebuffer.rows,
+        .cols = framebuffer.text_columns,
+        .rows = framebuffer.text_rows,
         .clear = null,
     };
 }
