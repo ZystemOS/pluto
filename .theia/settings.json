@@ -1,4 +1,0 @@
-{
-    "editor.autoSave": "on",
-    "zigLanguageClient.path": "tools/zls/zig-cache/bin/zls"
-}
