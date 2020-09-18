@@ -31,7 +31,6 @@ const Pixel = packed struct {
 };
 
 const font = [_][]const u1{
-    &[_]u1{},
     // space
     &[_]u1{
         0, 0, 0, 0, 0, 0, 0, 0,
@@ -74,14 +73,11 @@ fn clearScreen() void {
 
 fn writeChar(x: usize, y: usize, char: u8) void {
     var ch = char;
-    if (char < ' ' or char > '~')
+    if (ch < ' ' or ch > '~')
         ch = ' ';
-    // const bitmap = font[ch - ' '];
-    var font_index: usize = undefined;
-    if (ch == ' ') {
+    var font_index = ch - ' ';
+    if (font_index >= font.len) {
         font_index = 1;
-    } else {
-        font_index = 2;
     }
     const bitmap = font[font_index];
     const left = x * CHAR_WIDTH;
