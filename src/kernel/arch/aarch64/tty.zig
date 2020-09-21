@@ -115,7 +115,7 @@ pub fn setCursor(x: u8, y: u8) void {
     framebuffer.text_cursor_y = y;
 }
 
-pub fn init(allocator2: *std.heap.FixedBufferAllocator, board: arch.BootPayload) TTY {
+pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
     var alloc_buff = [_]u8{0} ** (4 * 1024);
     var fixed_allocator = std.heap.FixedBufferAllocator.init(alloc_buff[0..]);
     var allocator = &fixed_allocator.allocator;
