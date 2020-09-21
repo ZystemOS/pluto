@@ -30,7 +30,7 @@ extern var KERNEL_PHYSADDR_START: *u32;
 extern var KERNEL_PHYSADDR_END: *u32;
 
 pub fn initTTY(boot_payload: BootPayload) TTY {
-    return tty.init(&mem.fixed_buffer_allocator, boot_payload);
+    return tty.init(&mem.fixed_buffer_allocator.allocator, boot_payload);
 }
 
 pub fn initMmioAddress(board: *rpi.RaspberryPiBoard) void {
