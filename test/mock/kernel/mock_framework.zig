@@ -1,11 +1,9 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const StringHashMap = std.StringHashMap;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const GlobalAllocator = std.testing.allocator;
 const TailQueue = std.TailQueue;
-const warn = std.debug.warn;
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
 const cmos = @import("cmos_mock.zig");
@@ -67,7 +65,7 @@ const DataElementType = enum {
 /// A tagged union of all the data elements that the mocking framework can work with. This can be
 /// expanded to add new types. This is needed as need a list of data that all have different types,
 /// so this wraps the data into a union, (which is of one type) so can have a list of them.
-/// When https://github.com/ziglang/zig/issues/383 anf https://github.com/ziglang/zig/issues/2907
+/// When https://github.com/ziglang/zig/issues/383 and https://github.com/ziglang/zig/issues/2907
 /// is done, can programitaclly create types for this. Can use a compile time block that loops
 /// through the available basic types and create function types so don't have a long list.
 ///
@@ -245,7 +243,7 @@ fn Mock() type {
         /// Get the enum that represents the type given.
         ///
         /// Arguments:
-        ///     IN T: type - A type.
+        ///     IN comptime T: type - A type.
         ///
         /// Return: DataElementType
         ///     The DataElementType that represents the type given.
@@ -305,7 +303,7 @@ fn Mock() type {
         /// Get the data out of the tagged union
         ///
         /// Arguments:
-        ///     IN T: type              - The type of the data to extract. Used to switch on the
+        ///     IN comptime T: type     - The type of the data to extract. Used to switch on the
         ///                               tagged union.
         ///     IN element: DataElement - The data element to unwrap the data from.
         ///
@@ -364,30 +362,81 @@ fn Mock() type {
         }
 
         ///
-        /// Create a function type from a return type and its arguments. Waiting for
-        /// https://github.com/ziglang/zig/issues/313. TODO: Tidy mocking framework #69
+        /// Create a function type from a return type and its arguments.
         ///
         /// Arguments:
-        ///     IN RetType: type   - The return type of the function.
-        ///     IN params: anytype     - The argument list for the function.
+        ///     IN comptime RetType: type - The return type of the function.
+        ///     IN params: type           - The parameters of the function. This will be the type
+        ///                                 of a anonymous struct to get the fields and types.
         ///
         /// Return: type
         ///     A function type that represents the return type and its arguments.
         ///
-        fn getFunctionType(comptime RetType: type, params: anytype) type {
-            return switch (params.len) {
+        fn getFunctionType(comptime RetType: type, params: type) type {
+            const fields = @typeInfo(params).Struct.fields;
+            return switch (fields.len) {
                 0 => fn () RetType,
-                1 => fn (@TypeOf(params[0])) RetType,
-                2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                else => @compileError("Couldn't generate function type for " ++ len ++ " parameters\n"),
+                1 => fn (fields[0].field_type) RetType,
+                2 => fn (fields[0].field_type, fields[1].field_type) RetType,
+                3 => fn (fields[0].field_type, fields[1].field_type, fields[2].field_type) RetType,
+                else => @compileError("More than 3 parameters not supported"),
             };
+        }
+
+        ///
+        /// Call a function with the function definitions and parameters.
+        ///
+        /// Argument:
+        ///     IN comptime RetType: type - The return type of the function.
+        ///     IN function_type: anytype - The function pointer to call.
+        ///     IN params: anytype        - The parameter(s) of the function.
+        ///
+        /// Return: RetType
+        ///     The return value of the called function. This can be void.
+        ///
+        fn callFunction(comptime RetType: type, function_type: anytype, params: anytype) RetType {
+            return switch (params.len) {
+                0 => function_type(),
+                1 => function_type(params[0]),
+                2 => function_type(params[0], params[1]),
+                3 => function_type(params[0], params[1], params[2]),
+                // Should get to this as `getFunctionType` will catch this
+                else => @compileError("More than 3 parameters not supported"),
+            };
+        }
+
+        ///
+        /// Perform a generic function action. This can be part of a ConsumeFunctionCall or
+        /// RepeatFunctionCall action. This will perform the function type comparison and
+        /// call the function stored in the action list.
+        ///
+        /// Argument:
+        ///     IN comptime RetType: type    - The return type of the function to call.
+        ///     IN test_element: DataElement - The test value to compare to the generated function
+        ///                                    type. This is also the function that will be called.
+        ///     IN params: anytype           - The parameters of the function to call.
+        ///
+        /// Return: RetType
+        ///     The return value of the called function. This can be void.
+        ///
+        fn performGenericFunction(comptime RetType: type, test_element: DataElement, params: anytype) RetType {
+            // Get the expected function type
+            const expected_function = getFunctionType(RetType, @TypeOf(params));
+
+            // Test that the types match
+            const expect_type = comptime getDataElementType(expected_function);
+            expectEqual(expect_type, @as(DataElementType, test_element));
+
+            // Types match, so can use the expected type to get the actual data
+            const actual_function = getDataValue(expected_function, test_element);
+            return callFunction(RetType, actual_function, params);
         }
 
         ///
         /// This tests a value passed to a function.
         ///
         /// Arguments:
-        ///     IN ExpectedType: type           - The expected type of the value to be tested.
+        ///     IN comptime ExpectedType: type  - The expected type of the value to be tested.
         ///     IN expected_value: ExpectedType - The expected value to be tested. This is what was
         ///                                       passed to the functions.
         ///     IN elem: DataElement            - The wrapped data element to test against the
@@ -415,10 +464,13 @@ fn Mock() type {
         /// returned by a mocked function.
         ///
         /// Arguments:
-        ///     IN fun_name: []const u8         - The function name to be used to tell the user if
-        ///                                       there is no return value set up.
-        ///     IN/OUT action_list: *ActionList - The action list to extract the return value from.
-        ///     IN DataType: type               - The type of the return value.
+        ///     IN comptime fun_name: []const u8 - The function name to be used to tell the user if
+        ///                                        there is no return value set up.
+        ///     IN/OUT action_list: *ActionList  - The action list to extract the return value from.
+        ///     IN comptime  DataType: type      - The type of the return value.
+        ///
+        /// Return: RetType
+        ///     The return value of the expected value.
         ///
         fn expectGetValue(comptime fun_name: []const u8, action_list: *ActionList, comptime DataType: type) DataType {
             if (DataType == void) {
@@ -426,17 +478,15 @@ fn Mock() type {
             }
 
             if (action_list.*.popFirst()) |action_node| {
-                const action = action_node.data;
-                const expect_type = getDataElementType(DataType);
-
-                const ret = getDataValue(DataType, action.data);
-
-                expectEqual(@as(DataElementType, action.data), expect_type);
-
                 // Free the node
-                GlobalAllocator.destroy(action_node);
+                defer GlobalAllocator.destroy(action_node);
 
-                return ret;
+                const action = action_node.data;
+
+                // Test that the data match
+                const expect_data = comptime getDataElementType(DataType);
+                expectEqual(expect_data, @as(DataElementType, action.data));
+                return getDataValue(DataType, action.data);
             } else {
                 std.debug.panic("No more test values for the return of function: " ++ fun_name ++ "\n", .{});
             }
@@ -447,11 +497,11 @@ fn Mock() type {
         /// mapping if one doesn't exist for a function name.
         ///
         /// Arguments:
-        ///     IN/OUT self: *Self         - Self. This is the mocking object to be modified to add
-        ///                                  the test data.
-        ///     IN fun_name: []const u8    - The function name to add the test parameters to.
-        ///     IN data: anytype               - The data to add.
-        ///     IN action_type: ActionType - The action type to add.
+        ///     IN/OUT self: *Self               - Self. This is the mocking object to be modified
+        ///                                        to add the test data.
+        ///     IN comptime fun_name: []const u8 - The function name to add the test data to.
+        ///     IN data: anytype                 - The data to add to the action for the function.
+        ///     IN action_type: ActionType       - The action type to add.
         ///
         pub fn addAction(self: *Self, comptime fun_name: []const u8, data: anytype, action_type: ActionType) void {
             // Add a new mapping if one doesn't exist.
@@ -461,16 +511,15 @@ fn Mock() type {
 
             // Get the function mapping to add the parameter to.
             if (self.named_actions.getEntry(fun_name)) |actions_kv| {
-                var action_list = actions_kv.value;
+                // Take a reference of the value so the underlying action list will update
+                var action_list = &actions_kv.value;
                 const action = Action{
                     .action = action_type,
                     .data = createDataElement(data),
                 };
                 var a = GlobalAllocator.create(TailQueue(Action).Node) catch unreachable;
                 a.* = .{ .data = action };
-                action_list.append(a);
-                // Need to re-assign the value as it isn't updated when we just append
-                actions_kv.value = action_list;
+                action_list.*.append(a);
             } else {
                 // Shouldn't get here as we would have just added a new mapping
                 // But just in case ;)
@@ -482,131 +531,56 @@ fn Mock() type {
         /// Perform an action on a function. This can be one of ActionType.
         ///
         /// Arguments:
-        ///     IN/OUT self: *Self      - Self. This is the mocking object to be modified to
-        ///                               perform a action.
-        ///     IN fun_name: []const u8 - The function name to act on.
-        ///     IN RetType: type        - The return type of the function being mocked.
-        ///     IN params: anytype          - The list of parameters of the mocked function.
+        ///     IN/OUT self: *Self               - Self. This is the mocking object to be modified
+        ///                                        to perform a action.
+        ///     IN comptime fun_name: []const u8 - The function name to act on.
+        ///     IN comptime RetType: type        - The return type of the function being mocked.
+        ///     IN params: anytype               - The list of parameters of the mocked function.
         ///
         /// Return: RetType
         ///     The return value of the mocked function. This can be void.
         ///
         pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: anytype) RetType {
             if (self.named_actions.getEntry(fun_name)) |kv_actions_list| {
-                var action_list = kv_actions_list.value;
+                // Take a reference of the value so the underlying action list will update
+                var action_list = &kv_actions_list.value;
                 // Peak the first action to test the action type
-                if (action_list.first) |action_node| {
+                if (action_list.*.first) |action_node| {
                     const action = action_node.data;
-                    const ret = switch (action.action) {
+                    return switch (action.action) {
                         ActionType.TestValue => ret: {
                             comptime var i = 0;
                             inline while (i < params.len) : (i += 1) {
                                 // Now pop the action as we are going to use it
                                 // Have already checked that it is not null
-                                const test_node = action_list.popFirst().?;
+                                const test_node = action_list.*.popFirst().?;
+                                defer GlobalAllocator.destroy(test_node);
+
                                 const test_action = test_node.data;
                                 const param = params[i];
                                 const param_type = @TypeOf(params[i]);
 
                                 expectTest(param_type, param, test_action.data);
-
-                                // Free the node
-                                GlobalAllocator.destroy(test_node);
                             }
-                            break :ret expectGetValue(fun_name, &action_list, RetType);
+                            break :ret expectGetValue(fun_name, action_list, RetType);
                         },
                         ActionType.ConsumeFunctionCall => ret: {
                             // Now pop the action as we are going to use it
                             // Have already checked that it is not null
-                            const test_node = action_list.popFirst().?;
+                            const test_node = action_list.*.popFirst().?;
+                            // Free the node once done
+                            defer GlobalAllocator.destroy(test_node);
                             const test_element = test_node.data.data;
 
-                            // Work out the type of the function to call from the params and return type
-                            // At compile time
-                            //const expected_function = getFunctionType(RetType, params);
-                            // Waiting for this:
-                            // error: compiler bug: unable to call var args function at compile time. https://github.com/ziglang/zig/issues/313
-                            // to be resolved
-
-                            comptime const param_len = [1]u8{switch (params.len) {
-                                0...9 => params.len + @as(u8, '0'),
-                                else => unreachable,
-                            }};
-
-                            const expected_function = switch (params.len) {
-                                0 => fn () RetType,
-                                1 => fn (@TypeOf(params[0])) RetType,
-                                2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                                3 => fn (@TypeOf(params[0]), @TypeOf(params[1]), @TypeOf(params[2])) RetType,
-                                else => @compileError("Couldn't generate function type for " ++ param_len ++ " parameters\n"),
-                            };
-
-                            // Get the corresponding DataElementType
-                            const expect_type = comptime getDataElementType(expected_function);
-
-                            // Test that the types match
-                            expectEqual(expect_type, @as(DataElementType, test_element));
-
-                            // Types match, so can use the expected type to get the actual data
-                            const actual_function = getDataValue(expected_function, test_element);
-
-                            // Free the node
-                            GlobalAllocator.destroy(test_node);
-
-                            // The data element will contain the function to call
-                            const r = switch (params.len) {
-                                0 => actual_function(),
-                                1 => actual_function(params[0]),
-                                2 => actual_function(params[0], params[1]),
-                                3 => actual_function(params[0], params[1], params[2]),
-                                else => @compileError(param_len ++ " or more parameters not supported"),
-                            };
-
-                            break :ret r;
+                            break :ret performGenericFunction(RetType, test_element, params);
                         },
                         ActionType.RepeatFunctionCall => ret: {
                             // Do the same for ActionType.ConsumeFunctionCall but instead of
                             // popping the function, just peak
                             const test_element = action.data;
-
-                            comptime const param_len = [1]u8{switch (params.len) {
-                                0...9 => params.len + @as(u8, '0'),
-                                else => unreachable,
-                            }};
-
-                            const expected_function = switch (params.len) {
-                                0 => fn () RetType,
-                                1 => fn (@TypeOf(params[0])) RetType,
-                                2 => fn (@TypeOf(params[0]), @TypeOf(params[1])) RetType,
-                                3 => fn (@TypeOf(params[0]), @TypeOf(params[1]), @TypeOf(params[2])) RetType,
-                                else => @compileError("Couldn't generate function type for " ++ param_len ++ " parameters\n"),
-                            };
-
-                            // Get the corresponding DataElementType
-                            const expect_type = comptime getDataElementType(expected_function);
-
-                            // Test that the types match
-                            expectEqual(expect_type, @as(DataElementType, test_element));
-
-                            // Types match, so can use the expected type to get the actual data
-                            const actual_function = getDataValue(expected_function, test_element);
-
-                            // The data element will contain the function to call
-                            const r = switch (params.len) {
-                                0 => actual_function(),
-                                1 => actual_function(params[0]),
-                                2 => actual_function(params[0], params[1]),
-                                3 => actual_function(params[0], params[1], params[2]),
-                                else => @compileError(param_len ++ " or more parameters not supported"),
-                            };
-
-                            break :ret r;
+                            break :ret performGenericFunction(RetType, test_element, params);
                         },
                     };
-
-                    // Re-assign the action list as this would have changed
-                    kv_actions_list.value = action_list;
-                    return ret;
                 } else {
                     std.debug.panic("No action list elements for function: " ++ fun_name ++ "\n", .{});
                 }
@@ -639,8 +613,9 @@ fn Mock() type {
             // Make sure the expected list is empty
             var it = self.named_actions.iterator();
             while (it.next()) |next| {
-                var action_list = next.value;
-                if (action_list.popFirst()) |action_node| {
+                // Take a reference so the underlying action list will be updated.
+                var action_list = &next.value;
+                if (action_list.*.popFirst()) |action_node| {
                     const action = action_node.data;
                     switch (action.action) {
                         ActionType.TestValue, ActionType.ConsumeFunctionCall => {
@@ -651,7 +626,6 @@ fn Mock() type {
                             // As this is a repeat action, the function will still be here
                             // So need to free it
                             GlobalAllocator.destroy(action_node);
-                            next.value = action_list;
                         },
                     }
                 }
@@ -678,9 +652,7 @@ fn getMockObject() *Mock() {
     if (mock) |*m| {
         return m;
     } else {
-        warn("MOCK object doesn't exists, please initialise this test\n", .{});
-        expect(false);
-        unreachable;
+        std.debug.panic("MOCK object doesn't exists, please initialise this test\n", .{});
     }
 }
 
@@ -690,9 +662,7 @@ fn getMockObject() *Mock() {
 pub fn initTest() void {
     // Make sure there isn't a mock object
     if (mock) |_| {
-        warn("MOCK object already exists, please free previous test\n", .{});
-        expect(false);
-        unreachable;
+        std.debug.panic("MOCK object already exists, please free previous test\n", .{});
     } else {
         mock = Mock().init();
     }
@@ -716,10 +686,8 @@ pub fn freeTest() void {
 /// multiple values for each call to the same mocked function.
 ///
 /// Arguments:
-///     IN/OUT self: *Self      - Self. This is the mocking object to be modified to add
-///                               the test parameters.
-///     IN fun_name: []const u8 - The function name to add the test parameters to.
-///     IN params: anytype          - The parameters to add.
+///     IN comptime fun_name: []const u8 - The function name to add the test parameters to.
+///     IN params: anytype               - The parameters to add.
 ///
 pub fn addTestParams(comptime fun_name: []const u8, params: anytype) void {
     var mock_obj = getMockObject();
@@ -734,8 +702,8 @@ pub fn addTestParams(comptime fun_name: []const u8, params: anytype) void {
 /// the mocked function is called, this action wil be removed.
 ///
 /// Arguments:
-///     IN fun_name: []const u8 - The function name to add the function to.
-///     IN function: anytype        - The function to add.
+///     IN comptime fun_name: []const u8 - The function name to add the function to.
+///     IN function: anytype             - The function to add.
 ///
 pub fn addConsumeFunction(comptime fun_name: []const u8, function: anytype) void {
     getMockObject().addAction(fun_name, function, ActionType.ConsumeFunctionCall);
@@ -746,8 +714,8 @@ pub fn addConsumeFunction(comptime fun_name: []const u8, function: anytype) void
 /// the mocked function is called, this action wil be removed.
 ///
 /// Arguments:
-///     IN fun_name: []const u8 - The function name to add the function to.
-///     IN function: anytype        - The function to add.
+///     IN comptime fun_name: []const u8 - The function name to add the function to.
+///     IN function: anytype             - The function to add.
 ///
 pub fn addRepeatFunction(comptime fun_name: []const u8, function: anytype) void {
     getMockObject().addAction(fun_name, function, ActionType.RepeatFunctionCall);
@@ -757,9 +725,9 @@ pub fn addRepeatFunction(comptime fun_name: []const u8, function: anytype) void 
 /// Perform an action on a function. This can be one of ActionType.
 ///
 /// Arguments:
-///     IN fun_name: []const u8 - The function name to act on.
-///     IN RetType: type        - The return type of the function being mocked.
-///     IN params: anytype          - The list of parameters of the mocked function.
+///     IN comptime fun_name: []const u8 - The function name to act on.
+///     IN comptime RetType: type        - The return type of the function being mocked.
+///     IN params: anytype               - The list of parameters of the mocked function.
 ///
 /// Return: RetType
 ///     The return value of the mocked function. This can be void.
