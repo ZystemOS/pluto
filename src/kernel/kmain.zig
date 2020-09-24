@@ -171,10 +171,9 @@ fn initStage2() noreturn {
         \\                 | |      | |____  | |__| |    | |    | |__| |
         \\                 |_|      |______|  \____/     |_|     \____/
     ;
-    tty.print("Hello Pluto from kernel :)\n\n", .{});
     tty.print("{}\n\n", .{logo});
 
-    logger.info("Hello Pluto from kernel :)\n", .{});
+    tty.print("Hello Pluto from kernel :)\n", .{});
 
     switch (build_options.test_mode) {
         .Initialisation => {
