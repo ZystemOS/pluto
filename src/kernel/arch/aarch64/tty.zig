@@ -7,8 +7,6 @@ const mailbox = @import("mailbox.zig");
 const mem = @import("../../mem.zig");
 const Tag = mailbox.Tag;
 
-pub const CHAR_WIDTH: u8 = 8;
-pub const CHAR_HEIGHT: u8 = 8;
 const BLACK = Pixel{ .red = 0, .blue = 0, .green = 0 };
 const WHITE = Pixel{ .red = 255, .blue = 255, .green = 255 };
 
@@ -54,6 +52,9 @@ const font = [_][]const u1{
         0, 0, 0, 0, 0, 0, 0, 0,
     },
 };
+
+pub const CHAR_WIDTH: u8 = 8;
+pub const CHAR_HEIGHT: u8 = 8;
 
 var framebuffer: Framebuffer = undefined;
 
@@ -124,7 +125,6 @@ pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
     var fb_size: u32 = undefined;
     const fb_alignment: u32 = 16;
 
-    // Set phys and virt dimensions to 640x480 and colour depth to the size of a pixel in bits
     const allocate_fb = &[_]u32{
         @enumToInt(Tag.ALLOCATE_BUFF),
         8,
@@ -152,7 +152,6 @@ pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
     };
     const mmio_addr = board.mmioAddress();
     var pkg = mailbox.send(mmio_addr, allocate_fb, allocator) catch |e| panic(@errorReturnTrace(), "Failed to configure TTY: {}\n", .{e});
-    // log.debug("Data is {}\n", .{pkg.data[0..]});
     defer allocator.free(pkg.data);
     var msg = mailbox.read(mmio_addr);
 
