@@ -76,24 +76,18 @@ pub fn build(b: *Builder) !void {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
         .aarch64 => makeRpiImage: {
             const elf = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "pluto.elf" });
-            const kernel_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8.img" });
+            const kernel_image = "kernel8.img";
             const kernel_load_at_zero_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8-load-at-zero.img" });
             const sdcard_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard.img" });
 
-            const objcopy = b.addSystemCommand(&[_][]const u8{
-                "aarch64-linux-gnu-objcopy",
-                elf,
-                "-O",
-                "binary",
-                kernel_image,
-            });
-            objcopy.step.dependOn(&exec.step);
+            const install_raw = b.addInstallRaw(exec, kernel_image);
+            install_raw.step.dependOn(&exec.step);
 
             const make_kernel_load_at_zero = addCustomStep(b, MakeKernelLoadAtZeroStep{
-                .input_name = kernel_image,
+                .input_name = b.getInstallPath(.Bin, kernel_image),
                 .output_name = kernel_load_at_zero_image,
             });
-            make_kernel_load_at_zero.step.dependOn(&objcopy.step);
+            make_kernel_load_at_zero.step.dependOn(&install_raw.step);
 
             const allocate_sdcard_image = b.addSystemCommand(&[_][]const u8{
                 "fallocate",
