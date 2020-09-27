@@ -179,7 +179,7 @@ pub const RuntimeStep = struct {
     }
 
     ///
-    /// The make function that is called by the builder. This will create the qemu process with the
+    /// The make function that is called by the builder. This will create a qemu process with the
     /// stdout as a Pipe. Then create the read thread to read the logs from the qemu stdout. Then
     /// will call the test function to test a specifics part of the OS defined by the test mode.
     ///
