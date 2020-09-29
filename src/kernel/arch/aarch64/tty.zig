@@ -7,9 +7,12 @@ const mailbox = @import("mailbox.zig");
 const mem = @import("../../mem.zig");
 const Tag = mailbox.Tag;
 
+/// Black pixel
 const BLACK = Pixel{ .red = 0, .blue = 0, .green = 0 };
+/// White pixel
 const WHITE = Pixel{ .red = 255, .blue = 255, .green = 255 };
 
+/// Framebuffer state
 const Framebuffer = struct {
     width: usize,
     height: usize,
@@ -21,6 +24,7 @@ const Framebuffer = struct {
     buffer: [*]Pixel,
 };
 
+/// Pixel has color and alpha components
 const Pixel = packed struct {
     blue: u8,
     green: u8,
@@ -28,6 +32,7 @@ const Pixel = packed struct {
     alpha: u8 = 0,
 };
 
+/// The font table is indexed by the ascii character
 const font = [_][]const u1{
     // space
     &[_]u1{
@@ -53,15 +58,30 @@ const font = [_][]const u1{
     },
 };
 
+/// The width of characters in pixels
 pub const CHAR_WIDTH: u8 = 8;
+/// The height of characters in pixels
 pub const CHAR_HEIGHT: u8 = 8;
 
+/// The singlton frame buffer instance
 var framebuffer: Framebuffer = undefined;
 
+///
+/// Write pixel to frame buffer
+///
+/// Arguments:
+///     IN x: usize - The x coordinate (starting at 0 on the left)
+///     IN y: usize - The y coordinate (starting at 0 on the top)
+///     IN pixel: Pixel - The pixel to draw
+///
+///
 fn writePixel(x: usize, y: usize, pixel: Pixel) void {
     framebuffer.buffer[y * framebuffer.bytes_per_row / 4 + x] = pixel;
 }
 
+///
+/// Clear the entire frame buffer
+///
 fn clearScreen() void {
     var y: usize = 0;
     while (y < framebuffer.height) : (y += 1) {
@@ -72,6 +92,14 @@ fn clearScreen() void {
     }
 }
 
+///
+/// Write character to frame buffer
+///
+/// Arguments:
+///     IN x: usize - The x coordinate (the text column, starting at 0 on the left)
+///     IN y: usize - The y coordinate (the text row, starting at 0 at the top)
+///     IN char: u8 - The character to draw
+///
 fn writeChar(x: usize, y: usize, char: u8) void {
     var ch = char;
     if (ch < ' ' or ch > '~')
@@ -95,6 +123,14 @@ fn writeChar(x: usize, y: usize, char: u8) void {
     }
 }
 
+///
+/// Write string to frame buffer using current text cursor.
+/// The current text cursor is updated.
+/// New lines ('\n) move to the next line.
+///
+/// Arguments:
+///     IN str: []const u8 - The string to draw
+///
 pub fn writeString(str: []const u8) !void {
     for (str) |ch| {
         if (ch == '\n') {
@@ -111,11 +147,29 @@ pub fn writeString(str: []const u8) !void {
     }
 }
 
+///
+/// Set the text cursor
+///
+/// Arguments:
+///     IN x: usize - The x coordinate (the text column, starting at 0 on the left)
+///     IN y: usize - The y coordinate (the text row, starting at 0 at the top)
+///
 pub fn setCursor(x: u8, y: u8) void {
     framebuffer.text_cursor_x = x;
     framebuffer.text_cursor_y = y;
 }
 
+///
+/// Create and initialize a TTY object for the frame buffer
+///
+/// Arguments:
+///     IN allocator2: *std.mem.Allocator - not yet used
+///     IN board: arch.BootPayload - determines what 
+///
+/// Return: TTY
+///     The TTY struct that is used to work with the frame buffer
+///     
+///
 pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
     var alloc_buff = [_]u8{0} ** (4 * 1024);
     var fixed_allocator = std.heap.FixedBufferAllocator.init(alloc_buff[0..]);
