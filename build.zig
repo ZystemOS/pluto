@@ -85,7 +85,7 @@ pub fn build(b: *Builder) !void {
                 "64M",
                 sdcard_image,
             });
-            allocate_sdcard_image.step.dependOn(&objcopy.step);
+            allocate_sdcard_image.step.dependOn(&install_raw.step);
 
             const format_sdcard_image = b.addSystemCommand(&[_][]const u8{
                 "mformat",
@@ -126,7 +126,7 @@ pub fn build(b: *Builder) !void {
                 "mcopy",
                 "-i",
                 sdcard_image,
-                kernel_image,
+                b.getInstallPath(.Bin, kernel_image),
                 "::kernel8.img",
             });
             copy_kernel.step.dependOn(&copy_fixup.step);
