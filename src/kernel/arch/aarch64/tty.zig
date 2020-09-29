@@ -131,6 +131,9 @@ fn writeChar(x: usize, y: usize, char: u8) void {
 /// Arguments:
 ///     IN str: []const u8 - The string to draw
 ///
+/// Error:
+///     !void is needed for interface conformance. No actual errors are expected.
+///
 pub fn writeString(str: []const u8) !void {
     for (str) |ch| {
         if (ch == '\n') {
@@ -163,18 +166,14 @@ pub fn setCursor(x: u8, y: u8) void {
 /// Create and initialize a TTY object for the frame buffer
 ///
 /// Arguments:
-///     IN allocator2: *std.mem.Allocator - not yet used
-///     IN board: arch.BootPayload - determines what 
+///     IN allocator: *std.mem.Allocator - used to allocate buffers for video core mailbox messages
+///     IN board: arch.BootPayload - determines board properties such as mmio addresses
 ///
 /// Return: TTY
 ///     The TTY struct that is used to work with the frame buffer
 ///     
 ///
-pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
-    var alloc_buff = [_]u8{0} ** (4 * 1024);
-    var fixed_allocator = std.heap.FixedBufferAllocator.init(alloc_buff[0..]);
-    var allocator = &fixed_allocator.allocator;
-
+pub fn init(allocator: *std.mem.Allocator, board: arch.BootPayload) TTY {
     var fb_addr: u32 = undefined;
     var fb_size: u32 = undefined;
     const fb_alignment: u32 = 16;
@@ -235,9 +234,6 @@ pub fn init(allocator2: *std.mem.Allocator, board: arch.BootPayload) TTY {
     if (pkg.data[23] != @enumToInt(mailbox.Code.RESPONSE_SUCCESS) | 4) panic(null, "GET_BYTES_PER_ROW code wasn't as expected in response\n", .{});
 
     pkg.data[5] &= 0x3fffffff;
-    //  log.debug("FB is at 0x{x} and is of size {}\n", .{ pkg.data[5], pkg.data[6] });
-    //  log.debug("bytes per row is {}\n", .{pkg.data[24]});
-    //  log.debug("Data is {}\n", .{pkg.data[0..]});
 
     framebuffer = .{
         .width = 640,
