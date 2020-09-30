@@ -2,6 +2,7 @@ const std = @import("std");
 const vmm = @import("../../vmm.zig");
 const mem = @import("../../mem.zig");
 const Serial = @import("../../serial.zig").Serial;
+const tty = @import("tty.zig");
 const TTY = @import("../../tty.zig").TTY;
 const rpi = @import("rpi.zig");
 const mmio = @import("mmio.zig");
@@ -29,7 +30,7 @@ extern var KERNEL_PHYSADDR_START: *u32;
 extern var KERNEL_PHYSADDR_END: *u32;
 
 pub fn initTTY(boot_payload: BootPayload) TTY {
-    return undefined;
+    return tty.init(&mem.fixed_buffer_allocator.allocator, boot_payload);
 }
 
 pub fn initMmioAddress(board: *rpi.RaspberryPiBoard) void {
