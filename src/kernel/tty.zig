@@ -60,7 +60,6 @@ pub fn print(comptime format: []const u8, args: anytype) void {
 /// Clear the screen by printing a space at each cursor position. Sets the cursor to the top left (0, 0)
 ///
 pub fn clear() void {
-    log.info("tty.clear() aarch64.tty.clear = {}\n", .{tty.clear}); // testing: note undefined value
     if (tty.clear) |clr| {
         clr();
     } else {
