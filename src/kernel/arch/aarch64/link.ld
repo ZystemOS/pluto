@@ -1,8 +1,7 @@
 ENTRY(_start)
 
 SECTIONS {
-	/* The binary is loaded at 0x80000 for aarch64 and 0x8000 for arm */
-	. = 0x80000;
+	. = 0;
 	KERNEL_PHYSADDR_START = .;
 
 	.text ALIGN(4K) : {
