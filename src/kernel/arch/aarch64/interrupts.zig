@@ -154,12 +154,18 @@ export fn exceptionHandler() noreturn {
         }
     }
     if (!seen_previously) {
-        log.emerg("this exception has not been seen previously in development - please update aarch64/interrupts.zig\n", .{});
+        log.emerg("this exception has not been seen previously in development\n", .{});
+        log.emerg("    - please update aarch64/interrupts.zig\n", .{});
     }
     log.emerg("details\n", .{});
     log.emerg("    elr_el{} 0x{x}\n", .{ currentExceptionLevel(), elr_elx });
-    log.emerg("    esr_el{} 0x{x}: {}, 32 bit instruction {}, iss 0x{x}\n", .{ currentExceptionLevel(), esr_elx, esr_elx_class, esr_elx_instruction_is_32_bits, esr_elx_iss });
-    log.emerg("    exception entry offset 0x{x} {} {}\n", .{ exception_entry_offset, @intToEnum(ExceptionTakenFrom, @truncate(u2, exception_entry_offset >> 9)), @intToEnum(ExceptionCategory, @truncate(u2, exception_entry_offset >> 7)) });
+    log.emerg("    esr_el{} 0x{x}:\n", .{ currentExceptionLevel(), esr_elx });
+    log.emerg("        {}\n", .{esr_elx_class});
+    log.emerg("        32 bit instruction {}\n", .{esr_elx_instruction_is_32_bits});
+    log.emerg("        iss 0x{x}\n", .{esr_elx_iss});
+    log.emerg("    exception entry offset 0x{x}:\n", .{exception_entry_offset});
+    log.emerg("        {}\n", .{@intToEnum(ExceptionTakenFrom, @truncate(u2, exception_entry_offset >> 9))});
+    log.emerg("        {}\n", .{@intToEnum(ExceptionCategory, @truncate(u2, exception_entry_offset >> 7))});
     log.emerg("    far_el{} 0x{x}\n", .{ currentExceptionLevel(), far_elx });
     log.emerg("    mair_el{} 0x{x}\n", .{ currentExceptionLevel(), mair_elx });
     log.emerg("    sctlr_el{} 0x{x}\n", .{ currentExceptionLevel(), sctlr_elx });
