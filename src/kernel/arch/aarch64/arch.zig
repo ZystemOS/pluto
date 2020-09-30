@@ -205,24 +205,41 @@ pub const Cpu = struct {
     }
 };
 
-// map 1GB to ram except last 16MB to mmio
+/// Virtual addresses are 30 bits (1GB)
+const VirtualAddress = u30;
+/// Physical addresses are 30 bits (1GB)
+const PhysicalAddress = u30;
+/// There are two level 2 entries (512MB each)
+const level_2_page_table_len = 2;
+/// There are two level 3 tables of 8K entries
+const level_3_page_table_len = 2 * 8 * 1024;
+/// Page tables must be aligned to 64KB
+const table_alignment = 64 * 1024;
+/// The entire set of page table entries
+var translation_table: [level_3_page_table_len + level_2_page_table_len]usize align(table_alignment) = undefined;
+
+///
+/// map 1GB to ram except last 16MB to mmio
+//
 pub fn enableFlatMmu() void {
-    const level_2_table = @intToPtr([*]usize, 0x50000)[0..2];
-    level_2_table[0] = 0x60000 | 0x3;
-    level_2_table[1] = 0x70000 | 0x3;
-    const level_3_page_table = @intToPtr([*]usize, 0x60000)[0 .. 2 * 8 * 1024];
     const page_size = 64 * 1024;
-    const start_of_mmio = level_3_page_table.len - (16 * 1024 * 1024 / page_size);
-    var index: usize = 0;
-    while (index < start_of_mmio) : (index += 1) {
-        level_3_page_table[index] = index * page_size + 0x0703; // normal pte=3 attr index=0 inner shareable=3 af=1
+    const start_of_mmio = level_3_page_table_len - (16 * 1024 * 1024 / page_size);
+    var table_index: usize = 0;
+    while (table_index < start_of_mmio) : (table_index += 1) {
+        translation_table[table_index] = table_index * page_size + 0x0703; // normal pte=3 attr index=0 inner shareable=3 af=1
     }
-    while (index < level_3_page_table.len) : (index += 1) {
-        level_3_page_table[index] = index * page_size + 0x0607; // device pte=3 attr index=1 outer shareable=2 af=1
+    while (table_index < level_3_page_table_len) : (table_index += 1) {
+        translation_table[table_index] = table_index * page_size + 0x0607; // device pte=3 attr index=1 outer shareable=2 af=1
+    }
+    var x: usize = @ptrToInt(&translation_table);
+    while (table_index < translation_table.len) : (table_index += 1) {
+        translation_table[table_index] = x | 0x3;
+        x += table_alignment;
     }
     Cpu.mair.el(3).write(0x04ff);
-    Cpu.tcr.el(3).readSetWrite(0x80804022);
-    Cpu.ttbr0.el(3).write(0x50000);
+    const t0sz = @bitSizeOf(usize) - @bitSizeOf(VirtualAddress);
+    Cpu.tcr.el(3).readSetWrite(0x80804000 | t0sz);
+    Cpu.ttbr0.el(3).write(@ptrToInt(&translation_table[level_3_page_table_len]));
     Cpu.isb();
     Cpu.sctlr.el(3).readSetWrite(0x1);
     Cpu.isb();
