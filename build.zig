@@ -77,17 +77,10 @@ pub fn build(b: *Builder) !void {
         .aarch64 => makeRpiImage: {
             const elf = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "pluto.elf" });
             const kernel_image = "kernel8.img";
-            const kernel_load_at_zero_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "kernel8-load-at-zero.img" });
             const sdcard_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard.img" });
 
             const install_raw = b.addInstallRaw(exec, kernel_image);
             install_raw.step.dependOn(&exec.step);
-
-            const make_kernel_load_at_zero = addCustomStep(b, MakeKernelLoadAtZeroStep{
-                .input_name = b.getInstallPath(.Bin, kernel_image),
-                .output_name = kernel_load_at_zero_image,
-            });
-            make_kernel_load_at_zero.step.dependOn(&install_raw.step);
 
             const allocate_sdcard_image = b.addSystemCommand(&[_][]const u8{
                 "fallocate",
@@ -95,7 +88,7 @@ pub fn build(b: *Builder) !void {
                 "64M",
                 sdcard_image,
             });
-            allocate_sdcard_image.step.dependOn(&make_kernel_load_at_zero.step);
+            allocate_sdcard_image.step.dependOn(&install_raw.step);
 
             const format_sdcard_image = b.addSystemCommand(&[_][]const u8{
                 "mformat",
@@ -136,8 +129,8 @@ pub fn build(b: *Builder) !void {
                 "mcopy",
                 "-i",
                 sdcard_image,
-                kernel_load_at_zero_image,
-                "::kernel8-load-at-zero.img",
+                b.getInstallPath(.Bin, kernel_image),
+                "::kernel8.img",
             });
             copy_kernel.step.dependOn(&copy_fixup.step);
 
@@ -449,40 +442,3 @@ const RamdiskStep = struct {
         return ramdisk_step;
     }
 };
-
-const MakeKernelLoadAtZeroStep = struct {
-    step: std.build.Step = undefined,
-    input_name: []const u8,
-    output_name: []const u8,
-    pub fn make(step: *std.build.Step) anyerror!void {
-        const self = @fieldParentPtr(MakeKernelLoadAtZeroStep, "step", step);
-        const cwd = fs.cwd();
-        const image = try cwd.openFile(self.input_name, fs.File.OpenFlags{});
-        defer image.close();
-        const kernel_load_at_zero_image = try cwd.createFile(self.output_name, fs.File.CreateFlags{});
-        defer kernel_load_at_zero_image.close();
-        // armstub not yet working, therefore: b 0x80000 (which is 0x14020000)
-        _ = try kernel_load_at_zero_image.write(&[4]u8{ 0x00, 0x00, 0x02, 0x14 });
-        // followed by 0 filler until 0x80000
-        var i: usize = 4;
-        while (i < 0x80000) : (i += 1) {
-            _ = try kernel_load_at_zero_image.write(&[1]u8{0x00});
-        }
-        // followed finally by kernel that starts at 0x80000
-        var read_buf: [1]u8 = undefined;
-        while (true) {
-            var n = try image.read(&read_buf);
-            if (n == 0) {
-                break;
-            }
-            _ = try kernel_load_at_zero_image.write(&read_buf);
-        }
-    }
-};
-
-pub fn addCustomStep(self: *std.build.Builder, customStep: anytype) *@TypeOf(customStep) {
-    var allocated = self.allocator.create(@TypeOf(customStep)) catch unreachable;
-    allocated.* = customStep;
-    allocated.*.step = std.build.Step.init(.Custom, @typeName(@TypeOf(customStep)), self.allocator, @TypeOf(customStep).make);
-    return allocated;
-}
