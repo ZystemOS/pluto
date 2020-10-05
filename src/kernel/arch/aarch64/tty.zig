@@ -171,7 +171,7 @@ pub fn setCursor(x: u8, y: u8) void {
 ///
 /// Return: TTY
 ///     The TTY struct that is used to work with the frame buffer
-///     
+///
 ///
 pub fn init(allocator: *std.mem.Allocator, board: arch.BootPayload) TTY {
     var fb_addr: u32 = undefined;
