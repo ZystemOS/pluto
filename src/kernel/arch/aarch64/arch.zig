@@ -1,3 +1,4 @@
+const assert = std.debug.assert;
 const std = @import("std");
 const vmm = @import("../../vmm.zig");
 const mem = @import("../../mem.zig");
@@ -124,21 +125,61 @@ pub fn spinWait() noreturn {
 }
 
 pub const Cpu = struct {
-    pub const cntfrq = systemRegisterPerExceptionLevel("cntfrq");
+    pub const cntfrq = systemRegisterPerExceptionLevel(.JustLevelZero, "cntfrq");
+    pub const cntfrq_el0 = cntfrq.el(0);
     pub const CurrentEL = systemRegister("CurrentEL");
-    pub const elr = systemRegisterPerExceptionLevel("elr");
-    pub const esr = systemRegisterPerExceptionLevel("esr");
-    pub const far = systemRegisterPerExceptionLevel("far");
+    pub const elr = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "elr");
+    pub const elr_el1 = elr.el(1);
+    pub const elr_el2 = elr.el(2);
+    pub const elr_el3 = elr.el(3);
+    pub const esr = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "esr");
+    pub const esr_el1 = esr.el(1);
+    pub const esr_el2 = esr.el(2);
+    pub const esr_el3 = esr.el(3);
+    pub const far = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "far");
+    pub const far_el1 = far.el(1);
+    pub const far_el2 = far.el(2);
+    pub const far_el3 = esr.el(3);
     pub const lr = cpuRegister("lr");
-    pub const mair = systemRegisterPerExceptionLevel("mair");
-    pub const midr = systemRegisterPerExceptionLevel("midr");
-    pub const mpidr = systemRegisterPerExceptionLevel("mpidr");
-    pub const sctlr = systemRegisterPerExceptionLevel("sctlr");
+    pub const mair = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "mair");
+    pub const mair_el1 = mair.el(1);
+    pub const mair_el2 = mair.el(2);
+    pub const mair_el3 = mair.el(3);
+    pub const midr = systemRegisterPerExceptionLevel(.JustLevelOne, "midr");
+    pub const midr_el1 = midr.el(1);
+    pub const mpidr = systemRegisterPerExceptionLevel(.JustLevelOne, "mpidr");
+    pub const mpidr_el1 = mair.el(1);
+    pub const sctlr = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "sctlr");
+    pub const sctlr_el1 = sctlr.el(1);
+    pub const sctlr_el2 = sctlr.el(2);
+    pub const sctlr_el3 = sctlr.el(3);
     pub const sp = cpuRegister("sp");
-    pub const spsr = systemRegisterPerExceptionLevel("spsr");
-    pub const tcr = systemRegisterPerExceptionLevel("tcr");
-    pub const ttbr0 = systemRegisterPerExceptionLevel("ttbr0");
-    pub const vbar = systemRegisterPerExceptionLevel("vbar");
+    pub const spsr = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "spsr");
+    pub const spsr_el1 = spsr.el(1);
+    pub const spsr_el2 = spsr.el(2);
+    pub const spsr_el3 = spsr.el(3);
+    pub const tcr = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "tcr");
+    pub const tcr_el1 = tcr.el(1);
+    pub const tcr_el2 = tcr.el(2);
+    pub const tcr_el3 = tcr.el(3);
+    pub const ttbr0 = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "ttbr0");
+    pub const ttbr0_el1 = ttbr0.el(1);
+    pub const ttbr0_el2 = ttbr0.el(2);
+    pub const ttbr0_el3 = ttbr0.el(3);
+    pub const vbar = systemRegisterPerExceptionLevel(.LevelsOneThroughThree, "vbar");
+    pub const vbar_el1 = vbar.el(1);
+    pub const vbar_el2 = vbar.el(2);
+    pub const vbar_el3 = vbar.el(3);
+
+    /// Available levels for a system register
+    const AvailableLevels = enum {
+        /// Available only at level 0
+        JustLevelZero,
+        /// Available only at level 1
+        JustLevelOne,
+        /// Available only at levels 1 through 3
+        LevelsOneThroughThree,
+    };
 
     fn cpuRegister(comptime register_name: []const u8) type {
         return struct {
@@ -156,14 +197,26 @@ pub const Cpu = struct {
             }
         };
     }
-    fn systemRegisterPerExceptionLevel(comptime register_name: []const u8) type {
+    fn systemRegisterPerExceptionLevel(comptime available_levels: AvailableLevels, comptime register_name: []const u8) type {
         return struct {
             pub inline fn el(exception_level: u2) type {
                 const level_string = switch (exception_level) {
-                    0 => "0",
-                    1 => "1",
-                    2 => "2",
-                    3 => "3",
+                    0 => string: {
+                        assert(available_levels == .JustLevelZero);
+                        break :string "0";
+                    },
+                    1 => string: {
+                        assert(available_levels == .JustLevelOne or available_levels == .LevelsOneThroughThree);
+                        break :string "1";
+                    },
+                    2 => string: {
+                        assert(available_levels == .LevelsOneThroughThree);
+                        break :string "2";
+                    },
+                    3 => string: {
+                        assert(available_levels == .LevelsOneThroughThree);
+                        break :string "3";
+                    },
                 };
                 return systemRegister(register_name ++ "_el" ++ level_string);
             }
@@ -217,10 +270,8 @@ const level_3_page_table_len = 2 * 8 * 1024;
 const table_alignment = 64 * 1024;
 /// The entire set of page table entries
 var translation_table: [level_3_page_table_len + level_2_page_table_len]usize align(table_alignment) = undefined;
-
 ///
 /// map 1GB to ram except last 16MB to mmio
-//
 pub fn enableFlatMmu() void {
     const page_size = 64 * 1024;
     const start_of_mmio = level_3_page_table_len - (16 * 1024 * 1024 / page_size);
