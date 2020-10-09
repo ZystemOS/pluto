@@ -32,7 +32,7 @@ var on_print_screen = false;
 ///     The byte waiting in the keyboard buffer
 ///
 fn readKeyboardBuffer() u8 {
-    return arch.inb(0x60);
+    return arch.in(u8, 0x60);
 }
 
 ///

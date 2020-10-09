@@ -9,6 +9,7 @@ const irq = @import("irq.zig");
 const isr = @import("isr.zig");
 const paging = @import("paging.zig");
 const pic = @import("pic.zig");
+const pci = @import("pci.zig");
 const pit = @import("pit.zig");
 const rtc = @import("rtc.zig");
 const serial = @import("serial.zig");
@@ -24,6 +25,9 @@ const panic = @import("../../panic.zig").panic;
 const TTY = @import("../../tty.zig").TTY;
 const Keyboard = @import("../../keyboard.zig").Keyboard;
 const MemProfile = mem.MemProfile;
+
+/// The type of a device.
+pub const Device = pci.PciDeviceInfo;
 
 /// The virtual end of the kernel code.
 extern var KERNEL_VADDR_END: *u32;
@@ -102,41 +106,66 @@ pub const MEMORY_BLOCK_SIZE: usize = paging.PAGE_SIZE_4KB;
 pub const STACK_SIZE: u32 = MEMORY_BLOCK_SIZE / @sizeOf(u32);
 
 ///
-/// Assembly to write to a given port with a byte of data.
-///
-/// Arguments:
-///     IN port: u16 - The port to write to.
-///     IN data: u8  - The byte of data that will be sent.
-///
-pub fn outb(port: u16, data: u8) void {
-    asm volatile ("outb %[data], %[port]"
-        :
-        : [port] "{dx}" (port),
-          [data] "{al}" (data)
-    );
-}
-
-///
 /// Assembly that reads data from a given port and returns its value.
 ///
 /// Arguments:
-///     IN port: u16 - The port to read data from.
+///     IN comptime Type: type - The type of the data. This can only be u8, u16 or u32.
+///     IN port: u16           - The port to read data from.
 ///
-/// Return: u8
+/// Return: Type
 ///     The data that the port returns.
 ///
-pub fn inb(port: u16) u8 {
-    return asm volatile ("inb %[port], %[result]"
-        : [result] "={al}" (-> u8)
-        : [port] "N{dx}" (port)
-    );
+pub fn in(comptime Type: type, port: u16) Type {
+    return switch (Type) {
+        u8 => asm volatile ("inb %[port], %[result]"
+            : [result] "={al}" (-> Type)
+            : [port] "N{dx}" (port)
+        ),
+        u16 => asm volatile ("inw %[port], %[result]"
+            : [result] "={ax}" (-> Type)
+            : [port] "N{dx}" (port)
+        ),
+        u32 => asm volatile ("inl %[port], %[result]"
+            : [result] "={eax}" (-> Type)
+            : [port] "N{dx}" (port)
+        ),
+        else => @compileError("Invalid data type. Only u8, u16 or u32, found: " ++ @typeName(Type)),
+    };
+}
+
+///
+/// Assembly to write to a given port with a give type of data.
+///
+/// Arguments:
+///     IN port: u16     - The port to write to.
+///     IN data: anytype - The data that will be sent This must be a u8, u16 or u32 type.
+///
+pub fn out(port: u16, data: anytype) void {
+    switch (@TypeOf(data)) {
+        u8 => asm volatile ("outb %[data], %[port]"
+            :
+            : [port] "{dx}" (port),
+              [data] "{al}" (data)
+        ),
+        u16 => asm volatile ("outw %[data], %[port]"
+            :
+            : [port] "{dx}" (port),
+              [data] "{ax}" (data)
+        ),
+        u32 => asm volatile ("outl %[data], %[port]"
+            :
+            : [port] "{dx}" (port),
+              [data] "{eax}" (data)
+        ),
+        else => @compileError("Invalid data type. Only u8, u16 or u32, found: " ++ @typeName(@TypeOf(data))),
+    }
 }
 
 ///
 /// Force the CPU to wait for an I/O operation to compete. Use port 0x80 as this is unused.
 ///
 pub fn ioWait() void {
-    outb(0x80, 0);
+    out(0x80, @as(u8, 0));
 }
 
 ///
@@ -514,6 +543,10 @@ pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!
 
     const ret = .{ .stack = stack, .pointer = @ptrToInt(&stack[STACK_SIZE - 18]) };
     return ret;
+}
+
+pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
+    return pci.getDevices(allocator);
 }
 
 ///

@@ -199,7 +199,7 @@ var time_under_1_ns: u32 = undefined;
 ///     IN cmd: u8 - The command to send to the PIT.
 ///
 inline fn sendCommand(cmd: u8) void {
-    arch.outb(COMMAND_REGISTER, cmd);
+    arch.out(COMMAND_REGISTER, cmd);
 }
 
 ///
@@ -213,7 +213,7 @@ inline fn sendCommand(cmd: u8) void {
 ///
 inline fn readBackCommand(counter: CounterSelect) u8 {
     sendCommand(0xC2);
-    return 0x3F & arch.inb(counter.getRegister());
+    return 0x3F & arch.in(u8, counter.getRegister());
 }
 
 ///
@@ -224,7 +224,7 @@ inline fn readBackCommand(counter: CounterSelect) u8 {
 ///     IN data: u8               - The data to send.
 ///
 inline fn sendDataToCounter(counter: CounterSelect, data: u8) void {
-    arch.outb(counter.getRegister(), data);
+    arch.out(counter.getRegister(), data);
 }
 
 ///
@@ -396,7 +396,7 @@ test "sendCommand" {
 
     const cmd: u8 = 10;
 
-    arch.addTestParams("outb", .{ COMMAND_REGISTER, cmd });
+    arch.addTestParams("out", .{ COMMAND_REGISTER, cmd });
 
     sendCommand(cmd);
 }
@@ -407,8 +407,8 @@ test "readBackCommand" {
 
     const cmd: u8 = 0xC2;
 
-    arch.addTestParams("outb", .{ COMMAND_REGISTER, cmd });
-    arch.addTestParams("inb", .{ COUNTER_0_REGISTER, @as(u8, 0x20) });
+    arch.addTestParams("out", .{ COMMAND_REGISTER, cmd });
+    arch.addTestParams("in", .{ COUNTER_0_REGISTER, @as(u8, 0x20) });
 
     const actual = readBackCommand(CounterSelect.Counter0);
 
@@ -421,7 +421,7 @@ test "sendDataToCounter" {
 
     const data: u8 = 10;
 
-    arch.addTestParams("outb", .{ COUNTER_0_REGISTER, data });
+    arch.addTestParams("out", .{ COUNTER_0_REGISTER, data });
 
     sendDataToCounter(CounterSelect.Counter0, data);
 }
@@ -445,7 +445,7 @@ test "setupCounter lowest frequency" {
     const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
 
     while (freq <= 18) : (freq += 1) {
-        // arch.addTestParams("outb", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
+        // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
         expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
 
         // expectEqual(u32(0), ticks);
@@ -482,7 +482,7 @@ test "setupCounter highest frequency" {
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
     const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
 
-    // arch.addTestParams("outb", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
+    // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
 
     expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
 
@@ -515,7 +515,7 @@ test "setupCounter normal frequency" {
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
     const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
 
-    arch.addTestParams("outb", .{ COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8) });
+    arch.addTestParams("out", .{ COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8) });
 
     setupCounter(counter, freq, mode) catch unreachable;
 

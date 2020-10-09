@@ -93,7 +93,7 @@ fn baudDivisor(baud: u32) SerialError!u16 {
 ///     If the transmission buffer is empty.
 ///
 fn transmitIsEmpty(port: Port) bool {
-    return arch.inb(@enumToInt(port) + 5) & 0x20 > 0;
+    return arch.in(u8, @enumToInt(port) + 5) & 0x20 > 0;
 }
 
 ///
@@ -107,7 +107,7 @@ pub fn write(char: u8, port: Port) void {
     while (!transmitIsEmpty(port)) {
         arch.halt();
     }
-    arch.outb(@enumToInt(port), char);
+    arch.out(@enumToInt(port), char);
 }
 
 ///
@@ -125,19 +125,19 @@ pub fn init(baud: u32, port: Port) SerialError!void {
     const divisor: u16 = try baudDivisor(baud);
     const port_int = @enumToInt(port);
     // Send a byte to start setting the baudrate
-    arch.outb(port_int + LCR, lcrValue(0, false, false, 1) catch |e| {
+    arch.out(port_int + LCR, lcrValue(0, false, false, 1) catch |e| {
         panic(@errorReturnTrace(), "Failed to initialise serial output setup: {}", .{e});
     });
     // Send the divisor's lsb
-    arch.outb(port_int, @truncate(u8, divisor));
+    arch.out(port_int, @truncate(u8, divisor));
     // Send the divisor's msb
-    arch.outb(port_int + 1, @truncate(u8, divisor >> 8));
+    arch.out(port_int + 1, @truncate(u8, divisor >> 8));
     // Send the properties to use
-    arch.outb(port_int + LCR, lcrValue(CHAR_LEN, SINGLE_STOP_BIT, PARITY_BIT, 0) catch |e| {
+    arch.out(port_int + LCR, lcrValue(CHAR_LEN, SINGLE_STOP_BIT, PARITY_BIT, 0) catch |e| {
         panic(@errorReturnTrace(), "Failed to setup serial properties: {}", .{e});
     });
     // Stop initialisation
-    arch.outb(port_int + 1, 0);
+    arch.out(port_int + 1, @as(u8, 0));
 }
 
 test "lcrValue computes the correct value" {
