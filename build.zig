@@ -99,22 +99,21 @@ pub fn build(b: *Builder) !void {
     unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
     unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
     unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
+    unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
 
     if (builtin.os.tag != .windows) {
         unit_tests.enable_qemu = true;
     }
 
-    unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
+    // Run the mock gen
+    const mock_gen = b.addExecutable("mock_gen", "test/gen_types.zig");
+    mock_gen.setMainPkgPath(".");
+    const mock_gen_run = mock_gen.run();
+    unit_tests.step.dependOn(&mock_gen_run.step);
+
     test_step.dependOn(&unit_tests.step);
 
     const rt_test_step = b.step("rt-test", "Run runtime tests");
-    const build_mode_str = switch (build_mode) {
-        .Debug => "",
-        .ReleaseSafe => "-Drelease-safe",
-        .ReleaseFast => "-Drelease-fast",
-        .ReleaseSmall => "-Drelease-small",
-    };
-
     var qemu_args_al = ArrayList([]const u8).init(b.allocator);
     defer qemu_args_al.deinit();
 

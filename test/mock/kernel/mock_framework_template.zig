@@ -4,67 +4,12 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const GlobalAllocator = std.testing.allocator;
 const TailQueue = std.TailQueue;
-const cmos_mock = @import("cmos_mock.zig");
-const idt_mock = @import("idt_mock.zig");
-const gdt_mock = @import("gdt_mock.zig");
-const task_mock = @import("task_mock.zig");
-const StatusRegister = cmos_mock.StatusRegister;
-const RtcRegister = cmos_mock.RtcRegister;
-const IdtPtr = idt_mock.IdtPtr;
-const GdtPtr = gdt_mock.GdtPtr;
-const Task = task_mock.Task;
-const Allocator = std.mem.Allocator;
-const IdtError = idt_mock.IdtError;
-const IdtEntry = idt_mock.IdtEntry;
-
+////Imports////
 ///
 /// The enumeration of types that the mocking framework supports. These include basic types like u8
 /// and function types like fn () void.
 ///
-const DataElementType = enum {
-    BOOL,
-    U4,
-    U8,
-    U16,
-    U32,
-    USIZE,
-    STATUSREGISTER,
-    RTCREGISTER,
-    IDTPTR,
-    PTR_CONST_GDTPTR,
-    PTR_CONST_IDTPTR,
-    PTR_TASK,
-    PTR_ALLOCATOR,
-    ERROR_IDTERROR_RET_VOID,
-    ERROR_ALLOCATOR_RET_PTRTASK,
-    FN_CCC_OVOID,
-    FN_CCNAKED_OVOID,
-    FN_OVOID,
-    FN_OU16,
-    FN_OUSIZE,
-    FN_OGDTPTR,
-    FN_OIDTPTR,
-    FN_IU8_OVOID,
-    FN_IU8_OBOOL,
-    FN_IU8_IFNCCNAKEDOVOID_EIDTERROR_OVOID,
-    FN_IU16_OVOID,
-    FN_IU16_OU8,
-    FN_IUSIZE_OBOOL,
-    FN_IRTCREGISTER_OU8,
-    FN_IIDTENTRY_OBOOL,
-    FN_IPTRCONSTGDTPTR_OVOID,
-    FN_IPTRCONSTIDTPTR_OVOID,
-    FN_IU4_IU4_OU8,
-    FN_IU8_IU8_OU16,
-    FN_IU16_IU8_OVOID,
-    FN_IU16_IU16_OVOID,
-    FN_ISTATUSREGISTER_IBOOL_OU8,
-    FN_IPTRTASK_IUSIZE_OVOID,
-    FN_IPTRTASK_IPTRALLOCATOR_OVOID,
-    FN_IFNOVOID_IPTRALLOCATOR_EALLOCATOR_OPTRTASK,
-    FN_ISTATUSREGISTER_IU8_IBOOL_OVOID,
-};
-
+////DataElementType////
 ///
 /// A tagged union of all the data elements that the mocking framework can work with. This can be
 /// expanded to add new types. This is needed as need a list of data that all have different types,
@@ -73,50 +18,7 @@ const DataElementType = enum {
 /// is done, can programitaclly create types for this. Can use a compile time block that loops
 /// through the available basic types and create function types so don't have a long list.
 ///
-const DataElement = union(DataElementType) {
-    BOOL: bool,
-    U4: u4,
-    U8: u8,
-    U16: u16,
-    U32: u32,
-    USIZE: usize,
-    STATUSREGISTER: StatusRegister,
-    RTCREGISTER: RtcRegister,
-    IDTPTR: IdtPtr,
-    PTR_CONST_GDTPTR: *const GdtPtr,
-    PTR_CONST_IDTPTR: *const IdtPtr,
-    PTR_TASK: *Task,
-    PTR_ALLOCATOR: *Allocator,
-    ERROR_IDTERROR_RET_VOID: IdtError!void,
-    ERROR_ALLOCATOR_RET_PTRTASK: Allocator.Error!*Task,
-    FN_CCC_OVOID: fn () callconv(.C) void,
-    FN_CCNAKED_OVOID: fn () callconv(.Naked) void,
-    FN_OVOID: fn () void,
-    FN_OU16: fn () u16,
-    FN_OUSIZE: fn () usize,
-    FN_OGDTPTR: fn () GdtPtr,
-    FN_OIDTPTR: fn () IdtPtr,
-    FN_IU8_OVOID: fn (u8) void,
-    FN_IU8_OBOOL: fn (u8) bool,
-    FN_IU8_IFNCCNAKEDOVOID_EIDTERROR_OVOID: fn (u8, fn () callconv(.Naked) void) IdtError!void,
-    FN_IU16_OVOID: fn (u16) void,
-    FN_IU16_OU8: fn (u16) u8,
-    FN_IUSIZE_OBOOL: fn (usize) bool,
-    FN_IRTCREGISTER_OU8: fn (RtcRegister) u8,
-    FN_IIDTENTRY_OBOOL: fn (IdtEntry) bool,
-    FN_IPTRCONSTGDTPTR_OVOID: fn (*const GdtPtr) void,
-    FN_IPTRCONSTIDTPTR_OVOID: fn (*const IdtPtr) void,
-    FN_IU4_IU4_OU8: fn (u4, u4) u8,
-    FN_IU8_IU8_OU16: fn (u8, u8) u16,
-    FN_IU16_IU8_OVOID: fn (u16, u8) void,
-    FN_IU16_IU16_OVOID: fn (u16, u16) void,
-    FN_ISTATUSREGISTER_IBOOL_OU8: fn (StatusRegister, bool) u8,
-    FN_IPTRTASK_IUSIZE_OVOID: fn (*Task, usize) void,
-    FN_IPTRTASK_IPTRALLOCATOR_OVOID: fn (*Task, *Allocator) void,
-    FN_IFNOVOID_IPTRALLOCATOR_EALLOCATOR_OPTRTASK: fn (fn () void, *Allocator) Allocator.Error!*Task,
-    FN_ISTATUSREGISTER_IU8_IBOOL_OVOID: fn (StatusRegister, u8, bool) void,
-};
-
+////DataElement////
 ///
 /// The type of actions that the mocking framework can perform.
 ///
@@ -190,48 +92,7 @@ fn Mock() type {
         ///
         fn createDataElement(arg: anytype) DataElement {
             return switch (@TypeOf(arg)) {
-                bool => DataElement{ .BOOL = arg },
-                u4 => DataElement{ .U4 = arg },
-                u8 => DataElement{ .U8 = arg },
-                u16 => DataElement{ .U16 = arg },
-                u32 => DataElement{ .U32 = arg },
-                usize => DataElement{ .USIZE = arg },
-                StatusRegister => DataElement{ .STATUSREGISTER = arg },
-                RtcRegister => DataElement{ .RTCREGISTER = arg },
-                IdtPtr => DataElement{ .IDTPTR = arg },
-                *const GdtPtr => DataElement{ .PTR_CONST_GDTPTR = arg },
-                *const IdtPtr => DataElement{ .PTR_CONST_IDTPTR = arg },
-                *Task => DataElement{ .PTR_TASK = arg },
-                *Allocator => DataElement{ .PTR_ALLOCATOR = arg },
-                IdtError!void => DataElement{ .ERROR_IDTERROR_RET_VOID = arg },
-                Allocator.Error!*Task => DataElement{ .ERROR_ALLOCATOR_RET_PTRTASK = arg },
-                fn () callconv(.C) void => DataElement{ .FN_CCC_OVOID = arg },
-                fn () callconv(.Naked) void => DataElement{ .FN_CCNAKED_OVOID = arg },
-                fn () void => DataElement{ .FN_OVOID = arg },
-                fn () u16 => DataElement{ .FN_OU16 = arg },
-                fn () usize => DataElement{ .FN_OUSIZE = arg },
-                fn () GdtPtr => DataElement{ .FN_OGDTPTR = arg },
-                fn () IdtPtr => DataElement{ .FN_OIDTPTR = arg },
-                fn (u8) void => DataElement{ .FN_IU8_OVOID = arg },
-                fn (u8) bool => DataElement{ .FN_IU8_OBOOL = arg },
-                fn (u8, fn () callconv(.Naked) void) IdtError!void => DataElement{ .FN_IU8_IFNCCNAKEDOVOID_EIDTERROR_OVOID = arg },
-                fn (u16) void => DataElement{ .FN_IU16_OVOID = arg },
-                fn (u16) u8 => DataElement{ .FN_IU16_OU8 = arg },
-                fn (usize) bool => DataElement{ .FN_IUSIZE_OBOOL = arg },
-                fn (RtcRegister) u8 => DataElement{ .FN_IRTCREGISTER_OU8 = arg },
-                fn (IdtEntry) bool => DataElement{ .FN_IIDTENTRY_OBOOL = arg },
-                fn (*const GdtPtr) void => DataElement{ .FN_IPTRCONSTGDTPTR_OVOID = arg },
-                fn (*const IdtPtr) void => DataElement{ .FN_IPTRCONSTIDTPTR_OVOID = arg },
-                fn (u4, u4) u8 => DataElement{ .FN_IU4_IU4_OU8 = arg },
-                fn (u8, u8) u16 => DataElement{ .FN_IU8_IU8_OU16 = arg },
-                fn (u16, u8) void => DataElement{ .FN_IU16_IU8_OVOID = arg },
-                fn (u16, u16) void => DataElement{ .FN_IU16_IU16_OVOID = arg },
-                fn (StatusRegister, bool) u8 => DataElement{ .FN_ISTATUSREGISTER_IBOOL_OU8 = arg },
-                fn (*Task, usize) void => DataElement{ .FN_IPTRTASK_IUSIZE_OVOID = arg },
-                fn (*Task, *Allocator) void => DataElement{ .FN_IPTRTASK_IPTRALLOCATOR_OVOID = arg },
-                fn (fn () void, *Allocator) Allocator.Error!*Task => DataElement{ .FN_IFNOVOID_IPTRALLOCATOR_EALLOCATOR_OPTRTASK = arg },
-                fn (StatusRegister, u8, bool) void => DataElement{ .FN_ISTATUSREGISTER_IU8_IBOOL_OVOID = arg },
-                else => @compileError("Type not supported: " ++ @typeName(@TypeOf(arg))),
+            ////createDataElement////
             };
         }
 
@@ -246,48 +107,7 @@ fn Mock() type {
         ///
         fn getDataElementType(comptime T: type) DataElementType {
             return switch (T) {
-                bool => DataElement.BOOL,
-                u4 => DataElement.U4,
-                u8 => DataElement.U8,
-                u16 => DataElement.U16,
-                u32 => DataElement.U32,
-                usize => DataElement.USIZE,
-                StatusRegister => DataElement.STATUSREGISTER,
-                RtcRegister => DataElement.RTCREGISTER,
-                IdtPtr => DataElement.IDTPTR,
-                *const GdtPtr => DataElement.PTR_CONST_GDTPTR,
-                *const IdtPtr => DataElement.PTR_CONST_IDTPTR,
-                *Task => DataElement.PTR_TASK,
-                *Allocator => DataElement.PTR_ALLOCATOR,
-                IdtError!void => DataElement.ERROR_IDTERROR_RET_VOID,
-                Allocator.Error!*Task => DataElement.ERROR_ALLOCATOR_RET_PTRTASK,
-                fn () callconv(.C) void => DataElement.FN_CCC_OVOID,
-                fn () callconv(.Naked) void => DataElement.FN_CCNAKED_OVOID,
-                fn () void => DataElement.FN_OVOID,
-                fn () u16 => DataElement.FN_OU16,
-                fn () usize => DataElement.FN_OUSIZE,
-                fn () GdtPtr => DataElement.FN_OGDTPTR,
-                fn () IdtPtr => DataElement.FN_OIDTPTR,
-                fn (u8) void => DataElement.FN_IU8_OVOID,
-                fn (u8) bool => DataElement.FN_IU8_OBOOL,
-                fn (u8, fn () callconv(.Naked) void) IdtError!void => DataElement.FN_IU8_IFNCCNAKEDOVOID_EIDTERROR_OVOID,
-                fn (u16) void => DataElement.FN_IU16_OVOID,
-                fn (u16) u8 => DataElement.FN_IU16_OU8,
-                fn (usize) bool => DataElement.FN_IUSIZE_OBOOL,
-                fn (RtcRegister) u8 => DataElement.FN_IRTCREGISTER_OU8,
-                fn (IdtEntry) bool => DataElement.FN_IIDTENTRY_OBOOL,
-                fn (*const GdtPtr) void => DataElement.FN_IPTRCONSTGDTPTR_OVOID,
-                fn (*const IdtPtr) void => DataElement.FN_IPTRCONSTIDTPTR_OVOID,
-                fn (u4, u4) u8 => DataElement.FN_IU4_IU4_OU8,
-                fn (u8, u8) u16 => DataElement.FN_IU8_IU8_OU16,
-                fn (u16, u8) void => DataElement.FN_IU16_IU8_OVOID,
-                fn (u16, u16) void => DataElement.FN_IU16_IU16_OVOID,
-                fn (StatusRegister, bool) u8 => DataElement.FN_ISTATUSREGISTER_IBOOL_OU8,
-                fn (*Task, usize) void => DataElement.FN_IPTRTASK_IUSIZE_OVOID,
-                fn (*Task, *Allocator) void => DataElement.FN_IPTRTASK_IPTRALLOCATOR_OVOID,
-                fn (fn () void, *Allocator) Allocator.Error!*Task => DataElement.FN_IFNOVOID_IPTRALLOCATOR_EALLOCATOR_OPTRTASK,
-                fn (StatusRegister, u8, bool) void => DataElement.FN_ISTATUSREGISTER_IU8_IBOOL_OVOID,
-                else => @compileError("Type not supported: " ++ @typeName(T)),
+            ////getDataElementType////
             };
         }
 
@@ -304,48 +124,7 @@ fn Mock() type {
         ///
         fn getDataValue(comptime T: type, element: DataElement) T {
             return switch (T) {
-                bool => element.BOOL,
-                u4 => element.U4,
-                u8 => element.U8,
-                u16 => element.U16,
-                u32 => element.U32,
-                usize => element.USIZE,
-                StatusRegister => element.STATUSREGISTER,
-                RtcRegister => element.RTCREGISTER,
-                IdtPtr => element.IDTPTR,
-                *const GdtPtr => element.PTR_CONST_GDTPTR,
-                *const IdtPtr => element.PTR_CONST_IDTPTR,
-                *Task => element.PTR_TASK,
-                *Allocator => element.PTR_ALLOCATOR,
-                IdtError!void => element.ERROR_IDTERROR_RET_VOID,
-                Allocator.Error!*Task => element.ERROR_ALLOCATOR_RET_PTRTASK,
-                fn () callconv(.C) void => element.FN_CCC_OVOID,
-                fn () callconv(.Naked) void => element.FN_CCNAKED_OVOID,
-                fn () void => element.FN_OVOID,
-                fn () u16 => element.FN_OU16,
-                fn () usize => element.FN_OUSIZE,
-                fn () GdtPtr => element.FN_OGDTPTR,
-                fn () IdtPtr => element.FN_OIDTPTR,
-                fn (u8) void => element.FN_IU8_OVOID,
-                fn (u8) bool => element.FN_IU8_OBOOL,
-                fn (u8, fn () callconv(.Naked) void) IdtError!void => element.FN_IU8_IFNCCNAKEDOVOID_EIDTERROR_OVOID,
-                fn (u16) void => element.FN_IU16_OVOID,
-                fn (u16) u8 => element.FN_IU16_OU8,
-                fn (usize) bool => element.FN_IUSIZE_OBOOL,
-                fn (RtcRegister) u8 => element.FN_IRTCREGISTER_OU8,
-                fn (IdtEntry) bool => element.FN_IIDTENTRY_OBOOL,
-                fn (*const GdtPtr) void => element.FN_IPTRCONSTGDTPTR_OVOID,
-                fn (*const IdtPtr) void => element.FN_IPTRCONSTIDTPTR_OVOID,
-                fn (u4, u4) u8 => element.FN_IU4_IU4_OU8,
-                fn (u8, u8) u16 => element.FN_IU8_IU8_OU16,
-                fn (u16, u8) void => element.FN_IU16_IU8_OVOID,
-                fn (u16, u16) void => element.FN_IU16_IU16_OVOID,
-                fn (StatusRegister, bool) u8 => element.FN_ISTATUSREGISTER_IBOOL_OU8,
-                fn (*Task, usize) void => element.FN_IPTRTASK_IUSIZE_OVOID,
-                fn (*Task, *Allocator) void => element.FN_IPTRTASK_IPTRALLOCATOR_OVOID,
-                fn (fn () void, *Allocator) Allocator.Error!*Task => element.FN_IFNOVOID_IPTRALLOCATOR_EALLOCATOR_OPTRTASK,
-                fn (StatusRegister, u8, bool) void => element.FN_ISTATUSREGISTER_IU8_IBOOL_OVOID,
-                else => @compileError("Type not supported: " ++ @typeName(T)),
+            ////getDataValue////
             };
         }
 
