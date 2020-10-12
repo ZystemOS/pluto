@@ -63,9 +63,9 @@ const types = .{
 
     .{ "fn (u8) void", "FN_IU8_OVOID", "", "", "" },
     .{ "fn (u8) bool", "FN_IU8_OBOOL", "", "", "" },
-    .{ "fn (u8, fn () callconv(.Naked) void) IdtError!void", "FN_IU8_IFNCCNAKEDOVOID_EIDTERROR_OVOID", "", "", "" },
     .{ "fn (u16) void", "FN_IU16_OVOID", "", "", "" },
     .{ "fn (u16) u8", "FN_IU16_OU8", "", "", "" },
+    .{ "fn (u16) u32", "FN_IU16_OU32", "", "", "" },
     .{ "fn (usize) bool", "FN_IUSIZE_OBOOL", "", "", "" },
     .{ "fn (RtcRegister) u8", "FN_IRTCREGISTER_OU8", "", "", "" },
     .{ "fn (IdtEntry) bool", "FN_IIDTENTRY_OBOOL", "idt_mock", "", "IdtEntry" },
@@ -74,8 +74,10 @@ const types = .{
 
     .{ "fn (u4, u4) u8", "FN_IU4_IU4_OU8", "", "", "" },
     .{ "fn (u8, u8) u16", "FN_IU8_IU8_OU16", "", "", "" },
+    .{ "fn (u8, fn () callconv(.Naked) void) IdtError!void", "FN_IU8_IFNCCNAKEDOVOID_EIDTERROR_OVOID", "", "", "" },
     .{ "fn (u16, u8) void", "FN_IU16_IU8_OVOID", "", "", "" },
     .{ "fn (u16, u16) void", "FN_IU16_IU16_OVOID", "", "", "" },
+    .{ "fn (u16, u32) void", "FN_IU16_IU32_OVOID", "", "", "" },
     .{ "fn (StatusRegister, bool) u8", "FN_ISTATUSREGISTER_IBOOL_OU8", "", "", "" },
     .{ "fn (*Task, usize) void", "FN_IPTRTASK_IUSIZE_OVOID", "", "", "" },
     .{ "fn (*Task, *Allocator) void", "FN_IPTRTASK_IPTRALLOCATOR_OVOID", "", "", "" },

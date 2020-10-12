@@ -19,6 +19,7 @@ const scheduler = @import("scheduler.zig");
 const vfs = @import("filesystem/vfs.zig");
 const initrd = @import("filesystem/initrd.zig");
 const keyboard = @import("keyboard.zig");
+const Allocator = std.mem.Allocator;
 
 comptime {
     if (!is_test) {
@@ -57,6 +58,8 @@ pub fn log(
     log_root.log(level, "(" ++ @tagName(scope) ++ "): " ++ format, args);
 }
 
+var kernel_heap: heap.FreeListAllocator = undefined;
+
 export fn kmain(boot_payload: arch.BootPayload) void {
     const serial_stream = serial.init(boot_payload);
 
@@ -86,7 +89,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     if (!std.math.isPowerOfTwo(heap_size)) {
         heap_size = std.math.floorPowerOfTwo(usize, heap_size);
     }
-    var kernel_heap = heap.init(arch.VmmPayload, kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
+    kernel_heap = heap.init(arch.VmmPayload, kernel_vmm, vmm.Attributes{ .kernel = true, .writable = true, .cachable = true }, heap_size) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
     };
 
@@ -168,6 +171,14 @@ fn initStage2() noreturn {
     tty.print("{}\n\n", .{logo});
 
     tty.print("Hello Pluto from kernel :)\n", .{});
+
+    const devices = arch.getDevices(&kernel_heap.allocator) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Unable to get device list: {}\n", .{e});
+    };
+
+    for (devices) |device| {
+        device.print();
+    }
 
     switch (build_options.test_mode) {
         .Initialisation => {

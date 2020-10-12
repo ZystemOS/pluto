@@ -139,9 +139,9 @@ pub const RtcRegister = enum {
 ///
 inline fn selectRegister(reg: u8, comptime disable_nmi: bool) void {
     if (disable_nmi) {
-        arch.outb(ADDRESS, reg | NMI_BIT);
+        arch.out(ADDRESS, reg | NMI_BIT);
     } else {
-        arch.outb(ADDRESS, reg);
+        arch.out(ADDRESS, reg);
     }
 }
 
@@ -152,7 +152,7 @@ inline fn selectRegister(reg: u8, comptime disable_nmi: bool) void {
 ///     IN data: u8 - The data to write to the selected register.
 ///
 inline fn writeRegister(data: u8) void {
-    arch.outb(DATA, data);
+    arch.out(DATA, data);
 }
 
 ///
@@ -162,7 +162,7 @@ inline fn writeRegister(data: u8) void {
 ///     The value in the selected register.
 ///
 inline fn readRegister() u8 {
-    return arch.inb(DATA);
+    return arch.in(u8, DATA);
 }
 
 ///
@@ -240,7 +240,7 @@ test "selectRegister" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", .{ ADDRESS, STATUS_REGISTER_A });
+    arch.addTestParams("out", .{ ADDRESS, STATUS_REGISTER_A });
 
     const reg = STATUS_REGISTER_A;
 
@@ -251,7 +251,7 @@ test "selectRegister no NMI" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", .{ ADDRESS, STATUS_REGISTER_A | NMI_BIT });
+    arch.addTestParams("out", .{ ADDRESS, STATUS_REGISTER_A | NMI_BIT });
 
     const reg = STATUS_REGISTER_A;
 
@@ -262,7 +262,7 @@ test "writeRegister" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", .{ DATA, @as(u8, 0xAA) });
+    arch.addTestParams("out", .{ DATA, @as(u8, 0xAA) });
 
     const data = @as(u8, 0xAA);
 
@@ -273,7 +273,7 @@ test "readRegister" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("inb", .{ DATA, @as(u8, 0x55) });
+    arch.addTestParams("in", .{ DATA, @as(u8, 0x55) });
 
     const expected = @as(u8, 0x55);
     const actual = readRegister();
@@ -285,8 +285,8 @@ test "selectAndReadRegister NMI" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", .{ ADDRESS, STATUS_REGISTER_C });
-    arch.addTestParams("inb", .{ DATA, @as(u8, 0x44) });
+    arch.addTestParams("out", .{ ADDRESS, STATUS_REGISTER_C });
+    arch.addTestParams("in", .{ DATA, @as(u8, 0x44) });
     arch.addConsumeFunction("ioWait", arch.mock_ioWait);
 
     const reg = STATUS_REGISTER_C;
@@ -301,8 +301,8 @@ test "selectAndReadRegister no NMI" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", .{ ADDRESS, STATUS_REGISTER_C | NMI_BIT });
-    arch.addTestParams("inb", .{ DATA, @as(u8, 0x44) });
+    arch.addTestParams("out", .{ ADDRESS, STATUS_REGISTER_C | NMI_BIT });
+    arch.addTestParams("in", .{ DATA, @as(u8, 0x44) });
     arch.addConsumeFunction("ioWait", arch.mock_ioWait);
 
     const reg = STATUS_REGISTER_C;
@@ -317,7 +317,7 @@ test "selectAndWriteRegister NMI" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", .{ ADDRESS, STATUS_REGISTER_C, DATA, @as(u8, 0x88) });
+    arch.addTestParams("out", .{ ADDRESS, STATUS_REGISTER_C, DATA, @as(u8, 0x88) });
     arch.addConsumeFunction("ioWait", arch.mock_ioWait);
 
     const reg = STATUS_REGISTER_C;
@@ -330,7 +330,7 @@ test "selectAndWriteRegister no NMI" {
     arch.initTest();
     defer arch.freeTest();
 
-    arch.addTestParams("outb", .{ ADDRESS, STATUS_REGISTER_C | NMI_BIT, DATA, @as(u8, 0x88) });
+    arch.addTestParams("out", .{ ADDRESS, STATUS_REGISTER_C | NMI_BIT, DATA, @as(u8, 0x88) });
     arch.addConsumeFunction("ioWait", arch.mock_ioWait);
 
     const reg = STATUS_REGISTER_C;
@@ -358,8 +358,8 @@ test "readRtcRegister" {
             .CENTURY => REGISTER_CENTURY,
         };
 
-        arch.addTestParams("outb", .{ ADDRESS, r });
-        arch.addTestParams("inb", .{ DATA, @as(u8, 0x44) });
+        arch.addTestParams("out", .{ ADDRESS, r });
+        arch.addTestParams("in", .{ DATA, @as(u8, 0x44) });
 
         const expected = @as(u8, 0x44);
         const actual = readRtcRegister(reg);
@@ -383,8 +383,8 @@ test "readStatusRegister NMI" {
             .C => STATUS_REGISTER_C,
         };
 
-        arch.addTestParams("outb", .{ ADDRESS, r });
-        arch.addTestParams("inb", .{ DATA, @as(u8, 0x78) });
+        arch.addTestParams("out", .{ ADDRESS, r });
+        arch.addTestParams("in", .{ DATA, @as(u8, 0x78) });
 
         const expected = @as(u8, 0x78);
         const actual = readStatusRegister(reg, false);
@@ -408,8 +408,8 @@ test "readStatusRegister no NMI" {
             .C => STATUS_REGISTER_C,
         };
 
-        arch.addTestParams("outb", .{ ADDRESS, r | NMI_BIT });
-        arch.addTestParams("inb", .{ DATA, @as(u8, 0x78) });
+        arch.addTestParams("out", .{ ADDRESS, r | NMI_BIT });
+        arch.addTestParams("in", .{ DATA, @as(u8, 0x78) });
 
         const expected = @as(u8, 0x78);
         const actual = readStatusRegister(reg, true);
@@ -433,7 +433,7 @@ test "writeStatusRegister NMI" {
             .C => STATUS_REGISTER_C,
         };
 
-        arch.addTestParams("outb", .{ ADDRESS, r, DATA, @as(u8, 0x43) });
+        arch.addTestParams("out", .{ ADDRESS, r, DATA, @as(u8, 0x43) });
 
         const data = @as(u8, 0x43);
         writeStatusRegister(reg, data, false);
@@ -455,7 +455,7 @@ test "writeStatusRegister no NMI" {
             .C => STATUS_REGISTER_C,
         };
 
-        arch.addTestParams("outb", .{ ADDRESS, r | NMI_BIT, DATA, @as(u8, 0x43) });
+        arch.addTestParams("out", .{ ADDRESS, r | NMI_BIT, DATA, @as(u8, 0x43) });
 
         const data = @as(u8, 0x43);
         writeStatusRegister(reg, data, true);

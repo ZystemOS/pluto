@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const mem = @import("mem_mock.zig");
 const MemProfile = mem.MemProfile;
+const pci = @import("pci_mock.zig");
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
 const vmm = @import("vmm_mock.zig");
@@ -11,6 +12,8 @@ const TTY = @import("../../../src/kernel/tty.zig").TTY;
 const Keyboard = @import("../../../src/kernel/keyboard.zig").Keyboard;
 
 pub const task = @import("task_mock.zig");
+
+pub const Device = pci.PciDeviceInfo;
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
@@ -57,12 +60,12 @@ var KERNEL_VADDR_START: u32 = 0xC0100000;
 var KERNEL_VADDR_END: u32 = 0xC1100000;
 var KERNEL_ADDR_OFFSET: u32 = 0xC0000000;
 
-pub fn outb(port: u16, data: u8) void {
-    return mock_framework.performAction("outb", void, .{ port, data });
+pub fn out(port: u16, data: anytype) void {
+    return mock_framework.performAction("out", void, .{ port, data });
 }
 
-pub fn inb(port: u16) u8 {
-    return mock_framework.performAction("inb", u8, .{port});
+pub fn in(comptime Type: type, port: u16) Type {
+    return mock_framework.performAction("in", Type, .{port});
 }
 
 pub fn ioWait() void {
@@ -145,6 +148,10 @@ pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!
 
 pub fn initKeyboard(allocator: *Allocator) Allocator.Error!?*Keyboard {
     return null;
+}
+
+pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
+    return &[_]Device{};
 }
 
 pub fn init(mem_profile: *const MemProfile) void {

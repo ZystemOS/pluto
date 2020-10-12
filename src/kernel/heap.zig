@@ -9,7 +9,7 @@ const mock_path = build_options.mock_path;
 const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
 const panic = @import("panic.zig").panic;
 
-const FreeListAllocator = struct {
+pub const FreeListAllocator = struct {
     const Error = error{TooSmall};
     const Header = struct {
         size: usize,
