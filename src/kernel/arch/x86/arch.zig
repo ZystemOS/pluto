@@ -578,5 +578,5 @@ pub fn init(mem_profile: *const MemProfile) void {
 }
 
 test "" {
-    std.meta.refAllDecls(@This());
+    std.testing.refAllDecls(@This());
 }
