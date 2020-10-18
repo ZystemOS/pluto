@@ -23,7 +23,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         pub const BITMAP_FULL = std.math.maxInt(BitmapType);
 
         /// The type of an index into a bitmap entry. The smallest integer needed to represent all bit positions in the bitmap entry type
-        pub const IndexType = std.meta.IntType(false, std.math.log2(std.math.ceilPowerOfTwo(u16, std.meta.bitCount(BitmapType)) catch unreachable));
+        pub const IndexType = std.meta.IntType(.unsigned, std.math.log2(std.math.ceilPowerOfTwo(u16, std.meta.bitCount(BitmapType)) catch unreachable));
 
         bitmap: BitmapType,
         num_free_entries: BitmapType,
@@ -202,7 +202,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         pub const BITMAP_FULL = std.math.maxInt(BitmapType);
 
         /// The type of an index into a bitmap entry. The smallest integer needed to represent all bit positions in the bitmap entry type
-        pub const IndexType = std.meta.IntType(false, std.math.log2(std.math.ceilPowerOfTwo(u16, std.meta.bitCount(BitmapType)) catch unreachable));
+        pub const IndexType = std.meta.IntType(.unsigned, std.math.log2(std.math.ceilPowerOfTwo(u16, std.meta.bitCount(BitmapType)) catch unreachable));
 
         num_bitmaps: usize,
         num_entries: usize,
