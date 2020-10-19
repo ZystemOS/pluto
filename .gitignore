@@ -1,51 +1,15 @@
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+# Binaries
+**/*.elf
+**/*.bin
+**/*.o
+**/*.iso
 
-# Precompiled Headers
-*.gch
-*.pch
+# Zig ignore
+**/zig-cache/
+**/build/
+**/build-*/
+**/docgen_tmp/
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-*.initrd
-
-# Debug files
-*.dSYM/
-
-# Images
-*.iso
-*.bin
-
-# Intellij
-.idea/
-
-# VSCode
-.vscode/
-
-# Zig
-zig-cache
-
-# Build dir
-bin/*
-*.pyc
-__pycache__
+# Custom ignore
+**/mock_framework.zig
+**/*.ramdisk
