@@ -74,16 +74,16 @@ pub const FileSystem = struct {
     /// Arguments:
     ///     IN self: *const FileSystem - The filesystem in question being operated on
     ///     IN node: *const FileNode - The file being read from
-    ///     IN len: usize - The number of bytes to read from the file
+    ///     IN bytes: []u8 - The buffer to fill data from the file with
     ///
-    /// Return: []u8
-    ///     The data read as a slice of bytes. The length will be <= len, including 0 if there was no data to read
+    /// Return: usize
+    ///     The length of the actual data read. This being < bytes.len is not considered an error. It is never > bytes.len
     ///
     /// Error: Allocator.Error || Error
     ///     Allocator.Error.OutOfMemory - There wasn't enough memory to fulfill the request
     ///     Error.NotOpened - If the node provided is not one that the file system recognised as being opened.
     ///
-    const Read = fn (self: *const Self, node: *const FileNode, len: usize) (Allocator.Error || Error)![]u8;
+    const Read = fn (self: *const Self, node: *const FileNode, buffer: []u8) (Allocator.Error || Error)!usize;
 
     ///
     /// Write to an open file
@@ -93,10 +93,13 @@ pub const FileSystem = struct {
     ///     IN node: *const FileNode - The file being read from
     ///     IN bytes: []u8 - The bytes to write to the file
     ///
+    /// Return: usize
+    ///     The length of the actual data written to the file. This being < bytes.len is not considered an error. It is never > bytes.len
+    ///
     /// Error: Allocator.Error
     ///     Allocator.Error.OutOfMemory - There wasn't enough memory to fulfill the request
     ///
-    const Write = fn (self: *const Self, node: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!void;
+    const Write = fn (self: *const Self, node: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!usize;
 
     ///
     /// Open a file/dir within the filesystem. The result can then be used for write, read or close operations
@@ -153,8 +156,8 @@ pub const FileNode = struct {
     fs: *const FileSystem,
 
     /// See the documentation for FileSystem.Read
-    pub fn read(self: *const FileNode, len: usize) (Allocator.Error || Error)![]u8 {
-        return self.fs.read(self.fs, self, len);
+    pub fn read(self: *const FileNode, bytes: []u8) (Allocator.Error || Error)!usize {
+        return self.fs.read(self.fs, self, bytes);
     }
 
     /// See the documentation for FileSystem.Close
@@ -163,7 +166,7 @@ pub const FileNode = struct {
     }
 
     /// See the documentation for FileSystem.Write
-    pub fn write(self: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!void {
+    pub fn write(self: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!usize {
         return self.fs.write(self.fs, self, bytes);
     }
 };
@@ -481,18 +484,17 @@ const TestFS = struct {
         test_fs.open_files_count -= 1;
     }
 
-    fn read(fs: *const FileSystem, node: *const FileNode, len: usize) (Allocator.Error || Error)![]u8 {
+    fn read(fs: *const FileSystem, node: *const FileNode, bytes: []u8) (Allocator.Error || Error)!usize {
         var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
         // Get the tree that corresponds to the node. Cannot error as the file is already open so it does exist
         var tree = (getTreeNode(test_fs, node) catch unreachable) orelse unreachable;
-        const count = if (tree.data) |d| std.math.min(len, d.len) else 0;
+        const count = if (tree.data) |d| std.math.min(bytes.len, d.len) else 0;
         const data = if (tree.data) |d| d[0..count] else "";
-        var bytes = try test_fs.allocator.alloc(u8, count);
         std.mem.copy(u8, bytes, data);
-        return bytes;
+        return count;
     }
 
-    fn write(fs: *const FileSystem, node: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!void {
+    fn write(fs: *const FileSystem, node: *const FileNode, bytes: []const u8) (Allocator.Error || Error)!usize {
         var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
         var tree = (try getTreeNode(test_fs, node)) orelse unreachable;
         if (tree.data) |_| {
@@ -500,6 +502,7 @@ const TestFS = struct {
         }
         tree.data = try test_fs.allocator.alloc(u8, bytes.len);
         std.mem.copy(u8, tree.data.?, bytes);
+        return bytes.len;
     }
 
     fn open(fs: *const FileSystem, dir: *const DirNode, name: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*Node {
@@ -743,31 +746,31 @@ test "read" {
     var str = "test123";
     f_data.* = try std.mem.dupe(testing.allocator, u8, str);
 
+    var buffer: [64]u8 = undefined;
     {
-        var data = try test_file.read(str.len);
-        defer testing.allocator.free(data);
-        testing.expect(std.mem.eql(u8, str, data));
+        const length = try test_file.read(buffer[0..str.len]);
+        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
-        var data = try test_file.read(str.len + 1);
-        defer testing.allocator.free(data);
-        testing.expect(std.mem.eql(u8, str, data));
+        const length = try test_file.read(buffer[0 .. str.len + 1]);
+        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
-        var data = try test_file.read(str.len + 3);
-        defer testing.allocator.free(data);
-        testing.expect(std.mem.eql(u8, str, data));
+        const length = try test_file.read(buffer[0 .. str.len + 3]);
+        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
-        var data = try test_file.read(str.len - 1);
-        defer testing.allocator.free(data);
-        testing.expect(std.mem.eql(u8, str[0 .. str.len - 1], data));
+        const length = try test_file.read(buffer[0 .. str.len - 1]);
+        testing.expect(std.mem.eql(u8, str[0 .. str.len - 1], buffer[0..length]));
     }
 
-    testing.expect(std.mem.eql(u8, str[0..0], try test_file.read(0)));
+    {
+        const length = try test_file.read(buffer[0..0]);
+        testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
+    }
 }
 
 test "write" {
@@ -781,6 +784,7 @@ test "write" {
     testing.expectEqual(f_data.*, null);
 
     var str = "test123";
-    try test_file.write(str);
+    const length = try test_file.write(str);
     testing.expect(std.mem.eql(u8, str, f_data.* orelse unreachable));
+    testing.expect(length == str.len);
 }

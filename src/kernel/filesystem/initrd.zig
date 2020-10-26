@@ -75,18 +75,19 @@ pub const InitrdFS = struct {
     }
 
     /// See vfs.FileSystem.read
-    fn read(fs: *const vfs.FileSystem, node: *const vfs.FileNode, len: usize) (Allocator.Error || vfs.Error)![]u8 {
+    fn read(fs: *const vfs.FileSystem, node: *const vfs.FileNode, bytes: []u8) (Allocator.Error || vfs.Error)!usize {
         var self = @fieldParentPtr(InitrdFS, "instance", fs.instance);
         const cast_node = @ptrCast(*const vfs.Node, node);
         const file_header = self.opened_files.get(cast_node) orelse return vfs.Error.NotOpened;
-        const length = std.math.min(len, file_header.content.len);
-        const buff = try self.allocator.alloc(u8, length);
-        std.mem.copy(u8, buff, file_header.content[0..length]);
-        return buff;
+        const length = std.math.min(bytes.len, file_header.content.len);
+        std.mem.copy(u8, bytes, file_header.content[0..length]);
+        return length;
     }
 
     /// See vfs.FileSystem.write
-    fn write(fs: *const vfs.FileSystem, node: *const vfs.FileNode, bytes: []const u8) (Allocator.Error || vfs.Error)!void {}
+    fn write(fs: *const vfs.FileSystem, node: *const vfs.FileNode, bytes: []const u8) (Allocator.Error || vfs.Error)!usize {
+        return 0;
+    }
 
     /// See vfs.FileSystem.open
     fn open(fs: *const vfs.FileSystem, dir: *const vfs.DirNode, name: []const u8, flags: vfs.OpenFlags) (Allocator.Error || vfs.Error)!*vfs.Node {
@@ -460,11 +461,11 @@ test "open two of the same file" {
     expectEqual(fs.opened_files.count(), 2);
     expect(file1 != file2);
 
-    const b1 = try file1.read(128);
-    defer std.testing.allocator.free(b1);
-    const b2 = try file2.read(128);
-    defer std.testing.allocator.free(b2);
-    expectEqualSlices(u8, b1, b2);
+    var b1: [128]u8 = undefined;
+    const length1 = try file1.read(b1[0..b1.len]);
+    var b2: [128]u8 = undefined;
+    const length2 = try file2.read(b2[0..b2.len]);
+    expectEqualSlices(u8, b1[0..length1], b2[0..length2]);
 }
 
 test "close a file" {
@@ -539,33 +540,15 @@ test "read a file" {
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
     defer file1.close();
 
-    const bytes1 = try file1.read(128);
-    defer std.testing.allocator.free(bytes1);
+    var bytes1: [128]u8 = undefined;
+    const length1 = try file1.read(bytes1[0..bytes1.len]);
 
-    expectEqualSlices(u8, bytes1, "This is a test");
+    expectEqualSlices(u8, bytes1[0..length1], "This is a test");
 
-    const bytes2 = try file1.read(5);
-    defer std.testing.allocator.free(bytes2);
+    var bytes2: [5]u8 = undefined;
+    const length2 = try file1.read(bytes2[0..bytes2.len]);
 
-    expectEqualSlices(u8, bytes2, "This ");
-}
-
-test "read a file, out of memory" {
-    var fa = std.testing.FailingAllocator.init(std.testing.allocator, init_allocations + 2);
-
-    var ramdisk_bytes = try createInitrd(std.testing.allocator);
-    defer std.testing.allocator.free(ramdisk_bytes);
-
-    var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
-    var fs = try InitrdFS.init(&initrd_stream, &fa.allocator);
-    defer fs.deinit();
-
-    vfs.setRoot(fs.root_node);
-
-    var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
-    defer file1.close();
-
-    expectError(error.OutOfMemory, file1.read(1));
+    expectEqualSlices(u8, bytes2[0..length2], "This ");
 }
 
 test "read a file, invalid/not opened/crafted *const Node" {
@@ -590,7 +573,8 @@ test "read a file, invalid/not opened/crafted *const Node" {
     defer std.testing.allocator.destroy(fake_node);
     fake_node.* = .{ .File = .{ .fs = fs.fs } };
 
-    expectError(error.NotOpened, fake_node.File.read(128));
+    var unused: [1]u8 = undefined;
+    expectError(error.NotOpened, fake_node.File.read(unused[0..unused.len]));
 
     // Still only one file open
     expectEqual(fs.opened_files.count(), 1);
@@ -610,7 +594,7 @@ test "write does nothing" {
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
     defer file1.close();
 
-    try file1.write("Blah");
+    expectEqual(@as(usize, 0), try file1.write("Blah"));
 
     // Unchanged file content
     expectEqualSlices(u8, fs.opened_files.get(@ptrCast(*const vfs.Node, file1)).?.content, "This is a test");
@@ -639,20 +623,22 @@ fn rt_openReadClose(allocator: *Allocator) void {
     const f1 = vfs.openFile("/ramdisk_test1.txt", .NO_CREATION) catch |e| {
         panic(@errorReturnTrace(), "FAILURE: Failed to open file: {}\n", .{e});
     };
-    const bytes1 = f1.read(128) catch |e| {
+    var bytes1: [128]u8 = undefined;
+    const length1 = f1.read(bytes1[0..bytes1.len]) catch |e| {
         panic(@errorReturnTrace(), "FAILURE: Failed to read file: {}\n", .{e});
     };
     defer f1.close();
-    expectEqualSlicesClone(u8, bytes1, "Testing ram disk");
+    expectEqualSlicesClone(u8, bytes1[0..length1], "Testing ram disk");
 
     const f2 = vfs.openFile("/ramdisk_test2.txt", .NO_CREATION) catch |e| {
         panic(@errorReturnTrace(), "Failed to open file: {}\n", .{e});
     };
-    const bytes2 = f2.read(128) catch |e| {
+    var bytes2: [128]u8 = undefined;
+    const length2 = f2.read(bytes2[0..bytes2.len]) catch |e| {
         panic(@errorReturnTrace(), "FAILURE: Failed to read file: {}\n", .{e});
     };
     defer f2.close();
-    expectEqualSlicesClone(u8, bytes2, "Testing ram disk for the second time");
+    expectEqualSlicesClone(u8, bytes2[0..length2], "Testing ram disk for the second time");
 
     // Try open a non-existent file
     _ = vfs.openFile("/nope.txt", .NO_CREATION) catch |e| switch (e) {
