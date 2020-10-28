@@ -28,6 +28,8 @@ pub const MemProfile = struct {
     fixed_allocator: std.heap.FixedBufferAllocator,
 };
 
+pub var fixed_buffer_allocator: std.heap.FixedBufferAllocator = undefined;
+
 const FIXED_ALLOC_SIZE = 1024 * 1024;
 const ADDR_OFFSET: usize = 100;
 

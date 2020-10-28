@@ -484,8 +484,9 @@ test "parseMapEntry fails without a name" {
 }
 
 test "SymbolMap" {
-    var allocator = std.heap.page_allocator;
+    var allocator = std.testing.allocator;
     var map = SymbolMap.init(allocator);
+    defer map.deinit();
     try map.add("abc"[0..], 123);
     try map.addEntry(MapEntry{ .func_name = "def"[0..], .addr = 456 });
     try map.add("ghi"[0..], 789);
