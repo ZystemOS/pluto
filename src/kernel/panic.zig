@@ -180,7 +180,7 @@ fn parseChar(ptr: [*]const u8, end: *const u8) PanicError!u8 {
 ///
 fn parseWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
     var i: u32 = 0;
-    while (std.fmt.isWhiteSpace(try parseChar(ptr + i, end))) : (i += 1) {}
+    while (std.ascii.isSpace(try parseChar(ptr + i, end))) : (i += 1) {}
     return ptr + i;
 }
 
@@ -202,7 +202,7 @@ fn parseWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
 ///
 fn parseNonWhitespace(ptr: [*]const u8, end: *const u8) PanicError![*]const u8 {
     var i: u32 = 0;
-    while (!std.fmt.isWhiteSpace(try parseChar(ptr + i, end))) : (i += 1) {}
+    while (!std.ascii.isSpace(try parseChar(ptr + i, end))) : (i += 1) {}
     return ptr + i;
 }
 
