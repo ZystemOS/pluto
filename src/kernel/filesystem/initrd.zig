@@ -90,10 +90,10 @@ pub const InitrdFS = struct {
     }
 
     /// See vfs.FileSystem.open
-    fn open(fs: *const vfs.FileSystem, dir: *const vfs.DirNode, name: []const u8, flags: vfs.OpenFlags) (Allocator.Error || vfs.Error)!*vfs.Node {
+    fn open(fs: *const vfs.FileSystem, dir: *const vfs.DirNode, name: []const u8, flags: vfs.OpenFlags, args: vfs.OpenArgs) (Allocator.Error || vfs.Error)!*vfs.Node {
         var self = @fieldParentPtr(InitrdFS, "instance", fs.instance);
         switch (flags) {
-            .CREATE_DIR, .CREATE_FILE => return vfs.Error.InvalidFlags,
+            .CREATE_DIR, .CREATE_FILE, .CREATE_SYMLINK => return vfs.Error.InvalidFlags,
             .NO_CREATION => {
                 for (self.files) |*file| {
                     if (std.mem.eql(u8, file.name, name)) {
@@ -380,7 +380,7 @@ test "open valid file" {
     expectEqual(fs.opened_files.count(), 1);
     expectEqualSlices(u8, fs.opened_files.get(file1_node).?.name, "test1.txt");
 
-    var file3_node = try vfs.open("/test3.txt", .NO_CREATION);
+    var file3_node = try vfs.open("/test3.txt", true, .NO_CREATION, .{});
     defer file3_node.File.close();
 
     expectEqual(fs.opened_files.count(), 2);
@@ -388,7 +388,7 @@ test "open valid file" {
 
     var dir1 = try vfs.openDir("/", .NO_CREATION);
     expectEqual(&fs.root_node.Dir, dir1);
-    var file2 = &(try dir1.open("test2.txt", .NO_CREATION)).File;
+    var file2 = &(try dir1.open("test2.txt", .NO_CREATION, .{})).File;
     defer file2.close();
 
     expectEqual(fs.opened_files.count(), 3);
@@ -406,12 +406,19 @@ test "open fail with invalid flags" {
 
     expectError(error.InvalidFlags, vfs.openFile("/text10.txt", .CREATE_DIR));
     expectError(error.InvalidFlags, vfs.openFile("/text10.txt", .CREATE_FILE));
+    expectError(error.InvalidFlags, vfs.openFile("/text10.txt", .CREATE_SYMLINK));
     expectError(error.InvalidFlags, vfs.openDir("/text10.txt", .CREATE_DIR));
     expectError(error.InvalidFlags, vfs.openDir("/text10.txt", .CREATE_FILE));
+    expectError(error.InvalidFlags, vfs.openDir("/text10.txt", .CREATE_SYMLINK));
     expectError(error.InvalidFlags, vfs.openFile("/test/", .CREATE_DIR));
     expectError(error.InvalidFlags, vfs.openFile("/test/", .CREATE_FILE));
+    expectError(error.InvalidFlags, vfs.openFile("/test/", .CREATE_SYMLINK));
     expectError(error.InvalidFlags, vfs.openDir("/test/", .CREATE_DIR));
     expectError(error.InvalidFlags, vfs.openDir("/test/", .CREATE_FILE));
+    expectError(error.InvalidFlags, vfs.openDir("/test/", .CREATE_SYMLINK));
+    expectError(error.InvalidFlags, vfs.openSymlink("/test/", "", .CREATE_FILE));
+    expectError(error.InvalidFlags, vfs.openSymlink("/test/", "", .CREATE_DIR));
+    expectError(error.InvalidFlags, vfs.openSymlink("/test/", "", .CREATE_SYMLINK));
 }
 
 test "open fail with NoSuchFileOrDir" {
@@ -484,7 +491,7 @@ test "close a file" {
 
     expectEqual(fs.opened_files.count(), 1);
 
-    var file3_node = try vfs.open("/test3.txt", .NO_CREATION);
+    var file3_node = try vfs.open("/test3.txt", true, .NO_CREATION, .{});
 
     expectEqual(fs.opened_files.count(), 2);
     file1.close();
@@ -492,7 +499,7 @@ test "close a file" {
 
     var dir1 = try vfs.openDir("/", .NO_CREATION);
     expectEqual(&fs.root_node.Dir, dir1);
-    var file2 = &(try dir1.open("test2.txt", .NO_CREATION)).File;
+    var file2 = &(try dir1.open("test2.txt", .NO_CREATION, .{})).File;
     defer file2.close();
 
     expectEqual(fs.opened_files.count(), 2);
