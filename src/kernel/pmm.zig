@@ -129,8 +129,16 @@ pub fn init(mem_profile: *const MemProfile, allocator: *Allocator) void {
     }
 }
 
+///
+/// Free the internal state of the PMM. Is unusable aftwards unless re-initialised
+///
+pub fn deinit() void {
+    bitmap.deinit();
+}
+
 test "alloc" {
-    bitmap = try Bitmap(u32).init(32, std.heap.page_allocator);
+    bitmap = try Bitmap(u32).init(32, testing.allocator);
+    defer bitmap.deinit();
     comptime var addr = 0;
     comptime var i = 0;
     // Allocate all entries, making sure they succeed and return the correct addresses
@@ -148,7 +156,8 @@ test "alloc" {
 }
 
 test "free" {
-    bitmap = try Bitmap(u32).init(32, std.heap.page_allocator);
+    bitmap = try Bitmap(u32).init(32, testing.allocator);
+    defer bitmap.deinit();
     comptime var i = 0;
     // Allocate and free all entries
     inline while (i < 32) : (i += 1) {
@@ -165,7 +174,8 @@ test "free" {
 
 test "setAddr and isSet" {
     const num_entries: u32 = 32;
-    bitmap = try Bitmap(u32).init(num_entries, std.heap.page_allocator);
+    bitmap = try Bitmap(u32).init(num_entries, testing.allocator);
+    defer bitmap.deinit();
     var addr: u32 = 0;
     var i: u32 = 0;
     while (i < num_entries) : ({

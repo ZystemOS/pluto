@@ -25,6 +25,23 @@ pub const Directory = packed struct {
 
     /// The tables allocated for the directory. This is ignored by the CPU.
     tables: [ENTRIES_PER_DIRECTORY]?*Table,
+
+    /// The allocator used to allocate and free tables
+    allocator: *std.mem.Allocator,
+
+    ///
+    /// Free the state occupied by the directory. It will be unusable afterwards.
+    ///
+    /// Arguments:
+    ///     IN self: *Self - The directory to deinitialise.
+    ///
+    pub fn deinit(self: *@This()) void {
+        for (self.tables) |table| {
+            if (table) |t| {
+                self.allocator.destroy(t);
+            }
+        }
+    }
 };
 
 /// An array of table entries. Forms the second level of paging and covers a 4MB memory space.
@@ -109,7 +126,7 @@ pub const PAGE_SIZE_4MB: usize = 0x400000;
 pub const PAGE_SIZE_4KB: usize = PAGE_SIZE_4MB / 1024;
 
 /// The kernel's page directory. Should only be used to map kernel-owned code and data
-pub var kernel_directory: Directory align(@truncate(u29, PAGE_SIZE_4KB)) = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
+pub var kernel_directory: Directory align(@truncate(u29, PAGE_SIZE_4KB)) = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = &mem.fixed_buffer_allocator.allocator };
 
 ///
 /// Convert a virtual address to an index within an array of directory entries.
@@ -500,8 +517,9 @@ test "virtToTableEntryIdx" {
 }
 
 test "mapDirEntry" {
-    var allocator = std.heap.page_allocator;
-    var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
+    var allocator = std.testing.allocator;
+    var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = allocator };
+    defer dir.deinit();
     const attrs = vmm.Attributes{ .kernel = false, .writable = false, .cachable = false };
     vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(PAGE_SIZE_4MB, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, undefined);
     {
@@ -533,8 +551,8 @@ test "mapDirEntry" {
 }
 
 test "mapDirEntry returns errors correctly" {
-    var allocator = std.heap.page_allocator;
-    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = undefined };
+    var allocator = std.testing.allocator;
+    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = undefined, .allocator = allocator };
     const attrs = vmm.Attributes{ .kernel = true, .writable = true, .cachable = true };
     testing.expectError(vmm.MapperError.MisalignedVirtualAddress, mapDirEntry(&dir, 1, PAGE_SIZE_4KB + 1, 0, PAGE_SIZE_4KB, attrs, allocator));
     testing.expectError(vmm.MapperError.MisalignedPhysicalAddress, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB + 1, attrs, allocator));
@@ -544,8 +562,9 @@ test "mapDirEntry returns errors correctly" {
 }
 
 test "map and unmap" {
-    var allocator = std.heap.page_allocator;
-    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
+    var allocator = std.testing.allocator;
+    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = allocator };
+    defer dir.deinit();
     const phys_start: usize = PAGE_SIZE_4MB * 2;
     const virt_start: usize = PAGE_SIZE_4MB * 4;
     const phys_end: usize = PAGE_SIZE_4MB * 4;

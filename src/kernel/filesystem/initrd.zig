@@ -336,18 +336,13 @@ const init_allocations: usize = 10;
 test "init with files cleans memory if OutOfMemory" {
     var i: usize = 0;
     while (i < init_allocations) : (i += 1) {
-        {
-            var fa = std.testing.FailingAllocator.init(std.testing.allocator, i);
+        var fa = std.testing.FailingAllocator.init(std.testing.allocator, i);
 
-            var ramdisk_bytes = try createInitrd(std.testing.allocator);
-            defer std.testing.allocator.free(ramdisk_bytes);
+        var ramdisk_bytes = try createInitrd(std.testing.allocator);
+        defer std.testing.allocator.free(ramdisk_bytes);
 
-            var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
-            expectError(error.OutOfMemory, InitrdFS.init(&initrd_stream, &fa.allocator));
-        }
-
-        // Ensure we have freed any memory allocated
-        std.testing.expectEqual(false, std.testing.allocator_instance.detectLeaks());
+        var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
+        expectError(error.OutOfMemory, InitrdFS.init(&initrd_stream, &fa.allocator));
     }
 }
 

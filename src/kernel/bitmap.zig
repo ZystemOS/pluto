@@ -208,6 +208,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         num_entries: usize,
         bitmaps: []BitmapType,
         num_free_entries: usize,
+        allocator: *std.mem.Allocator,
 
         ///
         /// Create an instance of this bitmap type.
@@ -230,11 +231,22 @@ pub fn Bitmap(comptime BitmapType: type) type {
                 .num_entries = num_entries,
                 .bitmaps = try allocator.alloc(BitmapType, num),
                 .num_free_entries = num_entries,
+                .allocator = allocator,
             };
             for (self.bitmaps) |*bmp| {
                 bmp.* = 0;
             }
             return self;
+        }
+
+        ///
+        /// Free the memory occupied by this bitmap's internal state. It will become unusable afterwards.
+        ///
+        /// Arguments:
+        ///     IN self: *Self - The bitmap that should be deinitialised
+        ///
+        pub fn deinit(self: *Self) void {
+            self.allocator.free(self.bitmaps);
         }
 
         ///
@@ -533,7 +545,8 @@ test "Comptime setContiguous" {
 }
 
 test "setEntry" {
-    var bmp = try Bitmap(u32).init(31, std.heap.page_allocator);
+    var bmp = try Bitmap(u32).init(31, std.testing.allocator);
+    defer bmp.deinit();
     testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
 
     try bmp.setEntry(0);
@@ -554,7 +567,8 @@ test "setEntry" {
 }
 
 test "clearEntry" {
-    var bmp = try Bitmap(u32).init(32, std.heap.page_allocator);
+    var bmp = try Bitmap(u32).init(32, std.testing.allocator);
+    defer bmp.deinit();
     testing.expectEqual(@as(u32, 32), bmp.num_free_entries);
 
     try bmp.setEntry(0);
@@ -580,7 +594,8 @@ test "clearEntry" {
 }
 
 test "setFirstFree multiple bitmaps" {
-    var bmp = try Bitmap(u8).init(9, std.heap.page_allocator);
+    var bmp = try Bitmap(u8).init(9, std.testing.allocator);
+    defer bmp.deinit();
 
     // Allocate the first entry
     testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
@@ -616,7 +631,8 @@ test "setFirstFree multiple bitmaps" {
 }
 
 test "setFirstFree" {
-    var bmp = try Bitmap(u32).init(32, std.heap.page_allocator);
+    var bmp = try Bitmap(u32).init(32, std.testing.allocator);
+    defer bmp.deinit();
 
     // Allocate the first entry
     testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
@@ -637,7 +653,8 @@ test "setFirstFree" {
 }
 
 test "isSet" {
-    var bmp = try Bitmap(u32).init(32, std.heap.page_allocator);
+    var bmp = try Bitmap(u32).init(32, std.testing.allocator);
+    defer bmp.deinit();
 
     bmp.bitmaps[0] = 1;
     // Make sure that only the set entry is considered set
@@ -669,7 +686,8 @@ test "isSet" {
 }
 
 test "indexToBit" {
-    var bmp = try Bitmap(u8).init(10, std.heap.page_allocator);
+    var bmp = try Bitmap(u8).init(10, std.testing.allocator);
+    defer bmp.deinit();
     testing.expectEqual(bmp.indexToBit(0), 1);
     testing.expectEqual(bmp.indexToBit(1), 2);
     testing.expectEqual(bmp.indexToBit(2), 4);
@@ -683,7 +701,8 @@ test "indexToBit" {
 }
 
 test "setContiguous" {
-    var bmp = try Bitmap(u4).init(15, std.heap.page_allocator);
+    var bmp = try Bitmap(u4).init(15, std.testing.allocator);
+    defer bmp.deinit();
     // Test trying to set more entries than the bitmap has
     testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1), null);
     // All entries should still be free

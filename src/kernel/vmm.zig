@@ -181,6 +181,21 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         }
 
         ///
+        /// Free the internal state of the VMM. It is unusable afterwards
+        ///
+        /// Arguments:
+        ///     IN self: *Self - The VMM to deinitialise
+        ///
+        pub fn deinit(self: *Self) void {
+            self.bmp.deinit();
+            var it = self.allocations.iterator();
+            while (it.next()) |entry| {
+                entry.value.physical.deinit();
+            }
+            self.allocations.deinit();
+        }
+
+        ///
         /// Find the physical address that a given virtual address is mapped to.
         ///
         /// Arguments:
@@ -458,6 +473,7 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator
 test "virtToPhys" {
     const num_entries = 512;
     var vmm = try testInit(num_entries);
+    defer testDeinit(&vmm);
 
     const vstart = test_vaddr_start + BLOCK_SIZE;
     const vend = vstart + BLOCK_SIZE * 3;
@@ -480,6 +496,7 @@ test "virtToPhys" {
 test "physToVirt" {
     const num_entries = 512;
     var vmm = try testInit(num_entries);
+    defer testDeinit(&vmm);
 
     const vstart = test_vaddr_start + BLOCK_SIZE;
     const vend = vstart + BLOCK_SIZE * 3;
@@ -502,6 +519,7 @@ test "physToVirt" {
 test "alloc and free" {
     const num_entries = 512;
     var vmm = try testInit(num_entries);
+    defer testDeinit(&vmm);
     var allocations = test_allocations.?;
     var virtual_allocations = std.ArrayList(usize).init(std.testing.allocator);
     defer virtual_allocations.deinit();
@@ -583,6 +601,7 @@ test "alloc and free" {
 test "set" {
     const num_entries = 512;
     var vmm = try testInit(num_entries);
+    defer testDeinit(&vmm);
 
     const vstart = vmm.start + BLOCK_SIZE * 37;
     const vend = vmm.start + BLOCK_SIZE * 46;
@@ -627,7 +646,7 @@ const test_vaddr_start: usize = 0xC0000000;
 ///
 fn testInit(num_entries: u32) Allocator.Error!VirtualMemoryManager(u8) {
     if (test_allocations == null) {
-        test_allocations = try bitmap.Bitmap(u64).init(num_entries, std.heap.page_allocator);
+        test_allocations = try bitmap.Bitmap(u64).init(num_entries, std.testing.allocator);
     } else |allocations| {
         var entry: u32 = 0;
         while (entry < allocations.num_entries) : (entry += 1) {
@@ -646,8 +665,17 @@ fn testInit(num_entries: u32) Allocator.Error!VirtualMemoryManager(u8) {
         .physical_reserved = &[_]mem.Range{},
         .modules = &[_]mem.Module{},
     };
-    pmm.init(&mem_profile, std.heap.page_allocator);
-    return VirtualMemoryManager(u8).init(test_vaddr_start, test_vaddr_start + num_entries * BLOCK_SIZE, std.heap.page_allocator, test_mapper, 39);
+    pmm.init(&mem_profile, std.testing.allocator);
+    return VirtualMemoryManager(u8).init(test_vaddr_start, test_vaddr_start + num_entries * BLOCK_SIZE, std.testing.allocator, test_mapper, 39);
+}
+
+fn testDeinit(vmm: *VirtualMemoryManager(u8)) void {
+    defer vmm.deinit();
+    defer {
+        test_allocations.?.deinit();
+        test_allocations = null;
+    }
+    defer pmm.deinit();
 }
 
 ///
