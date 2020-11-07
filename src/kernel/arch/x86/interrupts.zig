@@ -32,7 +32,8 @@ export fn commonStub() callconv(.Naked) void {
         \\push  %%es
         \\push  %%fs
         \\push  %%gs
-        \\push  %%ss
+        \\mov %%cr3, %%eax
+        \\push %%eax
         \\mov   $0x10, %%ax
         \\mov   %%ax, %%ds
         \\mov   %%ax, %%es
@@ -42,13 +43,30 @@ export fn commonStub() callconv(.Naked) void {
         \\push  %%eax
         \\call  handler
         \\mov   %%eax, %%esp
-        \\pop   %%ss
+    );
+
+    // Pop off the new cr3 then check if it's the same as the previous cr3
+    // If so don't change cr3 to avoid a TLB flush
+    asm volatile (
+        \\pop   %%eax
+        \\mov   %%cr3, %%ebx
+        \\cmp   %%eax, %%ebx
+        \\je    same_cr3
+        \\mov   %%eax, %%cr3
+        \\same_cr3:
         \\pop   %%gs
         \\pop   %%fs
         \\pop   %%es
         \\pop   %%ds
         \\popa
-        \\add   $0x8, %%esp
+    );
+    // The Tss.esp0 value is the stack pointer used when an interrupt occurs. This should be the current process' stack pointer
+    // So skip the rest of the CpuState, set Tss.esp0 then un-skip the last few fields of the CpuState
+    asm volatile (
+        \\add   $0x1C, %%esp
+        \\.extern main_tss_entry
+        \\mov   %%esp, (main_tss_entry + 4)
+        \\sub   $0x14, %%esp
         \\iret
     );
 }

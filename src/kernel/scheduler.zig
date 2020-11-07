@@ -10,18 +10,20 @@ const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("panic.zig").panic;
 const task = if (is_test) @import(mock_path ++ "task_mock.zig") else @import("task.zig");
+const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
+const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
+const fs = @import("filesystem/vfs.zig");
 const Task = task.Task;
+const EntryPoint = task.EntryPoint;
 const Allocator = std.mem.Allocator;
 const TailQueue = std.TailQueue;
-
-/// The function type for the entry point.
-const EntryPointFn = fn () void;
 
 /// The default stack size of a task. Currently this is set to a page size.
 const STACK_SIZE: u32 = arch.MEMORY_BLOCK_SIZE / @sizeOf(usize);
 
 /// Pointer to the start of the main kernel stack
 extern var KERNEL_STACK_START: []u32;
+extern var KERNEL_STACK_END: []u32;
 
 /// The current task running
 var current_task: *Task = undefined;
@@ -58,6 +60,14 @@ pub fn taskSwitching(enabled: bool) void {
 ///     The new stack pointer to the next stack of the next task.
 ///
 pub fn pickNextTask(ctx: *arch.CpuState) usize {
+    switch (build_options.test_mode) {
+        .Scheduler => if (!current_task.kernel) {
+            if (!arch.runtimeTestCheckUserTaskState(ctx)) {
+                panic(null, "User task state check failed\n", .{});
+            }
+        },
+        else => {},
+    }
     // Save the stack pointer from old task
     current_task.stack_pointer = @ptrToInt(ctx);
 
@@ -92,7 +102,7 @@ pub fn pickNextTask(ctx: *arch.CpuState) usize {
 /// Create a new task and add it to the scheduling queue. No locking.
 ///
 /// Arguments:
-///     IN entry_point: EntryPointFn - The entry point into the task. This must be a function.
+///     IN entry_point: EntryPoint - The entry point into the task. This must be a function.
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - If there isn't enough memory for the a task/stack. Any memory allocated will
@@ -112,11 +122,12 @@ pub fn scheduleTask(new_task: *Task, allocator: *Allocator) Allocator.Error!void
 ///
 /// Arguments:
 ///     IN allocator: *Allocator - The allocator to use when needing to allocate memory.
+///     IN mem_profile: *const mem.MemProfile - The system's memory profile used for runtime testing.
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - There is no more memory. Any memory allocated will be freed on return.
 ///
-pub fn init(allocator: *Allocator) Allocator.Error!void {
+pub fn init(allocator: *Allocator, mem_profile: *const mem.MemProfile) Allocator.Error!void {
     // TODO: Maybe move the task init here?
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
@@ -129,17 +140,20 @@ pub fn init(allocator: *Allocator) Allocator.Error!void {
     errdefer allocator.destroy(current_task);
     // PID 0
     current_task.pid = 0;
-    current_task.stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..4096];
+    const kernel_stack_size = @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START);
+    current_task.kernel_stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..kernel_stack_size];
+    current_task.user_stack = &[_]usize{};
+    current_task.kernel = true;
     // ESP will be saved on next schedule
 
     // Run the runtime tests here
     switch (build_options.test_mode) {
-        .Scheduler => runtimeTests(allocator),
+        .Scheduler => runtimeTests(allocator, mem_profile),
         else => {},
     }
 
     // Create the idle task when there are no more tasks left
-    var idle_task = try Task.create(idle, allocator);
+    var idle_task = try Task.create(@ptrToInt(idle), true, &vmm.kernel_vmm, allocator);
     errdefer idle_task.destroy(allocator);
 
     try scheduleTask(idle_task, allocator);
@@ -154,20 +168,20 @@ fn test_fn2() void {}
 
 var test_pid_counter: u7 = 1;
 
-fn task_create(entry_point: EntryPointFn, allocator: *Allocator) Allocator.Error!*Task {
+fn createTestTask(entry_point: EntryPoint, allocator: *Allocator, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(u8)) Allocator.Error!*Task {
     var t = try allocator.create(Task);
     errdefer allocator.destroy(t);
     t.pid = test_pid_counter;
     // Just alloc something
-    t.stack = try allocator.alloc(u32, 1);
+    t.kernel_stack = try allocator.alloc(u32, 1);
     t.stack_pointer = 0;
     test_pid_counter += 1;
     return t;
 }
 
-fn task_destroy(self: *Task, allocator: *Allocator) void {
-    if (@ptrToInt(self.stack.ptr) != @ptrToInt(&KERNEL_STACK_START)) {
-        allocator.free(self.stack);
+fn destroyTestTask(self: *Task, allocator: *Allocator) void {
+    if (@ptrToInt(self.kernel_stack.ptr) != @ptrToInt(&KERNEL_STACK_START)) {
+        allocator.free(self.kernel_stack);
     }
     allocator.destroy(self);
 }
@@ -176,9 +190,9 @@ test "pickNextTask" {
     task.initTest();
     defer task.freeTest();
 
-    task.addConsumeFunction("Task.create", task_create);
-    task.addConsumeFunction("Task.create", task_create);
-    task.addRepeatFunction("Task.destroy", task_destroy);
+    task.addConsumeFunction("Task.create", createTestTask);
+    task.addConsumeFunction("Task.create", createTestTask);
+    task.addRepeatFunction("Task.destroy", destroyTestTask);
 
     var ctx: arch.CpuState = std.mem.zeroes(arch.CpuState);
 
@@ -189,15 +203,15 @@ test "pickNextTask" {
     current_task = try allocator.create(Task);
     defer allocator.destroy(current_task);
     current_task.pid = 0;
-    current_task.stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..4096];
+    current_task.kernel_stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..4096];
     current_task.stack_pointer = @ptrToInt(&KERNEL_STACK_START);
 
     // Create two tasks and schedule them
-    var test_fn1_task = try Task.create(test_fn1, allocator);
+    var test_fn1_task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator);
     defer test_fn1_task.destroy(allocator);
     try scheduleTask(test_fn1_task, allocator);
 
-    var test_fn2_task = try Task.create(test_fn2, allocator);
+    var test_fn2_task = try Task.create(@ptrToInt(test_fn2), true, undefined, allocator);
     defer test_fn2_task.destroy(allocator);
     try scheduleTask(test_fn2_task, allocator);
 
@@ -239,8 +253,8 @@ test "createNewTask add new task" {
     task.initTest();
     defer task.freeTest();
 
-    task.addConsumeFunction("Task.create", task_create);
-    task.addConsumeFunction("Task.destroy", task_destroy);
+    task.addConsumeFunction("Task.create", createTestTask);
+    task.addConsumeFunction("Task.destroy", destroyTestTask);
 
     // Set the global allocator
     var allocator = std.testing.allocator;
@@ -248,7 +262,7 @@ test "createNewTask add new task" {
     // Init the task list
     tasks = TailQueue(*Task){};
 
-    var test_fn1_task = try Task.create(test_fn1, allocator);
+    var test_fn1_task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator);
     defer test_fn1_task.destroy(allocator);
     try scheduleTask(test_fn1_task, allocator);
 
@@ -262,15 +276,15 @@ test "init" {
     task.initTest();
     defer task.freeTest();
 
-    task.addConsumeFunction("Task.create", task_create);
-    task.addRepeatFunction("Task.destroy", task_destroy);
+    task.addConsumeFunction("Task.create", createTestTask);
+    task.addRepeatFunction("Task.destroy", destroyTestTask);
 
     var allocator = std.testing.allocator;
 
-    try init(allocator);
+    try init(allocator, undefined);
 
     expectEqual(current_task.pid, 0);
-    expectEqual(current_task.stack, @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..4096]);
+    expectEqual(current_task.kernel_stack, @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0 .. @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START)]);
 
     expectEqual(tasks.len, 1);
 
@@ -308,7 +322,7 @@ fn rt_variable_preserved(allocator: *Allocator) void {
     defer allocator.destroy(is_set);
     is_set.* = true;
 
-    var test_task = Task.create(task_function, allocator) catch unreachable;
+    var test_task = Task.create(@ptrToInt(task_function), true, undefined, allocator) catch unreachable;
     scheduleTask(test_task, allocator) catch unreachable;
     // TODO: Need to add the ability to remove tasks
 
@@ -349,13 +363,56 @@ fn rt_variable_preserved(allocator: *Allocator) void {
 }
 
 ///
+/// Test the initialisation and running of a task running in user mode
+///
+/// Arguments:
+///     IN allocator: *std.mem.Allocator - The allocator to use when intialising the task
+///     IN mem_profile: mem.MemProfile - The system's memory profile. Determines the end address of the user task's VMM.
+///
+fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void {
+    // 1. Create user VMM
+    var task_vmm = allocator.create(vmm.VirtualMemoryManager(arch.VmmPayload)) catch |e| {
+        panic(@errorReturnTrace(), "Failed to allocate user task VMM: {}\n", .{e});
+    };
+    task_vmm.* = vmm.VirtualMemoryManager(arch.VmmPayload).init(0, @ptrToInt(mem_profile.vaddr_start), allocator, arch.VMM_MAPPER, undefined) catch unreachable;
+    // 2. Create user task. The code will be loaded at address 0
+    var user_task = task.Task.create(0, false, task_vmm, allocator) catch |e| {
+        panic(@errorReturnTrace(), "Failed to create user task: {}\n", .{e});
+    };
+    // 3. Read the user program file from the filesystem
+    const user_program_file = fs.openFile("/user_program", .NO_CREATION) catch |e| {
+        panic(@errorReturnTrace(), "Failed to open /user_program: {}\n", .{e});
+    };
+    defer user_program_file.close();
+    var code: [1024]u8 = undefined;
+    const code_len = user_program_file.read(code[0..1024]) catch |e| {
+        panic(@errorReturnTrace(), "Failed to read user program file: {}\n", .{e});
+    };
+    // 4. Allocate space in the vmm for the user_program
+    const code_start = task_vmm.alloc(std.mem.alignForward(code_len, vmm.BLOCK_SIZE) / vmm.BLOCK_SIZE, .{ .kernel = false, .writable = true, .cachable = true }) catch |e| {
+        panic(@errorReturnTrace(), "Failed to allocate VMM memory for user program code: {}\n", .{e});
+    } orelse panic(null, "User task VMM didn't allocate space for the user program\n", .{});
+    if (code_start != 0) panic(null, "User program start address was {} instead of 0\n", .{code_start});
+    // 5. Copy user_program code over
+    vmm.kernel_vmm.copyDataToVMM(task_vmm, code[0..code_len], code_start) catch |e| {
+        panic(@errorReturnTrace(), "Failed to copy user code: {}\n", .{e});
+    };
+    // 6. Schedule it
+    scheduleTask(user_task, allocator) catch |e| {
+        panic(@errorReturnTrace(), "Failed to schedule the user task: {}\n", .{e});
+    };
+}
+
+///
 /// The scheduler runtime tests that will test the scheduling functionality.
 ///
 /// Arguments:
 ///     IN allocator: *Allocator - The allocator to use when needing to allocate memory.
+///     IN mem_profile: *const mem.MemProfile - The system's memory profile. Used to set up user task VMMs.
 ///
-fn runtimeTests(allocator: *Allocator) void {
+fn runtimeTests(allocator: *Allocator, mem_profile: *const mem.MemProfile) void {
     arch.enableInterrupts();
+    rt_user_task(allocator, mem_profile);
     rt_variable_preserved(allocator);
     while (true) {}
 }

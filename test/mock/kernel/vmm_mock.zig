@@ -3,6 +3,7 @@ const bitmap = @import("../../../src/kernel/bitmap.zig");
 const vmm = @import("../../../src/kernel/vmm.zig");
 const arch = @import("arch_mock.zig");
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 pub const VmmError = error{
     /// A memory region expected to be allocated wasn't
@@ -45,9 +46,11 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         pub fn free(self: *Self, vaddr: usize) (bitmap.Bitmap(u32).BitmapError || VmmError)!void {
             return VmmError.NotAllocated;
         }
+
+        pub fn copyDataToVMM(self: *Self, to: *const Self, data: []const u8, dest: usize) (bitmap.Bitmap(usize).BitmapError || VmmError || Allocator.Error)!void {}
     };
 }
 
-pub fn init(mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) std.mem.Allocator.Error!VirtualMemoryManager(arch.VmmPayload) {
+pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator.Error!*VirtualMemoryManager(arch.VmmPayload) {
     return std.mem.Allocator.Error.OutOfMemory;
 }

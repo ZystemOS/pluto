@@ -11,7 +11,7 @@ const Serial = @import("../../../src/kernel/serial.zig").Serial;
 const TTY = @import("../../../src/kernel/tty.zig").TTY;
 const Keyboard = @import("../../../src/kernel/keyboard.zig").Keyboard;
 
-pub const task = @import("task_mock.zig");
+pub const task = @import("../../../src/kernel/task.zig");
 
 pub const Device = pci.PciDeviceInfo;
 
@@ -141,10 +141,7 @@ pub fn initMem(payload: BootPayload) Allocator.Error!mem.MemProfile {
     };
 }
 
-pub fn initTaskStack(entry_point: usize, allocator: *Allocator) Allocator.Error!struct { stack: []u32, pointer: usize } {
-    const ret = .{ .stack = &([_]u32{}), .pointer = 0 };
-    return ret;
-}
+pub fn initTask(t: *Task, entry_point: usize, allocator: *Allocator) Allocator.Error!void {}
 
 pub fn initKeyboard(allocator: *Allocator) Allocator.Error!?*Keyboard {
     return null;

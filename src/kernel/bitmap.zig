@@ -240,6 +240,29 @@ pub fn Bitmap(comptime BitmapType: type) type {
         }
 
         ///
+        /// Clone this bitmap.
+        ///
+        /// Arguments:
+        ///     IN self: *Self - The bitmap to clone.
+        ///
+        /// Return: Self
+        ///     The cloned bitmap
+        ///
+        /// Error: std.mem.Allocator.Error
+        ///     OutOfMemory: There isn't enough memory available to allocate the required number of BitmapType.
+        ///
+        pub fn clone(self: *const Self) std.mem.Allocator.Error!Self {
+            var copy = try init(self.num_entries, self.allocator);
+            var i: usize = 0;
+            while (i < copy.num_entries) : (i += 1) {
+                if (self.isSet(i) catch unreachable) {
+                    copy.setEntry(i) catch unreachable;
+                }
+            }
+            return copy;
+        }
+
+        ///
         /// Free the memory occupied by this bitmap's internal state. It will become unusable afterwards.
         ///
         /// Arguments:

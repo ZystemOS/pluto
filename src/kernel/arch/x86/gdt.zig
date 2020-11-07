@@ -358,7 +358,7 @@ var gdt_ptr: GdtPtr = GdtPtr{
 };
 
 /// The main task state segment entry.
-var main_tss_entry: Tss = init: {
+pub var main_tss_entry: Tss = init: {
     var tss_temp = std.mem.zeroes(Tss);
     tss_temp.ss0 = KERNEL_DATA_OFFSET;
     tss_temp.io_permissions_base_offset = @sizeOf(Tss);
