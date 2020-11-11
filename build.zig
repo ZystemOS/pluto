@@ -211,7 +211,13 @@ const Fat32BuilderStep = struct {
     ///
     fn make(step: *Step) (error{EndOfStream} || File.OpenError || File.ReadError || File.WriteError || File.SeekError || Fat32.Error)!void {
         const self = @fieldParentPtr(Fat32BuilderStep, "step", step);
-        try Fat32.make(self.options, self.out_file_path);
+        // Open the out file
+        const image = try std.fs.cwd().createFile(self.out_file_path, .{ .read = true });
+
+        // If there was an error, delete the image as this will be invalid
+        errdefer (std.fs.cwd().deleteFile(self.out_file_path) catch unreachable);
+        defer image.close();
+        try Fat32.make(self.options, image);
     }
 
     ///
