@@ -191,8 +191,8 @@ pub const Fat32 = struct {
         InvalidOptionValue,
     };
 
-    /// The logger function for printing errors when creating a FAT32 image.
-    const logger = std.log.scoped(.mkfat32);
+    /// The log function for printing errors when creating a FAT32 image.
+    const log = std.log.scoped(.mkfat32);
 
     /// The bootloader code for the FAT32 boot sector.
     const bootsector_boot_code = [512]u8{
@@ -495,13 +495,13 @@ pub const Fat32 = struct {
     fn createFATHeader(options: Options) Error!Header {
         // 512 is the smallest sector size for FAT32
         if (options.sector_size < 512 or options.sector_size > 4096 or options.sector_size % 512 != 0) {
-            logger.err("Bytes per sector is invalid. Must be greater then 512 and a multiple of 512. Found: {}", .{options.sector_size});
+            log.err("Bytes per sector is invalid. Must be greater then 512 and a multiple of 512. Found: {}", .{options.sector_size});
             return Error.InvalidOptionValue;
         }
 
         // Valid clusters are 1, 2, 4, 8, 16, 32, 64 and 128
         if (options.cluster_size < 0 or options.cluster_size > 128 or !std.math.isPowerOfTwo(options.cluster_size)) {
-            logger.err("Sectors per cluster is invalid. Must be less then 32 and a power of 2. Found: {}", .{options.cluster_size});
+            log.err("Sectors per cluster is invalid. Must be less then 32 and a power of 2. Found: {}", .{options.cluster_size});
             return Error.InvalidOptionValue;
         }
 
@@ -513,7 +513,7 @@ pub const Fat32 = struct {
         // +1 for the root director sector,                                                      2 TB
         // FAT count for FAT32 is always 2
         if (image_size < ((getReservedSectors() + 2 + 1) * options.sector_size) or image_size >= 2 * 1024 * 1024 * 1024 * 1024) {
-            logger.err("Image size is invalid. Must be greater then 17919 (~18KB). Found: {}", .{image_size});
+            log.err("Image size is invalid. Must be greater then 17919 (~18KB). Found: {}", .{image_size});
             return Error.InvalidOptionValue;
         }
 

@@ -1,5 +1,5 @@
 const std = @import("std");
-const logger = std.log.scoped(.kmain);
+const kmain_log = std.log.scoped(.kmain);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
@@ -79,9 +79,9 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
     };
 
-    logger.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+    kmain_log.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
     arch.init(&mem_profile);
-    logger.info("Arch init done\n", .{});
+    kmain_log.info("Arch init done\n", .{});
 
     // The VMM runtime tests can't happen until the architecture has initialised itself
     switch (build_options.test_mode) {
@@ -137,12 +137,12 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     };
 
     // Initialisation is finished, now does other stuff
-    logger.info("Init\n", .{});
+    kmain_log.info("Init\n", .{});
 
     // Main initialisation finished so can enable interrupts
     arch.enableInterrupts();
 
-    logger.info("Creating init2\n", .{});
+    kmain_log.info("Creating init2\n", .{});
 
     // Create a init2 task
     var stage2_task = task.Task.create(@ptrToInt(initStage2), true, kernel_vmm, &kernel_heap.allocator) catch |e| {
@@ -185,7 +185,7 @@ fn initStage2() noreturn {
 
     switch (build_options.test_mode) {
         .Initialisation => {
-            logger.info("SUCCESS\n", .{});
+            kmain_log.info("SUCCESS\n", .{});
         },
         else => {},
     }
