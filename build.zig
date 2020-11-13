@@ -1,5 +1,5 @@
 const std = @import("std");
-const logger = std.log.scoped(.builder);
+const log = std.log.scoped(.builder);
 const builtin = @import("builtin");
 const rt = @import("test/runtime_test.zig");
 const RuntimeStep = rt.RuntimeStep;

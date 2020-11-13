@@ -6,7 +6,7 @@ const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const logger = std.log.scoped(.pci);
+const log = std.log.scoped(.pci);
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
 
 /// The port address for selecting a 32bit register in the PCI configuration space.
@@ -301,7 +301,7 @@ pub const PciDeviceInfo = struct {
     }
 
     pub fn print(device: arch.Device) void {
-        logger.info("BUS: 0x{X}, DEV: 0x{X}, FUN: 0x{X}, VID: 0x{X}, DID: 0x{X}, SC: 0x{X}, CC: 0x{X}\n", .{
+        log.info("BUS: 0x{X}, DEV: 0x{X}, FUN: 0x{X}, VID: 0x{X}, DID: 0x{X}, SC: 0x{X}, CC: 0x{X}\n", .{
             device.pci_device.bus,
             device.pci_device.device,
             device.function,
