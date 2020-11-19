@@ -4,6 +4,8 @@ const TailQueue = std.TailQueue;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
+pub const Handle = usize;
+
 /// Flags specifying what to do when opening a file or directory
 pub const OpenFlags = enum {
     /// Create a directory if it doesn't exist
