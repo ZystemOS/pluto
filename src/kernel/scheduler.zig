@@ -394,7 +394,7 @@ fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void 
     } orelse panic(null, "User task VMM didn't allocate space for the user program\n", .{});
     if (code_start != 0) panic(null, "User program start address was {} instead of 0\n", .{code_start});
     // 5. Copy user_program code over
-    vmm.kernel_vmm.copyDataToVMM(task_vmm, code[0..code_len], code_start) catch |e| {
+    vmm.kernel_vmm.copyData(task_vmm, code[0..code_len], code_start, true) catch |e| {
         panic(@errorReturnTrace(), "Failed to copy user code: {}\n", .{e});
     };
     // 6. Schedule it
