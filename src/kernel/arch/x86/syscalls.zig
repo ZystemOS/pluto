@@ -33,19 +33,12 @@ comptime {
 /// The array of registered syscalls
 var handlers: [NUM_HANDLERS]?Handler = [_]?Handler{null} ** NUM_HANDLERS;
 
-///
-/// Returns true if the syscall is valid, else false.
-/// A syscall is valid if it's less than NUM_HANDLERS.
-///
-/// Arguments:
-///     IN syscall: u32 - The syscall to check
-///
-/// Return: bool
-///     Whether the syscall number is valid.
-///
-pub fn isValidSyscall(syscall: u32) bool {
-    return syscall < NUM_HANDLERS;
+comptime {
+    std.debug.assert(@typeInfo(Syscall).Enum.fields.len <= NUM_HANDLERS);
 }
+
+/// The array of registered syscalls
+var handlers: [NUM_HANDLERS]?SyscallHandler = [_]?SyscallHandler{null} ** NUM_HANDLERS;
 
 ///
 /// Handle a syscall. Gets the syscall number from eax within the context and calls the registered
@@ -63,7 +56,7 @@ pub fn isValidSyscall(syscall: u32) bool {
 fn handle(ctx: *arch.CpuState) usize {
     // The syscall number is put in eax
     const syscall = ctx.eax;
-    if (isValidSyscall(syscall)) {
+    if (syscall < NUM_HANDLERS) {
         if (handlers[syscall]) |handler| {
             const result = handler(ctx, syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
             if (result) |res| {
