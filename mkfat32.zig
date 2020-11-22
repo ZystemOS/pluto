@@ -231,6 +231,29 @@ pub const Fat32 = struct {
     };
 
     ///
+    /// A convenient function for returning the error types for reading, writing and seeking a stream.
+    ///
+    /// Argument:
+    ///     IN comptime StreamType: type - The stream to get the error set from.
+    ///
+    /// Return: type
+    ///     The Error set for reading, writing and seeking the stream.
+    ///
+    fn ErrorSet(comptime StreamType: type) type {
+        const WriteError = switch (@typeInfo(StreamType)) {
+            .Pointer => |p| p.child.WriteError,
+            else => StreamType.WriteError,
+        };
+
+        const SeekError = switch (@typeInfo(StreamType)) {
+            .Pointer => |p| p.child.SeekError,
+            else => StreamType.SeekError,
+        };
+
+        return WriteError || SeekError;
+    }
+
+    ///
     /// Get the number of reserved sectors. The number of reserved sectors doesn't have to be 32,
     /// but this is a commonly used value.
     ///
@@ -310,7 +333,7 @@ pub const Fat32 = struct {
     }
 
     ///
-    /// Get the default image size: 34090496 (~32.5KB). This is the recommended minimum image size
+    /// Get the default image size: 34090496 (~32.5MB). This is the recommended minimum image size
     /// for FAT32. (Valid cluster values + (sectors per FAT * 2) + reserved sectors) * bytes per sector.
     ///
     /// Return: u32
@@ -363,7 +386,7 @@ pub const Fat32 = struct {
     ///     @TypeOf(stream).WriteError - If there is an error when writing. See the relevant error for the stream.
     ///     @TypeOf(stream).SeekError  - If there is an error when seeking. See the relevant error for the stream.
     ///
-    fn writeFSInfo(stream: anytype, fat32_header: Header, free_cluster_num: u32, next_free_cluster: u32) (@TypeOf(stream).WriteError || @TypeOf(stream).SeekError)!void {
+    fn writeFSInfo(stream: anytype, fat32_header: Header, free_cluster_num: u32, next_free_cluster: u32) ErrorSet(@TypeOf(stream))!void {
         const seekable_stream = stream.seekableStream();
         const writer = stream.writer();
 
@@ -414,7 +437,7 @@ pub const Fat32 = struct {
     ///     @TypeOf(stream).WriteError - If there is an error when writing. See the relevant error for the stream.
     ///     @TypeOf(stream).SeekError  - If there is an error when seeking. See the relevant error for the stream.
     ///
-    fn writeFAT(stream: anytype, fat32_header: Header) (@TypeOf(stream).WriteError || @TypeOf(stream).SeekError)!void {
+    fn writeFAT(stream: anytype, fat32_header: Header) ErrorSet(@TypeOf(stream))!void {
         const seekable_stream = stream.seekableStream();
         const writer = stream.writer();
 
@@ -448,7 +471,7 @@ pub const Fat32 = struct {
     ///     @TypeOf(stream).WriteError - If there is an error when writing. See the relevant error for the stream.
     ///     @TypeOf(stream).SeekError  - If there is an error when seeking. See the relevant error for the stream.
     ///
-    fn writeBootSector(stream: anytype, fat32_header: Header) (@TypeOf(stream).WriteError || @TypeOf(stream).SeekError)!void {
+    fn writeBootSector(stream: anytype, fat32_header: Header) ErrorSet(@TypeOf(stream))!void {
         const seekable_stream = stream.seekableStream();
         const writer = stream.writer();
 
@@ -549,7 +572,7 @@ pub const Fat32 = struct {
     ///     Error.TooLarge                   - The stream size is too small. < 17.5KB.
     ///     Error.TooSmall                   - The stream size is to large. > 2TB.
     ///
-    pub fn make(options: Options, stream: anytype) (@TypeOf(stream).WriteError || @TypeOf(stream).SeekError || Error)!void {
+    pub fn make(options: Options, stream: anytype) (ErrorSet(@TypeOf(stream)) || Error)!void {
         // First set up the header
         const fat32_header = try Fat32.createFATHeader(options);
         // Get the total image size again. As the above has a check for the size, we don't need one here again

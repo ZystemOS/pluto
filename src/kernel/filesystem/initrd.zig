@@ -42,7 +42,7 @@ pub const InitrdFS = struct {
     /// The underlying file system
     fs: *vfs.FileSystem,
 
-    /// The allocator used for allocating memory for opening and reading.
+    /// The allocator used for allocating memory for opening files.
     allocator: *Allocator,
 
     /// The list of files in the ram disk. These will be pointers into the raw ramdisk to save on
