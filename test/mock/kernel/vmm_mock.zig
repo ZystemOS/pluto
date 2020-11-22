@@ -47,7 +47,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             return VmmError.NotAllocated;
         }
 
-        pub fn copyDataToVMM(self: *Self, to: *const Self, data: []const u8, dest: usize) (bitmap.Bitmap(usize).BitmapError || VmmError || Allocator.Error)!void {}
+        pub fn copyData(self: *Self, other: *Self, data: []const u8, dest: usize, from_self: bool) (bitmap.Bitmap(usize).BitmapError || VmmError || Allocator.Error)!void {}
     };
 }
 
