@@ -26,7 +26,7 @@ extern var KERNEL_STACK_START: []u32;
 extern var KERNEL_STACK_END: []u32;
 
 /// The current task running
-var current_task: *Task = undefined;
+pub var current_task: *Task = undefined;
 
 /// Array list of all runnable tasks
 var tasks: TailQueue(*Task) = undefined;
