@@ -20,6 +20,10 @@ extern var KERNEL_STACK_START: *u32;
 /// The number of vfs handles that a process can have. This is arbitrarily set to 65535
 pub const VFS_HANDLES_PER_PROCESS = std.math.maxInt(u16);
 
+comptime {
+    std.debug.assert(VFS_HANDLES_PER_PROCESS < std.math.maxInt(vfs.Handle));
+}
+
 /// The function type for the entry point.
 pub const EntryPoint = usize;
 
