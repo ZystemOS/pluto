@@ -604,7 +604,7 @@ pub const FreeListAllocator = struct {
 pub fn init(comptime vmm_payload: type, heap_vmm: *vmm.VirtualMemoryManager(vmm_payload), attributes: vmm.Attributes, heap_size: usize) (FreeListAllocator.Error || Allocator.Error)!FreeListAllocator {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
-    var heap_start = (try heap_vmm.alloc(heap_size / vmm.BLOCK_SIZE, attributes)) orelse panic(null, "Not enough contiguous virtual memory blocks to allocate to kernel heap\n", .{});
+    var heap_start = (try heap_vmm.alloc(heap_size / vmm.BLOCK_SIZE, null, attributes)) orelse panic(null, "Not enough contiguous virtual memory blocks to allocate to kernel heap\n", .{});
     // This free call cannot error as it is guaranteed to have been allocated above
     errdefer heap_vmm.free(heap_start) catch unreachable;
     return try FreeListAllocator.init(heap_start, heap_size);

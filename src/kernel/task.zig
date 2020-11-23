@@ -7,9 +7,14 @@ const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const panic = @import("panic.zig").panic;
-const ComptimeBitmap = @import("bitmap.zig").ComptimeBitmap;
 const vmm = @import("vmm.zig");
+const pmm = @import("pmm.zig");
+const mem = @import("mem.zig");
+const elf = @import("elf.zig");
+const bitmap = @import("bitmap.zig");
+const ComptimeBitmap = bitmap.ComptimeBitmap;
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.task);
 
 /// The kernels main stack start as this is used to check for if the task being destroyed is this stack
 /// as we cannot deallocate this.
@@ -96,6 +101,38 @@ pub const Task = struct {
 
         try arch.initTask(task, entry_point, allocator);
 
+        return task;
+    }
+
+    pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: *Allocator) (bitmap.Bitmap(usize).BitmapError || vmm.VmmError || Allocator.Error)!*Task {
+        const task = try create(program_elf.header.entry_address, kernel, task_vmm, allocator);
+        errdefer task.destroy(allocator);
+
+        // Iterate over sections
+        var i: usize = 0;
+        errdefer {
+            // Free the previously allocated addresses
+            for (program_elf.section_headers) |header, j| {
+                if (j >= i)
+                    break;
+                if ((header.flags & elf.SECTION_ALLOCATABLE) != 0)
+                    task_vmm.free(header.virtual_address) catch |e| panic(null, "VMM failed to clean up a previously-allocated address after an error: {}\n", .{e});
+            }
+        }
+        while (i < program_elf.section_headers.len) : (i += 1) {
+            const header = program_elf.section_headers[i];
+            if ((header.flags & elf.SECTION_ALLOCATABLE) == 0) {
+                continue;
+            }
+            // If it is loadable then allocate it at its virtual address
+            const attrs = vmm.Attributes{ .kernel = kernel, .writable = (header.flags & elf.SECTION_WRITABLE) != 0, .cachable = true };
+            const vmm_blocks = std.mem.alignForward(header.size, vmm.BLOCK_SIZE) / vmm.BLOCK_SIZE;
+            const vaddr_opt = try task_vmm.alloc(vmm_blocks, header.virtual_address, attrs);
+            const vaddr = vaddr_opt orelse return if (try task_vmm.isSet(header.virtual_address)) error.AlreadyAllocated else error.OutOfBounds;
+            errdefer task_vmm.free(vaddr) catch |e| panic(@errorReturnTrace(), "Failed to free VMM memory in createFromElf: {}\n", .{e});
+            // Copy it into memory
+            try vmm.kernel_vmm.copyData(task_vmm, true, program_elf.section_data[i].?, vaddr);
+        }
         return task;
     }
 
@@ -253,4 +290,63 @@ test "allocatePid and freePid" {
     }
 
     expectEqual(all_pids.bitmap, 0);
+}
+
+test "createFromElf" {
+    var allocator = std.testing.allocator;
+    var master_vmm = try vmm.testInit(32);
+    defer vmm.testDeinit(&master_vmm);
+
+    const code_address = 0;
+    const elf_data = try elf.testInitData(allocator, "abc123", "strings", .Executable, code_address, 0, elf.SECTION_ALLOCATABLE, 0, code_address, 0);
+    defer allocator.free(elf_data);
+    var the_elf = try elf.Elf.init(elf_data, builtin.arch, std.testing.allocator);
+    defer the_elf.deinit();
+
+    var the_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 10000, std.testing.allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
+    defer the_vmm.deinit();
+    const task = try Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator);
+    defer task.destroy(allocator);
+
+    std.testing.expectEqual(task.pid, 0);
+    std.testing.expectEqual(task.user_stack.len, 0);
+    std.testing.expectEqual(task.kernel_stack.len, STACK_SIZE);
+}
+
+test "createFromElf clean-up" {
+    var allocator = std.testing.allocator;
+    var master_vmm = try vmm.testInit(32);
+    defer vmm.testDeinit(&master_vmm);
+
+    const code_address = 0;
+    const elf_data = try elf.testInitData(allocator, "abc123", "strings", .Executable, code_address, 0, elf.SECTION_ALLOCATABLE, 0, code_address, 0);
+    defer allocator.free(elf_data);
+    var the_elf = try elf.Elf.init(elf_data, builtin.arch, std.testing.allocator);
+    defer the_elf.deinit();
+
+    var the_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 10000, std.testing.allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
+    defer the_vmm.deinit();
+    const task = try Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator);
+    defer task.destroy(allocator);
+
+    // Test clean-up
+    // Test OutOfMemory
+    var allocator2 = &std.testing.FailingAllocator.init(allocator, 0).allocator;
+    std.testing.expectError(std.mem.Allocator.Error.OutOfMemory, Task.createFromElf(the_elf, true, &the_vmm, allocator2));
+    std.testing.expectEqual(all_pids.num_free_entries, PidBitmap.NUM_ENTRIES - 1);
+    // Test AlreadyAllocated
+    std.testing.expectError(error.AlreadyAllocated, Task.createFromElf(the_elf, true, &the_vmm, allocator));
+    // Test OutOfBounds
+    the_elf.section_headers[0].virtual_address = the_vmm.end + 1;
+    std.testing.expectError(error.OutOfBounds, Task.createFromElf(the_elf, true, &the_vmm, allocator));
+
+    // Test errdefer clean-up by fillng up all but one block in the VMM so allocating the last section fails
+    // The allocation for the first section should be cleaned up in case of an error
+    const available_address = (try the_vmm.alloc(1, null, .{ .writable = false, .kernel = false, .cachable = false })) orelse unreachable;
+    the_elf.section_headers[0].virtual_address = available_address;
+    _ = try the_vmm.alloc(the_vmm.bmp.num_free_entries, null, .{ .kernel = false, .writable = false, .cachable = false });
+    try the_vmm.free(available_address);
+    // Make the strings section allocatable so createFromElf tries to allocate more than one
+    the_elf.section_headers[1].flags |= elf.SECTION_ALLOCATABLE;
+    std.testing.expectError(error.AlreadyAllocated, Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator));
 }

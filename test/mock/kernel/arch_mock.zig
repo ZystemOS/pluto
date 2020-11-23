@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const mem = @import("../../../src/kernel/mem.zig");
 const MemProfile = mem.MemProfile;
@@ -11,6 +12,7 @@ const Serial = @import("../../../src/kernel/serial.zig").Serial;
 const TTY = @import("../../../src/kernel/tty.zig").TTY;
 const Keyboard = @import("../../../src/kernel/keyboard.zig").Keyboard;
 const task = @import("../../../src/kernel/task.zig");
+const x86_paging = @import("../../../src/kernel/arch/x86/paging.zig");
 
 pub const Device = pci.PciDeviceInfo;
 pub const DateTime = struct {
@@ -54,11 +56,18 @@ pub const CpuState = struct {
     user_ss: u32,
 };
 
-pub const VmmPayload = u8;
-pub const KERNEL_VMM_PAYLOAD: usize = 0;
+pub const VmmPayload = switch (builtin.arch) {
+    .i386 => *x86_paging.Directory,
+    else => unreachable,
+};
+
+pub const KERNEL_VMM_PAYLOAD: VmmPayload = switch (builtin.arch) {
+    .i386 => &x86_paging.kernel_directory,
+    else => unreachable,
+};
 pub const MEMORY_BLOCK_SIZE: u32 = paging.PAGE_SIZE_4KB;
 pub const STACK_SIZE: u32 = MEMORY_BLOCK_SIZE / @sizeOf(u32);
-pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = undefined;
+pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = .{ .mapFn = map, .unmapFn = unmap };
 pub const BootPayload = u8;
 pub const Task = task.Task;
 
@@ -68,6 +77,9 @@ var KERNEL_PHYSADDR_END: u32 = 0x01000000;
 var KERNEL_VADDR_START: u32 = 0xC0100000;
 var KERNEL_VADDR_END: u32 = 0xC1100000;
 var KERNEL_ADDR_OFFSET: u32 = 0xC0000000;
+
+pub fn map(start: usize, end: usize, p_start: usize, p_end: usize, attrs: vmm.Attributes, allocator: *Allocator, payload: VmmPayload) !void {}
+pub fn unmap(start: usize, end: usize, allocator: *Allocator, payload: VmmPayload) !void {}
 
 pub fn out(port: u16, data: anytype) void {
     return mock_framework.performAction("out", void, .{ port, data });
