@@ -125,7 +125,7 @@ pub const KeyAction = struct {
 };
 
 /// The type used to index the keyboard queue
-const QueueIndex = std.meta.IntType(.unsigned, std.math.log2(QUEUE_SIZE));
+const QueueIndex = std.meta.Int(.unsigned, std.math.log2(QUEUE_SIZE));
 
 /// A keyboard buffer that stores keyboard actions. This corresponds to a single hardware keyboard
 pub const Keyboard = struct {
