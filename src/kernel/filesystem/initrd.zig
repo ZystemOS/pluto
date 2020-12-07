@@ -63,22 +63,20 @@ pub const InitrdFS = struct {
     }
 
     /// See vfs.FileSystem.close
-    fn close(fs: *const vfs.FileSystem, node: *const vfs.FileNode) void {
+    fn close(fs: *const vfs.FileSystem, node: *const vfs.Node) void {
         var self = @fieldParentPtr(InitrdFS, "instance", fs.instance);
-        const cast_node = @ptrCast(*const vfs.Node, node);
         // As close can't error, if provided with a invalid Node that isn't opened or try to close
         // the same file twice, will just do nothing.
-        if (self.opened_files.contains(cast_node)) {
-            _ = self.opened_files.remove(cast_node);
+        if (self.opened_files.remove(node)) |entry_node| {
             self.allocator.destroy(node);
         }
     }
 
     /// See vfs.FileSystem.read
-    fn read(fs: *const vfs.FileSystem, node: *const vfs.FileNode, bytes: []u8) (Allocator.Error || vfs.Error)!usize {
+    fn read(fs: *const vfs.FileSystem, file_node: *const vfs.FileNode, bytes: []u8) (Allocator.Error || vfs.Error)!usize {
         var self = @fieldParentPtr(InitrdFS, "instance", fs.instance);
-        const cast_node = @ptrCast(*const vfs.Node, node);
-        const file_header = self.opened_files.get(cast_node) orelse return vfs.Error.NotOpened;
+        const node = @ptrCast(*const vfs.Node, file_node);
+        const file_header = self.opened_files.get(node) orelse return vfs.Error.NotOpened;
         const length = std.math.min(bytes.len, file_header.content.len);
         std.mem.copy(u8, bytes, file_header.content[0..length]);
         return length;
@@ -99,10 +97,11 @@ pub const InitrdFS = struct {
                     if (std.mem.eql(u8, file.name, name)) {
                         // Opening 2 files of the same name, will create 2 different Nodes
                         // Create a node
-                        var file_node = try self.allocator.create(vfs.Node);
-                        file_node.* = .{ .File = .{ .fs = self.fs } };
-                        try self.opened_files.put(file_node, file);
-                        return file_node;
+                        var node = try self.allocator.create(vfs.Node);
+                        errdefer self.allocator.destroy(node);
+                        node.* = .{ .File = .{ .fs = self.fs } };
+                        try self.opened_files.put(node, file);
+                        return node;
                     }
                 }
                 return vfs.Error.NoSuchFileOrDir;
@@ -206,7 +205,14 @@ pub const InitrdFS = struct {
         var root_node = try allocator.create(vfs.Node);
 
         root_node.* = .{ .Dir = .{ .fs = fs, .mount = null } };
-        fs.* = .{ .open = open, .close = close, .read = read, .write = write, .instance = &rd_fs.instance, .getRootNode = getRootNode };
+        fs.* = .{
+            .open = open,
+            .close = close,
+            .read = read,
+            .write = write,
+            .instance = &rd_fs.instance,
+            .getRootNode = getRootNode,
+        };
 
         rd_fs.* = .{
             .opened_files = AutoHashMap(*const vfs.Node, *InitrdHeader).init(allocator),
@@ -370,10 +376,8 @@ test "open valid file" {
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
     defer file1.close();
 
-    var file1_node = @ptrCast(*const vfs.Node, file1);
-
     expectEqual(fs.opened_files.count(), 1);
-    expectEqualSlices(u8, fs.opened_files.get(file1_node).?.name, "test1.txt");
+    expectEqualSlices(u8, fs.opened_files.get(@ptrCast(*const vfs.Node, file1)).?.name, "test1.txt");
 
     var file3_node = try vfs.open("/test3.txt", true, .NO_CREATION, .{});
     defer file3_node.File.close();

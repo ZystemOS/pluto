@@ -87,13 +87,13 @@ pub const FileSystem = struct {
     const Self = @This();
 
     ///
-    /// Close an open file, performing any last operations required to save data etc.
+    /// Close an open node, performing any last operations required to save data etc.
     ///
     /// Arguments:
     ///     IN self: *const FileSystem - The filesystem in question being operated on.
-    ///     IN node: *const FileNode - The file being closed
+    ///     IN node: *const Node - The node being closed.
     ///
-    const Close = fn (self: *const Self, node: *const FileNode) void;
+    const Close = fn (self: *const Self, node: *const Node) void;
 
     ///
     /// Read from an open file
@@ -191,7 +191,8 @@ pub const FileNode = struct {
 
     /// See the documentation for FileSystem.Close
     pub fn close(self: *const FileNode) void {
-        return self.fs.close(self.fs, self);
+        // TODO: Use @fieldParentPtr() once implemented for unions
+        return self.fs.close(self.fs, @ptrCast(*const Node, self));
     }
 
     /// See the documentation for FileSystem.Write
@@ -217,6 +218,18 @@ pub const DirNode = struct {
             node = mnt;
         }
         return fs.open(fs, node, name, flags, args);
+    }
+
+    /// See the documentation for FileSystem.Close
+    pub fn close(self: *const DirNode) void {
+        var fs = self.fs;
+        var node = self;
+        if (self.mount) |mnt| {
+            fs = mnt.fs;
+            node = mnt;
+        }
+        // TODO: Use @fieldParentPtr() once implemented for unions
+        return fs.close(fs, @ptrCast(*const Node, node));
     }
 };
 
@@ -574,7 +587,7 @@ const TestFS = struct {
         return &test_fs.tree.val.Dir;
     }
 
-    fn close(fs: *const FileSystem, node: *const FileNode) void {
+    fn close(fs: *const FileSystem, node: *const Node) void {
         var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
         test_fs.open_files_count -= 1;
     }
@@ -680,7 +693,14 @@ fn testInitFs(allocator: *Allocator) !*TestFS {
         .allocator = allocator,
     };
     testfs.tree.children.* = ArrayList(*TestFS.TreeNode).init(allocator);
-    fs.* = .{ .open = TestFS.open, .close = TestFS.close, .read = TestFS.read, .write = TestFS.write, .instance = &testfs.instance, .getRootNode = TestFS.getRootNode };
+    fs.* = .{
+        .open = TestFS.open,
+        .close = TestFS.close,
+        .read = TestFS.read,
+        .write = TestFS.write,
+        .instance = &testfs.instance,
+        .getRootNode = TestFS.getRootNode,
+    };
     return testfs;
 }
 
