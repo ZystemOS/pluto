@@ -47,12 +47,9 @@ const types = .{
     .{ "IdtPtr", "IDTPTR", "idt_mock", "", "IdtPtr" },
     .{ "*const GdtPtr", "PTR_CONST_GDTPTR", "gdt_mock", "", "GdtPtr" },
     .{ "*const IdtPtr", "PTR_CONST_IDTPTR", "idt_mock", "", "IdtPtr" },
-    .{ "*Task", "PTR_TASK", "task_mock", "", "Task" },
     .{ "*Allocator", "PTR_ALLOCATOR", "", "std.mem", "Allocator" },
-    .{ "*VirtualMemoryManager(u8)", "PTR_VMM", "vmm_mock", "", "VirtualMemoryManager" },
 
     .{ "IdtError!void", "ERROR_IDTERROR_RET_VOID", "idt_mock", "", "IdtError" },
-    .{ "Allocator.Error!*Task", "ERROR_ALLOCATOR_RET_PTRTASK", "", "", "" },
 
     .{ "fn () callconv(.C) void", "FN_CCC_OVOID", "", "", "" },
     .{ "fn () callconv(.Naked) void", "FN_CCNAKED_OVOID", "", "", "" },
@@ -80,10 +77,6 @@ const types = .{
     .{ "fn (u16, u16) void", "FN_IU16_IU16_OVOID", "", "", "" },
     .{ "fn (u16, u32) void", "FN_IU16_IU32_OVOID", "", "", "" },
     .{ "fn (StatusRegister, bool) u8", "FN_ISTATUSREGISTER_IBOOL_OU8", "", "", "" },
-    .{ "fn (*Task, usize) void", "FN_IPTRTASK_IUSIZE_OVOID", "", "", "" },
-    .{ "fn (*Task, *Allocator) void", "FN_IPTRTASK_IPTRALLOCATOR_OVOID", "", "", "" },
-    .{ "fn (fn () void, *Allocator) Allocator.Error!*Task", "FN_IFNOVOID_IPTRALLOCATOR_EALLOCATOR_OPTRTASK", "", "", "" },
-    .{ "fn (usize, *Allocator, bool, *VirtualMemoryManager(u8)) Allocator.Error!*Task", "FN_IUSIZE_IPTRALLOCATOR_IBOOL_IVMM_EALLOCATOR_OVOID", "", "", "" },
 
     .{ "fn (StatusRegister, u8, bool) void", "FN_ISTATUSREGISTER_IU8_IBOOL_OVOID", "", "", "" },
 };

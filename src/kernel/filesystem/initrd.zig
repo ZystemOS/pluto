@@ -11,8 +11,8 @@ const mock_path = build_options.mock_path;
 const Allocator = std.mem.Allocator;
 const AutoHashMap = std.AutoHashMap;
 const vfs = @import("vfs.zig");
-const mem = if (is_test) @import("../" ++ mock_path ++ "mem_mock.zig") else @import("../mem.zig");
-const panic = if (is_test) @import("../" ++ mock_path ++ "panic_mock.zig").panic else @import("../panic.zig").panic;
+const mem = @import("../mem.zig");
+const panic = @import("../panic.zig").panic;
 
 /// The Initrd file system struct.
 /// Format of raw ramdisk:
