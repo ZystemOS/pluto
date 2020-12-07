@@ -557,13 +557,16 @@ pub const Fat32 = struct {
 
     ///
     /// Make a FAT32 image. This will either use the default options or modified defaults from the
-    /// user. The file will be saved to the path specified.
+    /// user. The file will be saved to the path specified. If quick format is on, then the entire
+    /// stream is zeroed else the reserved and FAT sectors are zeroed.
     ///
     /// Argument:
-    ///     IN options: Options - The FAT32 options that the user can provide to change the
-    ///                           parameters of a FAT32 image.
-    ///     IN stream: anytype  - The stream to create a new FAT32 image. This stream must support
-    ///                           reader(), writer() and seekableStream() interfaces.
+    ///     IN options: Options   - The FAT32 options that the user can provide to change the
+    ///                             parameters of a FAT32 image.
+    ///     IN stream: anytype    - The stream to create a new FAT32 image. This stream must
+    ///                             support reader(), writer() and seekableStream() interfaces.
+    ///     IN quick_format: bool - Whether to completely zero the stream initially or zero just
+    ///                             the important sectors.
     ///
     /// Error:  @TypeOf(stream).WriteError ||  @TypeOf(stream).SeekError || Error
     ///     @TypeOf(stream).WriteError       - If there is an error when writing. See the relevant error for the stream.
@@ -572,14 +575,19 @@ pub const Fat32 = struct {
     ///     Error.TooLarge                   - The stream size is too small. < 17.5KB.
     ///     Error.TooSmall                   - The stream size is to large. > 2TB.
     ///
-    pub fn make(options: Options, stream: anytype) (ErrorSet(@TypeOf(stream)) || Error)!void {
+    pub fn make(options: Options, stream: anytype, quick_format: bool) (ErrorSet(@TypeOf(stream)) || Error)!void {
         // First set up the header
         const fat32_header = try Fat32.createFATHeader(options);
-        // Get the total image size again. As the above has a check for the size, we don't need one here again
-        const image_size = std.mem.alignBackward(options.image_size, fat32_header.bytes_per_sector);
 
         // Initialise the stream with all zeros
-        try stream.writer().writeByteNTimes(0x00, image_size);
+        try stream.seekableStream().seekTo(0);
+        if (quick_format) {
+            // Zero just the reserved and FAT sectors
+            try stream.writer().writeByteNTimes(0x00, (fat32_header.reserved_sectors + (fat32_header.sectors_per_fat * 2)) * fat32_header.bytes_per_sector);
+        } else {
+            const image_size = std.mem.alignBackward(options.image_size, fat32_header.bytes_per_sector);
+            try stream.writer().writeByteNTimes(0x00, image_size);
+        }
 
         // Write the boot sector with the bootstrap code and header and the backup boot sector.
         try Fat32.writeBootSector(stream, fat32_header);
