@@ -1105,16 +1105,13 @@ pub fn Fat32FS(comptime StreamType: type) type {
             return &self.root_node.node.Dir;
         }
 
-        /// See vfs.FileSystem.close
-        fn close(fs: *const vfs.FileSystem, node: *const vfs.FileNode) void {
+        /// See vfs.FileSystem.closeFile
+        fn close(fs: *const vfs.FileSystem, node: *const vfs.Node) void {
             const self = @fieldParentPtr(Fat32Self, "instance", fs.instance);
-            const cast_node = @ptrCast(*const vfs.Node, node);
             // As close can't error, if provided with a invalid Node that isn't opened or try to close
             // the same file twice, will just do nothing.
-            if (self.opened_files.contains(cast_node)) {
-                const opened_node = self.opened_files.remove(cast_node).?.value;
-                self.allocator.destroy(opened_node);
-                self.allocator.destroy(node);
+            if (self.opened_files.remove(node)) |entry_node| {
+                self.allocator.destroy(entry_node.value);
             }
         }
 
@@ -1168,7 +1165,10 @@ pub fn Fat32FS(comptime StreamType: type) type {
             node.* = switch (flags) {
                 .CREATE_DIR => .{ .Dir = .{ .fs = self.fs, .mount = null } },
                 .CREATE_FILE => .{ .File = .{ .fs = self.fs } },
-                .CREATE_SYMLINK => if (open_args.symlink_target) |target| .{ .Symlink = target } else return vfs.Error.NoSymlinkTarget,
+                .CREATE_SYMLINK => if (open_args.symlink_target) |target|
+                    .{ .Symlink = target }
+                else
+                    return vfs.Error.NoSymlinkTarget,
                 .NO_CREATION => unreachable,
             };
 
