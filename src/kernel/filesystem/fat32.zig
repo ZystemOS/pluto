@@ -776,7 +776,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
             ///     IN self: *ClusterChainIteratorSelf - Iterator self.
             ///
             ///
-            pub fn deinit(self: *ClusterChainIteratorSelf) void {
+            pub fn deinit(self: *const ClusterChainIteratorSelf) void {
                 self.allocator.free(self.fat);
             }
 
@@ -1185,6 +1185,27 @@ pub fn Fat32FS(comptime StreamType: type) type {
         }
 
         ///
+        /// A helper function for getting the cluster from an opened directory node.
+        ///
+        /// Arguments:
+        ///     IN self: *const Fat32Self  - Self, used to get the opened nodes.
+        ///     IN dir: *const vfs.DirNode - The directory node to get the cluster for.
+        ///
+        /// Return: u32
+        ///     The cluster number for the directory node.
+        ///
+        /// Error: vfs.Error
+        ///     error.NotOpened - If directory node isn't opened.
+        ///
+        fn getDirCluster(self: *Fat32Self, dir: *const vfs.DirNode) vfs.Error!u32 {
+            return if (std.meta.eql(dir, self.fs.getRootNode(self.fs))) self.root_node.cluster else brk: {
+                const parent = self.opened_files.get(@ptrCast(*const vfs.Node, dir)) orelse return vfs.Error.NotOpened;
+                // Cluster 0 means is the root directory cluster
+                break :brk if (parent.cluster == 0) self.fat_config.root_directory_cluster else parent.cluster;
+            };
+        }
+
+        ///
         /// The helper function for opening a file/folder, no creation.
         ///
         /// Arguments:
@@ -1195,16 +1216,56 @@ pub fn Fat32FS(comptime StreamType: type) type {
         /// Return: *vfs.Node
         ///     The VFS Node for the opened file/folder.
         ///
-        /// Error: Allocator.Error || ReadError || SeekError || vfs.Error
+        /// Error: Allocator.Error || vfs.Error
         ///     Allocator.Error           - Not enough memory for allocating memory
-        ///     ReadError                 - Errors when reading the stream.
-        ///     SeekError                 - Errors when seeking the stream.
         ///     vfs.Error.NoSuchFileOrDir - Error if the file/folder doesn't exist.
+        ///     vfs.Error.Unexpected      - An error occurred whilst reading the file system, this
+        ///                                 can be caused by a parsing error or errors on reading
+        ///                                 or seeking the underlying stream. If this occurs, then
+        ///                                 the real error is printed using `log.err`.
         ///
-        fn openImpl(fs: *const vfs.FileSystem, dir: *const vfs.DirNode, name: []const u8) (Allocator.Error || ReadError || SeekError || vfs.Error)!*vfs.Node {
+        fn openImpl(fs: *const vfs.FileSystem, dir: *const vfs.DirNode, name: []const u8) (Allocator.Error || vfs.Error)!*vfs.Node {
             const self = @fieldParentPtr(Fat32Self, "instance", fs.instance);
+            // TODO: Cache the files in this dir, so when opening, don't have to iterator the directory every time
 
-            // TODO: Future PR
+            // Iterate over the directory and find the file/folder
+            const cluster = try self.getDirCluster(dir);
+            var it = EntryIterator.init(self.allocator, self.fat_config, cluster, self.stream) catch |e| switch (e) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => {
+                    log.err("Error initialising the entry iterator. Error: {}\n", .{e});
+                    return vfs.Error.Unexpected;
+                },
+            };
+            defer it.deinit();
+            while (it.next() catch |e| switch (e) {
+                error.OutOfMemory => return vfs.Error.IsAFile,
+                else => {
+                    log.err("Error initialising the entry iterator. Error: {}\n", .{e});
+                    return vfs.Error.Unexpected;
+                },
+            }) |entry| {
+                defer entry.deinit();
+                // File name compare is case insensitive
+                var match: bool = brk: {
+                    if (entry.long_name) |long_name| {
+                        if (std.ascii.eqlIgnoreCase(name, long_name)) {
+                            break :brk true;
+                        }
+                    }
+                    var short_buff: [33]u8 = undefined;
+                    const s_end = entry.short_name.getName(short_buff[0..]);
+                    if (std.ascii.eqlIgnoreCase(name, short_buff[0..s_end])) {
+                        break :brk true;
+                    }
+                    break :brk false;
+                };
+
+                if (match) {
+                    const open_type = if (entry.short_name.isDir()) vfs.OpenFlags.CREATE_DIR else vfs.OpenFlags.CREATE_FILE;
+                    return self.createNode(entry.short_name.getCluster(), entry.short_name.size, open_type, .{});
+                }
+            }
             return vfs.Error.NoSuchFileOrDir;
         }
 
@@ -1235,18 +1296,20 @@ pub fn Fat32FS(comptime StreamType: type) type {
         }
 
         ///
-        /// Deinitialise this file system.
+        /// Deinitialise this file system. This frees the root node, virtual filesystem and self.
+        /// This asserts that there are no open files left.
         ///
         /// Arguments:
         ///     IN self: *Fat32Self - Self to free.
         ///
-        pub fn deinit(self: *Fat32Self) void {
+        pub fn destroy(self: *Fat32Self) void {
             // Make sure we have closed all files
             // TODO: Should this deinit close any open files instead?
             std.debug.assert(self.opened_files.count() == 0);
             self.opened_files.deinit();
             self.allocator.destroy(self.root_node.node);
             self.allocator.destroy(self.fs);
+            self.allocator.destroy(self);
         }
 
         ///
@@ -1254,19 +1317,19 @@ pub fn Fat32FS(comptime StreamType: type) type {
         ///
         /// Arguments:
         ///     IN allocator: *Allocator - Allocate memory.
-        ///     IN stream: StreamType - Allocate memory.
+        ///     IN stream: StreamType    - The underlying stream that the filesystem will sit on.
         ///
         /// Return: *Fat32
-        ///     The pointer to a Fat32 filesystem.
+        ///     The pointer to a FAT32 filesystem.
         ///
-        /// Error: Allocator.Error || ReadError || SeekError || Error
+        /// Error: Allocator.Error || ReadError || SeekError || Fat32Self.Error
         ///     Allocator.Error - If there is no more memory. Any memory allocated will be freed.
         ///     ReadError       - If there is an error reading from the stream.
         ///     SeekError       - If there si an error seeking the stream.
-        ///     Error           - If there is an error when parsing the stream to set up a fAT32
+        ///     Fat32Self.Error - If there is an error when parsing the stream to set up a fAT32
         ///                       filesystem. See Error for the list of possible errors.
         ///
-        pub fn init(allocator: *Allocator, stream: StreamType) (Allocator.Error || ReadError || SeekError || Error)!Fat32Self {
+        pub fn create(allocator: *Allocator, stream: StreamType) (Allocator.Error || ReadError || SeekError || Fat32Self.Error)!*Fat32Self {
             log.debug("Init\n", .{});
             defer log.debug("Done\n", .{});
             // We need to get the root directory sector. For this we need to read the boot sector.
@@ -1369,6 +1432,8 @@ pub fn Fat32FS(comptime StreamType: type) type {
             errdefer allocator.destroy(fs);
             const root_node = try allocator.create(vfs.Node);
             errdefer allocator.destroy(root_node);
+            const fat32_fs = try allocator.create(Fat32Self);
+            errdefer allocator.destroy(fat32_fs);
 
             // Record the relevant information
             const fat_config = FATConfig{
@@ -1387,7 +1452,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
                 .cluster_end_marker = cluster_end_marker,
             };
 
-            var fat32_fs = Fat32Self{
+            fat32_fs.* = .{
                 .fs = fs,
                 .allocator = allocator,
                 .instance = 32,
@@ -1420,10 +1485,11 @@ pub fn Fat32FS(comptime StreamType: type) type {
         }
     };
 }
+
 ///
 /// Initialise a FAT32 filesystem. This will take a stream that conforms to the reader(), writer(),
 /// and seekableStream() interfaces. For example, FixedBufferStream or File. A pointer to this is
-//// allowed. This will allow the use of different devices such as Hard drives or RAM disks to have
+/// allowed. This will allow the use of different devices such as Hard drives or RAM disks to have
 /// a FAT32 filesystem abstraction. We assume the FAT32 will be the only filesystem present and no
 /// partition schemes are present. So will expect a valid boot sector.
 ///
@@ -1438,15 +1504,12 @@ pub fn Fat32FS(comptime StreamType: type) type {
 /// Error: Allocator.Error || Fat32FS(@TypeOf(stream)).Error
 ///     Allocator.Error - If there isn't enough memory to create the filesystem.
 ///
-pub fn initialiseFAT32(allocator: *Allocator, stream: anytype) (Allocator.Error || ErrorSet(@TypeOf(stream)) || Fat32FS(@TypeOf(stream)).Error)!Fat32FS(@TypeOf(stream)) {
-    return Fat32FS(@TypeOf(stream)).init(allocator, stream);
+pub fn initialiseFAT32(allocator: *Allocator, stream: anytype) (Allocator.Error || ErrorSet(@TypeOf(stream)) || Fat32FS(@TypeOf(stream)).Error)!*Fat32FS(@TypeOf(stream)) {
+    return Fat32FS(@TypeOf(stream)).create(allocator, stream);
 }
 
-/// The number of allocations that the init function make.
-const test_init_allocations: usize = 4;
-
 /// The test buffer for the test filesystem stream.
-var test_stream_buff: [if (builtin.is_test) 34090496 else 0]u8 = undefined;
+var test_stream_buff = [_]u8{0} ** if (builtin.is_test) 34090496 else 0;
 
 ///
 /// Read the test files and write them to the test FAT32 filesystem.
@@ -1462,7 +1525,7 @@ var test_stream_buff: [if (builtin.is_test) 34090496 else 0]u8 = undefined;
 ///     std.fs.File.OpenError - Error when opening the test files.
 ///     std.fs.File.ReadError - Error when reading the test files.
 ///
-fn testWriteTestFiles(comptime StreamType: type, fat32fs: Fat32FS(StreamType)) (Allocator.Error || ErrorSet(StreamType) || vfs.Error || std.fs.File.OpenError || std.fs.File.ReadError)!void {
+fn testWriteTestFiles(comptime StreamType: type, fat32fs: *Fat32FS(StreamType)) (Allocator.Error || ErrorSet(StreamType) || vfs.Error || std.fs.File.OpenError || std.fs.File.ReadError)!void {
     vfs.setRoot(fat32fs.root_node.node);
 
     const test_path_prefix = "test/fat32";
@@ -1871,10 +1934,10 @@ test "ShortName.calcCheckSum" {
 test "Fat32FS initialise test files" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
     // Write the test files
     try testWriteTestFiles(@TypeOf(stream), test_fs);
@@ -1892,10 +1955,10 @@ test "Fat32FS initialise test files" {
 test "Fat32FS.getRootNode" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
     expectEqual(test_fs.fs.getRootNode(test_fs.fs), &test_fs.root_node.node.Dir);
     expectEqual(test_fs.root_node.cluster, 2);
@@ -1905,10 +1968,10 @@ test "Fat32FS.getRootNode" {
 test "Fat32FS.read" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
     // TODO: Once the read PR is done
 }
@@ -1916,10 +1979,10 @@ test "Fat32FS.read" {
 test "Fat32FS.write" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
     // TODO: Once the write PR is done
 }
@@ -1927,21 +1990,60 @@ test "Fat32FS.write" {
 test "Fat32FS.open - no create" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
-    // TODO: Once the open PR is done
+    // Temporary add hand built files to open
+    // Once write PR is done, then can test real files
+    var entry_buff = [_]u8{
+        // Long entry 3
+        0x43, 0x6E, 0x00, 0x67, 0x00, 0x6E, 0x00, 0x61, 0x00, 0x6D, 0x00, 0x0F, 0x00, 0x6E, 0x65, 0x00,
+        0x2E, 0x00, 0x74, 0x00, 0x78, 0x00, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        // Long entry 2
+        0x02, 0x6E, 0x00, 0x67, 0x00, 0x76, 0x00, 0x65, 0x00, 0x72, 0x00, 0x0F, 0x00, 0x6E, 0x79, 0x00,
+        0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Long entry 1
+        0x01, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x0F, 0x00, 0x6E, 0x6F, 0x00,
+        0x6E, 0x00, 0x67, 0x00, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Short entry
+        0x4C, 0x4F, 0x4F, 0x4F, 0x4F, 0x4F, 0x7E, 0x31, 0x54, 0x58, 0x54, 0x00, 0x18, 0xA0, 0x68, 0xA9,
+        0xFE, 0x50, 0x00, 0x00, 0x00, 0x00, 0x6E, 0xA9, 0xFE, 0x50, 0x08, 0x00, 0x13, 0x00, 0x00, 0x00,
+        // Long entry 2
+        0x42, 0x2E, 0x00, 0x74, 0x00, 0x78, 0x00, 0x74, 0x00, 0x00, 0x00, 0x0F, 0x00, 0xE9, 0xFF, 0xFF,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        // Long entry 1
+        0x01, 0x72, 0x00, 0x61, 0x00, 0x6D, 0x00, 0x64, 0x00, 0x69, 0x00, 0x0F, 0x00, 0xE9, 0x73, 0x00,
+        0x6B, 0x00, 0x5F, 0x00, 0x74, 0x00, 0x65, 0x00, 0x73, 0x00, 0x00, 0x00, 0x74, 0x00, 0x31, 0x00,
+        // Short entry
+        0x52, 0x41, 0x4D, 0x44, 0x49, 0x53, 0x7E, 0x31, 0x54, 0x58, 0x54, 0x00, 0x18, 0x34, 0x47, 0x76,
+        0xF9, 0x50, 0x00, 0x00, 0x00, 0x00, 0x48, 0x76, 0xF9, 0x50, 0x03, 0x00, 0x10, 0x00, 0x00, 0x00,
+    };
+
+    // Goto root dir and write a long and short entry
+    const sector = test_fs.fat_config.clusterToSector(test_fs.root_node.cluster);
+    try test_fs.stream.seekableStream().seekTo(sector * test_fs.fat_config.bytes_per_sector);
+    try test_fs.stream.writer().writeAll(entry_buff[0..]);
+
+    vfs.setRoot(test_fs.root_node.node);
+
+    const file = try vfs.openFile("/ramdisk_test1.txt", .NO_CREATION);
+    defer file.close();
+
+    expect(test_fs.opened_files.contains(@ptrCast(*const vfs.Node, file)));
+    const opened_info = test_fs.opened_files.get(@ptrCast(*const vfs.Node, file)).?;
+    expectEqual(opened_info.cluster, 3);
+    expectEqual(opened_info.size, 16);
 }
 
 test "Fat32FS.open - create file" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
     // TODO: Once the open and write PR is done
 }
@@ -1949,10 +2051,10 @@ test "Fat32FS.open - create file" {
 test "Fat32FS.open - create directory" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
     // TODO: Once the open and write PR is done
 }
@@ -1960,10 +2062,10 @@ test "Fat32FS.open - create directory" {
 test "Fat32FS.open - create symlink" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
     // TODO: Once the open and write PR is done
 }
@@ -1971,16 +2073,16 @@ test "Fat32FS.open - create symlink" {
 test "Fat32FS.init no error" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 }
 
 test "Fat32FS.init errors" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     // BadMBRMagic
     test_stream_buff[510] = 0x00;
@@ -2062,10 +2164,11 @@ test "Fat32FS.init errors" {
 test "Fat32FS.init memory" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
+    const allocations: usize = 5;
     var i: usize = 0;
-    while (i < test_init_allocations) : (i += 1) {
+    while (i < allocations) : (i += 1) {
         var fa = std.testing.FailingAllocator.init(std.testing.allocator, i);
 
         expectError(error.OutOfMemory, initialiseFAT32(&fa.allocator, stream));
@@ -2075,10 +2178,10 @@ test "Fat32FS.init memory" {
 test "Fat32FS.init FATConfig expected" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-    defer test_fs.deinit();
+    defer test_fs.destroy();
 
     // This is the default config that should be produced from mkfat32.Fat32
     const expected = FATConfig{
@@ -2103,7 +2206,7 @@ test "Fat32FS.init FATConfig expected" {
 test "Fat32FS.init FATConfig mix FSInfo" {
     var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
 
-    try mkfat32.Fat32.make(.{}, stream);
+    try mkfat32.Fat32.make(.{}, stream, true);
 
     // No FSInfo
     {
@@ -2111,7 +2214,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
         test_stream_buff[48] = 0x00;
 
         var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-        defer test_fs.deinit();
+        defer test_fs.destroy();
 
         // This is the default config that should be produced from mkfat32.Fat32
         const expected = FATConfig{
@@ -2140,7 +2243,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
         test_stream_buff[512] = 0xAA;
 
         var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-        defer test_fs.deinit();
+        defer test_fs.destroy();
 
         // This is the default config that should be produced from mkfat32.Fat32
         const expected = FATConfig{
@@ -2172,7 +2275,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
         test_stream_buff[512 + 4 + 480 + 7] = 0xDD;
 
         var test_fs = try initialiseFAT32(std.testing.allocator, stream);
-        defer test_fs.deinit();
+        defer test_fs.destroy();
 
         // This is the default config that should be produced from mkfat32.Fat32
         const expected = FATConfig{
@@ -3572,4 +3675,249 @@ test "EntryIterator.init - free on BadRead" {
     };
     var stream = &std.io.fixedBufferStream(buff_stream[0..]);
     expectError(error.BadRead, Fat32FS(@TypeOf(stream)).EntryIterator.init(std.testing.allocator, fat_config, 2, stream));
+}
+
+test "Fat32FS.getDirCluster - root dir" {
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(std.testing.allocator, stream);
+    defer test_fs.destroy();
+
+    var test_node_1 = try test_fs.createNode(3, 16, .CREATE_FILE, .{});
+    defer test_node_1.File.close();
+
+    const actual = try test_fs.getDirCluster(&test_fs.root_node.node.Dir);
+    expectEqual(actual, 2);
+}
+
+test "Fat32FS.getDirCluster - sub dir" {
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(std.testing.allocator, stream);
+    defer test_fs.destroy();
+
+    var test_node_1 = try test_fs.createNode(5, 0, .CREATE_DIR, .{});
+    defer {
+        const elem = test_fs.opened_files.remove(test_node_1).?.value;
+        std.testing.allocator.destroy(elem);
+        std.testing.allocator.destroy(test_node_1);
+    }
+
+    const actual = try test_fs.getDirCluster(&test_node_1.Dir);
+    expectEqual(actual, 5);
+}
+
+test "Fat32FS.getDirCluster - not opened dir" {
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(std.testing.allocator, stream);
+    defer test_fs.destroy();
+
+    var test_node_1 = try test_fs.createNode(5, 0, .CREATE_DIR, .{});
+    const elem = test_fs.opened_files.remove(test_node_1).?.value;
+    std.testing.allocator.destroy(elem);
+
+    expectError(error.NotOpened, test_fs.getDirCluster(&test_node_1.Dir));
+    std.testing.allocator.destroy(test_node_1);
+}
+
+test "Fat32FS.openImpl - entry iterator failed init" {
+    // Will need to fail the 8th allocation
+    const allocations: usize = 8;
+    var fa = std.testing.FailingAllocator.init(std.testing.allocator, allocations);
+    const allocator = &fa.allocator;
+
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(allocator, stream);
+    defer test_fs.destroy();
+
+    var test_node_1 = try test_fs.createNode(5, 0, .CREATE_DIR, .{});
+    defer {
+        const elem = test_fs.opened_files.remove(test_node_1).?.value;
+        allocator.destroy(elem);
+        allocator.destroy(test_node_1);
+    }
+
+    expectError(error.OutOfMemory, Fat32FS(@TypeOf(stream)).openImpl(test_fs.fs, &test_node_1.Dir, "file.txt"));
+}
+
+test "Fat32FS.openImpl - entry iterator failed next" {
+    // Will need to fail the 10th allocation
+    const allocations: usize = 10;
+    var fa = std.testing.FailingAllocator.init(std.testing.allocator, allocations);
+    const allocator = &fa.allocator;
+
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(allocator, stream);
+    defer test_fs.destroy();
+
+    var entry_buff = [_]u8{
+        // Long entry 3
+        0x43, 0x6E, 0x00, 0x67, 0x00, 0x6E, 0x00, 0x61, 0x00, 0x6D, 0x00, 0x0F, 0x00, 0x6E, 0x65, 0x00,
+        0x2E, 0x00, 0x74, 0x00, 0x78, 0x00, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        // Long entry 2
+        0x02, 0x6E, 0x00, 0x67, 0x00, 0x76, 0x00, 0x65, 0x00, 0x72, 0x00, 0x0F, 0x00, 0x6E, 0x79, 0x00,
+        0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Long entry 1
+        0x01, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x0F, 0x00, 0x6E, 0x6F, 0x00,
+        0x6E, 0x00, 0x67, 0x00, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Short entry
+        0x4C, 0x4F, 0x4F, 0x4F, 0x4F, 0x4F, 0x7E, 0x31, 0x54, 0x58, 0x54, 0x00, 0x18, 0xA0, 0x68, 0xA9,
+        0xFE, 0x50, 0x00, 0x00, 0x00, 0x00, 0x6E, 0xA9, 0xFE, 0x50, 0x08, 0x00, 0x13, 0x00, 0x00, 0x00,
+        // Long entry 2
+        0x42, 0x2E, 0x00, 0x74, 0x00, 0x78, 0x00, 0x74, 0x00, 0x00, 0x00, 0x0F, 0x00, 0xE9, 0xFF, 0xFF,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        // Long entry 1
+        0x01, 0x72, 0x00, 0x61, 0x00, 0x6D, 0x00, 0x64, 0x00, 0x69, 0x00, 0x0F, 0x00, 0xE9, 0x73, 0x00,
+        0x6B, 0x00, 0x5F, 0x00, 0x74, 0x00, 0x65, 0x00, 0x73, 0x00, 0x00, 0x00, 0x74, 0x00, 0x31, 0x00,
+        // Short entry
+        0x52, 0x41, 0x4D, 0x44, 0x49, 0x53, 0x7E, 0x31, 0x54, 0x58, 0x54, 0x00, 0x18, 0x34, 0x47, 0x76,
+        0xF9, 0x50, 0x00, 0x00, 0x00, 0x00, 0x48, 0x76, 0xF9, 0x50, 0x03, 0x00, 0x10, 0x00, 0x00, 0x00,
+    };
+
+    // Goto root dir and write a long and short entry
+    const sector = test_fs.fat_config.clusterToSector(test_fs.root_node.cluster);
+    try test_fs.stream.seekableStream().seekTo(sector * test_fs.fat_config.bytes_per_sector);
+    try test_fs.stream.writer().writeAll(entry_buff[0..]);
+
+    expectError(error.OutOfMemory, Fat32FS(@TypeOf(stream)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "looooongloooongveryloooooongname.txt"));
+}
+
+test "Fat32FS.openImpl - entry iterator failed 2nd next" {
+    // Will need to fail the 11th allocation
+    const allocations: usize = 11;
+    var fa = std.testing.FailingAllocator.init(std.testing.allocator, allocations);
+    const allocator = &fa.allocator;
+
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(allocator, stream);
+    defer test_fs.destroy();
+
+    var entry_buff = [_]u8{
+        // Long entry 3
+        0x43, 0x6E, 0x00, 0x67, 0x00, 0x6E, 0x00, 0x61, 0x00, 0x6D, 0x00, 0x0F, 0x00, 0x6E, 0x65, 0x00,
+        0x2E, 0x00, 0x74, 0x00, 0x78, 0x00, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        // Long entry 2
+        0x02, 0x6E, 0x00, 0x67, 0x00, 0x76, 0x00, 0x65, 0x00, 0x72, 0x00, 0x0F, 0x00, 0x6E, 0x79, 0x00,
+        0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Long entry 1
+        0x01, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x0F, 0x00, 0x6E, 0x6F, 0x00,
+        0x6E, 0x00, 0x67, 0x00, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Short entry
+        0x4C, 0x4F, 0x4F, 0x4F, 0x4F, 0x4F, 0x7E, 0x31, 0x54, 0x58, 0x54, 0x00, 0x18, 0xA0, 0x68, 0xA9,
+        0xFE, 0x50, 0x00, 0x00, 0x00, 0x00, 0x6E, 0xA9, 0xFE, 0x50, 0x08, 0x00, 0x13, 0x00, 0x00, 0x00,
+        // Long entry 2
+        0x42, 0x2E, 0x00, 0x74, 0x00, 0x78, 0x00, 0x74, 0x00, 0x00, 0x00, 0x0F, 0x00, 0xE9, 0xFF, 0xFF,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        // Long entry 1
+        0x01, 0x72, 0x00, 0x61, 0x00, 0x6D, 0x00, 0x64, 0x00, 0x69, 0x00, 0x0F, 0x00, 0xE9, 0x73, 0x00,
+        0x6B, 0x00, 0x5F, 0x00, 0x74, 0x00, 0x65, 0x00, 0x73, 0x00, 0x00, 0x00, 0x74, 0x00, 0x31, 0x00,
+        // Short entry
+        0x52, 0x41, 0x4D, 0x44, 0x49, 0x53, 0x7E, 0x31, 0x54, 0x58, 0x54, 0x00, 0x18, 0x34, 0x47, 0x76,
+        0xF9, 0x50, 0x00, 0x00, 0x00, 0x00, 0x48, 0x76, 0xF9, 0x50, 0x03, 0x00, 0x10, 0x00, 0x00, 0x00,
+    };
+
+    // Goto root dir and write a long and short entry
+    const sector = test_fs.fat_config.clusterToSector(test_fs.root_node.cluster);
+    try test_fs.stream.seekableStream().seekTo(sector * test_fs.fat_config.bytes_per_sector);
+    try test_fs.stream.writer().writeAll(entry_buff[0..]);
+
+    expectError(error.OutOfMemory, Fat32FS(@TypeOf(stream)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "ramdisk_test1.txt"));
+}
+
+test "Fat32FS.openImpl - match short name" {
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(std.testing.allocator, stream);
+    defer test_fs.destroy();
+
+    var entry_buff = [_]u8{
+        // Long entry 3
+        0x43, 0x6E, 0x00, 0x67, 0x00, 0x6E, 0x00, 0x61, 0x00, 0x6D, 0x00, 0x0F, 0x00, 0x6E, 0x65, 0x00,
+        0x2E, 0x00, 0x74, 0x00, 0x78, 0x00, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        // Long entry 2
+        0x02, 0x6E, 0x00, 0x67, 0x00, 0x76, 0x00, 0x65, 0x00, 0x72, 0x00, 0x0F, 0x00, 0x6E, 0x79, 0x00,
+        0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Long entry 1
+        0x01, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x0F, 0x00, 0x6E, 0x6F, 0x00,
+        0x6E, 0x00, 0x67, 0x00, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Short entry
+        0x4C, 0x4F, 0x4F, 0x4F, 0x4F, 0x4F, 0x7E, 0x31, 0x54, 0x58, 0x54, 0x00, 0x18, 0xA0, 0x68, 0xA9,
+        0xFE, 0x50, 0x00, 0x00, 0x00, 0x00, 0x6E, 0xA9, 0xFE, 0x50, 0x08, 0x00, 0x13, 0x00, 0x00, 0x00,
+    };
+
+    // Goto root dir and write a long and short entry
+    const sector = test_fs.fat_config.clusterToSector(test_fs.root_node.cluster);
+    try test_fs.stream.seekableStream().seekTo(sector * test_fs.fat_config.bytes_per_sector);
+    try test_fs.stream.writer().writeAll(entry_buff[0..]);
+
+    const file_node = try Fat32FS(@TypeOf(stream)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "LOOOOO~1.TXT");
+    defer file_node.File.close();
+}
+
+test "Fat32FS.openImpl - match long name" {
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(std.testing.allocator, stream);
+    defer test_fs.destroy();
+
+    var entry_buff = [_]u8{
+        // Long entry 3
+        0x43, 0x6E, 0x00, 0x67, 0x00, 0x6E, 0x00, 0x61, 0x00, 0x6D, 0x00, 0x0F, 0x00, 0x6E, 0x65, 0x00,
+        0x2E, 0x00, 0x74, 0x00, 0x78, 0x00, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        // Long entry 2
+        0x02, 0x6E, 0x00, 0x67, 0x00, 0x76, 0x00, 0x65, 0x00, 0x72, 0x00, 0x0F, 0x00, 0x6E, 0x79, 0x00,
+        0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Long entry 1
+        0x01, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x0F, 0x00, 0x6E, 0x6F, 0x00,
+        0x6E, 0x00, 0x67, 0x00, 0x6C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x00, 0x00, 0x6F, 0x00, 0x6F, 0x00,
+        // Short entry
+        0x4C, 0x4F, 0x4F, 0x4F, 0x4F, 0x4F, 0x7E, 0x31, 0x54, 0x58, 0x54, 0x00, 0x18, 0xA0, 0x68, 0xA9,
+        0xFE, 0x50, 0x00, 0x00, 0x00, 0x00, 0x6E, 0xA9, 0xFE, 0x50, 0x08, 0x00, 0x13, 0x00, 0x00, 0x00,
+    };
+
+    // Goto root dir and write a long and short entry
+    const sector = test_fs.fat_config.clusterToSector(test_fs.root_node.cluster);
+    try test_fs.stream.seekableStream().seekTo(sector * test_fs.fat_config.bytes_per_sector);
+    try test_fs.stream.writer().writeAll(entry_buff[0..]);
+
+    const file_node = try Fat32FS(@TypeOf(stream)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "looooongloooongveryloooooongname.txt");
+    defer file_node.File.close();
+}
+
+test "Fat32FS.openImpl - no match" {
+    var stream = &std.io.fixedBufferStream(test_stream_buff[0..]);
+
+    try mkfat32.Fat32.make(.{}, stream, true);
+
+    var test_fs = try initialiseFAT32(std.testing.allocator, stream);
+    defer test_fs.destroy();
+
+    var test_node_1 = try test_fs.createNode(5, 0, .CREATE_DIR, .{});
+    defer {
+        const elem = test_fs.opened_files.remove(test_node_1).?.value;
+        std.testing.allocator.destroy(elem);
+        std.testing.allocator.destroy(test_node_1);
+    }
+
+    expectError(vfs.Error.NoSuchFileOrDir, Fat32FS(@TypeOf(stream)).openImpl(test_fs.fs, &test_node_1.Dir, "file.txt"));
 }

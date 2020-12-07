@@ -245,6 +245,9 @@ pub const Error = error{
 
     /// No symlink target was provided when one was expected
     NoSymlinkTarget,
+
+    /// An unexpected error ocurred when performing a VFS operation.
+    Unexpected,
 };
 
 /// Errors that can be thrown when attempting to mount

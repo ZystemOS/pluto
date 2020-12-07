@@ -217,7 +217,7 @@ const Fat32BuilderStep = struct {
         // If there was an error, delete the image as this will be invalid
         errdefer (std.fs.cwd().deleteFile(self.out_file_path) catch unreachable);
         defer image.close();
-        try Fat32.make(self.options, image);
+        try Fat32.make(self.options, image, false);
     }
 
     ///
