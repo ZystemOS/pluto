@@ -8,10 +8,10 @@ const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
-const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("panic.zig").panic;
-const task = if (is_test) @import(mock_path ++ "task_mock.zig") else @import("task.zig");
-const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
-const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("mem.zig");
+const panic = @import("panic.zig").panic;
+const task = @import("task.zig");
+const vmm = @import("vmm.zig");
+const mem = @import("mem.zig");
 const fs = @import("filesystem/vfs.zig");
 const Task = task.Task;
 const EntryPoint = task.EntryPoint;
@@ -187,13 +187,6 @@ fn destroyTestTask(self: *Task, allocator: *Allocator) void {
 }
 
 test "pickNextTask" {
-    task.initTest();
-    defer task.freeTest();
-
-    task.addConsumeFunction("Task.create", createTestTask);
-    task.addConsumeFunction("Task.create", createTestTask);
-    task.addRepeatFunction("Task.destroy", destroyTestTask);
-
     var ctx: arch.CpuState = std.mem.zeroes(arch.CpuState);
 
     var allocator = std.testing.allocator;
@@ -216,8 +209,8 @@ test "pickNextTask" {
     try scheduleTask(test_fn2_task, allocator);
 
     // Get the stack pointers of the created tasks
-    const fn1_stack_pointer = tasks.first.?.data.stack_pointer;
-    const fn2_stack_pointer = tasks.first.?.next.?.data.stack_pointer;
+    const fn1_stack_pointer = test_fn1_task.stack_pointer;
+    const fn2_stack_pointer = test_fn2_task.stack_pointer;
 
     expectEqual(pickNextTask(&ctx), fn1_stack_pointer);
     // The stack pointer of the re-added task should point to the context
@@ -250,12 +243,6 @@ test "pickNextTask" {
 }
 
 test "createNewTask add new task" {
-    task.initTest();
-    defer task.freeTest();
-
-    task.addConsumeFunction("Task.create", createTestTask);
-    task.addConsumeFunction("Task.destroy", destroyTestTask);
-
     // Set the global allocator
     var allocator = std.testing.allocator;
 
@@ -273,18 +260,13 @@ test "createNewTask add new task" {
 }
 
 test "init" {
-    task.initTest();
-    defer task.freeTest();
-
-    task.addConsumeFunction("Task.create", createTestTask);
-    task.addRepeatFunction("Task.destroy", destroyTestTask);
-
     var allocator = std.testing.allocator;
 
     try init(allocator, undefined);
 
     expectEqual(current_task.pid, 0);
-    expectEqual(current_task.kernel_stack, @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0 .. @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START)]);
+    expectEqual(@ptrToInt(current_task.kernel_stack.ptr), @ptrToInt(&KERNEL_STACK_START));
+    expectEqual(current_task.kernel_stack.len, @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START));
 
     expectEqual(tasks.len, 1);
 

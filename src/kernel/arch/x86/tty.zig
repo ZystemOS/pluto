@@ -9,7 +9,7 @@ const log = std.log.scoped(.x86_tty);
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const vga = if (is_test) @import("../../" ++ mock_path ++ "vga_mock.zig") else @import("vga.zig");
-const panic = if (is_test) @import("../../" ++ mock_path ++ "panic_mock.zig").panic else @import("../../panic.zig").panic;
+const panic = @import("../../panic.zig").panic;
 
 /// The error set for if there is an error whiles printing.
 const TtyError = error{

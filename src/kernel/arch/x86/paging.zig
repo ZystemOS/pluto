@@ -12,8 +12,8 @@ const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("ar
 const isr = @import("isr.zig");
 const MemProfile = @import("../../mem.zig").MemProfile;
 const tty = @import("../../tty.zig");
-const mem = if (is_test) @import(mock_path ++ "mem_mock.zig") else @import("../../mem.zig");
-const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("../../vmm.zig");
+const mem = @import("../../mem.zig");
+const vmm = @import("../../vmm.zig");
 const pmm = @import("../../pmm.zig");
 const multiboot = @import("multiboot.zig");
 const Allocator = std.mem.Allocator;
@@ -239,8 +239,10 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
         // Create a table and put the physical address in the dir entry
         table = &(try allocator.alignedAlloc(Table, @truncate(u29, PAGE_SIZE_4KB), 1))[0];
         @memset(@ptrCast([*]u8, table), 0, @sizeOf(Table));
-        const table_phys_addr = vmm.kernel_vmm.virtToPhys(@ptrToInt(table)) catch |e| {
-            panic(@errorReturnTrace(), "Failed getting the physical address for an allocated page table: {}\n", .{e});
+        const table_phys_addr = vmm.kernel_vmm.virtToPhys(@ptrToInt(table)) catch |e| blk: {
+            // When testing this will fail, but that's ok
+            if (!is_test) panic(@errorReturnTrace(), "Failed getting the physical address for a page table: {}\n", .{e});
+            break :blk 0;
         };
         dir_entry.* |= DENTRY_PAGE_ADDR & table_phys_addr;
         dir.tables[entry] = table;
@@ -535,6 +537,7 @@ test "mapDirEntry" {
     defer dir.deinit();
     const attrs = vmm.Attributes{ .kernel = false, .writable = false, .cachable = false };
     vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(PAGE_SIZE_4MB, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, undefined);
+    defer vmm.kernel_vmm.deinit();
     {
         const phys: usize = 0 * PAGE_SIZE_4MB;
         const phys_end: usize = phys + PAGE_SIZE_4MB;
@@ -578,6 +581,10 @@ test "map and unmap" {
     var allocator = std.testing.allocator;
     var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = allocator };
     defer dir.deinit();
+
+    vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(PAGE_SIZE_4MB, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, undefined);
+    defer vmm.kernel_vmm.deinit();
+
     const phys_start: usize = PAGE_SIZE_4MB * 2;
     const virt_start: usize = PAGE_SIZE_4MB * 4;
     const phys_end: usize = PAGE_SIZE_4MB * 4;

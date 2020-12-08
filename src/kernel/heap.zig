@@ -6,7 +6,7 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
-const vmm = if (is_test) @import(mock_path ++ "vmm_mock.zig") else @import("vmm.zig");
+const vmm = @import("vmm.zig");
 const panic = @import("panic.zig").panic;
 
 pub const FreeListAllocator = struct {
