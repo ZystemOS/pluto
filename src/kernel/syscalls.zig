@@ -211,17 +211,29 @@ fn getData(ptr: usize, len: usize) Error![]u8 {
     }
 }
 
-fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, ignored1: usize, ignored2: usize) Error!usize {
+fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, args: usize, ignored: usize) Error!usize {
     const current_task = scheduler.current_task;
     if (!current_task.hasFreeVFSHandle()) {
         return Error.NoMoreFSHandles;
     }
 
+    // Fetch the open arguments from user/kernel memory
+    var open_args: vfs.OpenArgs = if (args == 0) .{} else blk: {
+        const data = try getData(args, @sizeOf(vfs.OpenArgs));
+        defer if (!current_task.kernel) allocator.free(data);
+        break :blk std.mem.bytesAsValue(vfs.OpenArgs, data[0..@sizeOf(vfs.OpenArgs)]).*;
+    };
+    // The symlink target could refer to a location in user memory so convert that too
+    if (open_args.symlink_target) |target| {
+        open_args.symlink_target = try getData(@ptrToInt(target.ptr), target.len);
+    }
+    defer if (!current_task.kernel) if (open_args.symlink_target) |target| allocator.free(target);
+
     const open_flags = std.meta.intToEnum(vfs.OpenFlags, flags) catch return Error.InvalidFlags;
     const path = try getData(path_ptr, path_len);
     defer if (!current_task.kernel) allocator.free(path);
 
-    var node = try vfs.open(path, true, open_flags, .{});
+    var node = try vfs.open(path, true, open_flags, open_args);
     return current_task.addVFSHandle(node) orelse panic(null, "Failed to add a VFS handle to current_task\n", .{});
 }
 
@@ -414,5 +426,12 @@ test "handleRead" {
     {
         const length = try handleRead(test_file, @ptrToInt(&buffer[0]), 0, undefined, undefined);
         testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
+    }
+    // Try reading from a symlink
+    const args = vfs.OpenArgs{ .symlink_target = "/foo.txt" };
+    var test_link = try handleOpen(@ptrToInt("/link"), "/link".len, @enumToInt(vfs.OpenFlags.CREATE_SYMLINK), @ptrToInt(&args), undefined);
+    {
+        const length = try handleRead(test_link, @ptrToInt(&buffer[0]), buffer.len, undefined, undefined);
+        testing.expect(std.mem.eql(u8, str[0..str.len], buffer[0..length]));
     }
 }
