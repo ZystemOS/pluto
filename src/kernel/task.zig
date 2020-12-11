@@ -1,6 +1,7 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const expect = std.testing.expect;
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
@@ -18,11 +19,13 @@ const Allocator = std.mem.Allocator;
 extern var KERNEL_STACK_START: *u32;
 
 /// The number of vfs handles that a process can have. This is arbitrarily set to 65535
-pub const VFS_HANDLES_PER_PROCESS = std.math.maxInt(u16);
+pub const VFS_HANDLES_PER_PROCESS = 65535;
 
 comptime {
-    std.debug.assert(VFS_HANDLES_PER_PROCESS < std.math.maxInt(vfs.Handle));
+    std.debug.assert(VFS_HANDLES_PER_PROCESS < std.math.maxInt(Handle));
 }
+
+pub const Handle = usize;
 
 /// The function type for the entry point.
 pub const EntryPoint = usize;
@@ -68,7 +71,7 @@ pub const Task = struct {
     file_handles: bitmap.Bitmap(usize),
 
     /// The mapping between file handles and file nodes
-    file_handle_mapping: std.hash_map.AutoHashMap(vfs.Handle, *vfs.Node),
+    file_handle_mapping: std.hash_map.AutoHashMap(Handle, *vfs.Node),
 
     ///
     /// Create a task. This will allocate a PID and the stack. The stack will be set up as a
@@ -109,7 +112,7 @@ pub const Task = struct {
             .kernel = kernel,
             .vmm = task_vmm,
             .file_handles = try bitmap.Bitmap(usize).init(VFS_HANDLES_PER_PROCESS, allocator),
-            .file_handle_mapping = std.hash_map.AutoHashMap(vfs.Handle, *vfs.Node).init(allocator),
+            .file_handle_mapping = std.hash_map.AutoHashMap(Handle, *vfs.Node).init(allocator),
         };
 
         try arch.initTask(task, entry_point, allocator);
@@ -138,11 +141,8 @@ pub const Task = struct {
         allocator.destroy(self);
     }
 
-    pub fn getVFSHandle(self: @This(), handle: vfs.Handle) bitmap.Bitmap(usize).BitmapError!?*vfs.Node {
-        if (try self.hasVFSHandle(handle)) {
-            return self.file_handle_mapping.get(handle);
-        }
-        return null;
+    pub fn getVFSHandle(self: @This(), handle: Handle) bitmap.Bitmap(usize).BitmapError!?*vfs.Node {
+        return self.file_handle_mapping.get(handle);
     }
 
     pub fn hasFreeVFSHandle(self: @This()) bool {
@@ -159,11 +159,11 @@ pub const Task = struct {
         return null;
     }
 
-    pub fn hasVFSHandle(self: @This(), handle: vfs.Handle) bitmap.Bitmap(usize).BitmapError!bool {
+    pub fn hasVFSHandle(self: @This(), handle: Handle) bitmap.Bitmap(usize).BitmapError!bool {
         return self.file_handles.isSet(handle);
     }
 
-    pub fn clearVFSHandle(self: *@This(), handle: vfs.Handle) (bitmap.Bitmap(usize).BitmapError || Error)!void {
+    pub fn clearVFSHandle(self: *@This(), handle: Handle) (bitmap.Bitmap(usize).BitmapError || Error)!void {
         if (try self.hasVFSHandle(handle)) {
             try self.file_handles.clearEntry(handle);
             _ = self.file_handle_mapping.remove(handle);
@@ -331,17 +331,18 @@ test "hasFreeVFSHandle" {
     defer task.destroy(std.testing.allocator);
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
 
-    expectEqual(true, task.hasFreeVFSHandle());
+    expect(task.hasFreeVFSHandle());
 
     const handle1 = task.addVFSHandle(&node1) orelse unreachable;
-    expectEqual(true, task.hasFreeVFSHandle());
+    expect(task.hasFreeVFSHandle());
 
     var i: usize = 0;
     const free_entries = task.file_handles.num_free_entries;
     while (i < free_entries) : (i += 1) {
+        expect(task.hasFreeVFSHandle());
         _ = task.file_handles.setFirstFree();
     }
-    expectEqual(false, task.hasFreeVFSHandle());
+    expect(!task.hasFreeVFSHandle());
 }
 
 test "getVFSHandle" {
