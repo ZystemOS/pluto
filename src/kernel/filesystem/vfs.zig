@@ -4,8 +4,6 @@ const TailQueue = std.TailQueue;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
-pub const Handle = usize;
-
 /// Flags specifying what to do when opening a file or directory
 pub const OpenFlags = enum {
     /// Create a directory if it doesn't exist
@@ -213,13 +211,8 @@ pub const DirNode = struct {
 
     /// See the documentation for FileSystem.Open
     pub fn open(self: *const DirNode, name: []const u8, flags: OpenFlags, args: OpenArgs) (Allocator.Error || Error)!*Node {
-        var fs = self.fs;
-        var node = self;
-        if (self.mount) |mnt| {
-            fs = mnt.fs;
-            node = mnt;
-        }
-        return fs.open(fs, node, name, flags, args);
+        var node = self.mount orelse self;
+        return node.fs.open(node.fs, node, name, flags, args);
     }
 
     /// See the documentation for FileSystem.Close
@@ -291,7 +284,7 @@ pub const MountError = error{
 pub const SEPARATOR: u8 = '/';
 
 /// The root of the system's top-level filesystem
-var root: *Node = undefined;
+pub var root: *Node = undefined;
 
 ///
 /// Traverse the specified path from the root and open the file/dir corresponding to that path. If the file/dir doesn't exist it can be created by specifying the open flags
@@ -594,7 +587,7 @@ const TestFS = struct {
 
     const Self = @This();
 
-    fn deinit(self: *@This()) void {
+    pub fn deinit(self: *@This()) void {
         self.tree.deinit(self.allocator);
         self.allocator.destroy(self.fs);
     }
@@ -720,7 +713,7 @@ const TestFS = struct {
     }
 };
 
-fn testInitFs(allocator: Allocator) !*TestFS {
+pub fn testInitFs(allocator: Allocator) !*TestFS {
     const fs = try allocator.create(FileSystem);
     var testfs = try allocator.create(TestFS);
     var root_node = try allocator.create(Node);

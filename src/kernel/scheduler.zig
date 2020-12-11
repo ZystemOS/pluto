@@ -14,6 +14,7 @@ const mem = @import("mem.zig");
 const fs = @import("filesystem/vfs.zig");
 const elf = @import("elf.zig");
 const pmm = @import("pmm.zig");
+const bitmap = @import("bitmap.zig");
 const Task = task.Task;
 const EntryPoint = task.EntryPoint;
 const Allocator = std.mem.Allocator;
@@ -146,6 +147,9 @@ pub fn init(allocator: Allocator, mem_profile: *const mem.MemProfile) Allocator.
     current_task.kernel_stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..kernel_stack_size];
     current_task.user_stack = &[_]usize{};
     current_task.kernel = true;
+    // TODO: Use Task.create instead of setting it up manually
+    current_task.file_handles = try bitmap.Bitmap(usize).init(task.VFS_HANDLES_PER_PROCESS, allocator);
+    current_task.file_handle_mapping = std.hash_map.AutoHashMap(task.Handle, *fs.Node).init(allocator);
     // ESP will be saved on next schedule
 
     // Run the runtime tests here
