@@ -46,6 +46,7 @@ pub fn build(b: *Builder) !void {
     const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
     const ramdisk_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "initrd.ramdisk" });
     const fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "fat32.img" });
+    const test_fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ "test", "fat32", "test_fat32.img" });
 
     const build_mode = b.standardReleaseOptions();
     comptime var test_mode_desc: []const u8 = "\n                         ";
@@ -122,6 +123,12 @@ pub fn build(b: *Builder) !void {
     mock_gen.setMainPkgPath(".");
     const mock_gen_run = mock_gen.run();
     unit_tests.step.dependOn(&mock_gen_run.step);
+
+    // Create test FAT32 image
+    const test_fat32_img_step = Fat32BuilderStep.create(b, .{}, test_fat32_image_path);
+    const copy_test_files_step = b.addSystemCommand(&[_][]const u8{ "./fat32_cp.sh", test_fat32_image_path });
+    copy_test_files_step.step.dependOn(&test_fat32_img_step.step);
+    unit_tests.step.dependOn(&copy_test_files_step.step);
 
     test_step.dependOn(&unit_tests.step);
 
