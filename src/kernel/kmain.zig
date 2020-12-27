@@ -218,3 +218,7 @@ fn initStage2() noreturn {
     // Can't return for now, later this can return maybe
     arch.spinWait();
 }
+
+test "" {
+    _ = @import("filesystem/fat32.zig");
+}

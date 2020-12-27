@@ -2090,12 +2090,12 @@ test "Fat32FS.init FATConfig expected" {
         .fsinfo_sector = 1,
         .backup_boot_sector = 6,
         .has_fs_info = true,
-        .number_free_clusters = 65491,
-        .next_free_cluster = 35,
+        .number_free_clusters = 65490,
+        .next_free_cluster = 36,
         .cluster_end_marker = 0x0FFFFFFF,
     };
 
-    expectEqual(expected, test_fs.fat_config);
+    expectEqual(test_fs.fat_config, expected);
 }
 
 test "Fat32FS.init FATConfig mix FSInfo" {
@@ -2133,7 +2133,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
             .cluster_end_marker = 0x0FFFFFFF,
         };
 
-        expectEqual(expected, test_fs.fat_config);
+        expectEqual(test_fs.fat_config, expected);
         test_file_buf[48] = 0x01;
     }
 
@@ -2162,7 +2162,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
             .cluster_end_marker = 0x0FFFFFFF,
         };
 
-        expectEqual(expected, test_fs.fat_config);
+        expectEqual(test_fs.fat_config, expected);
         test_file_buf[512] = 0x52;
     }
 
@@ -2190,11 +2190,11 @@ test "Fat32FS.init FATConfig mix FSInfo" {
             .backup_boot_sector = 6,
             .has_fs_info = true,
             .number_free_clusters = 0xFFFFFFFF,
-            .next_free_cluster = 35,
+            .next_free_cluster = 36,
             .cluster_end_marker = 0x0FFFFFFF,
         };
 
-        expectEqual(expected, test_fs.fat_config);
+        expectEqual(test_fs.fat_config, expected);
     }
 }
 
@@ -3879,14 +3879,14 @@ test "Fat32FS.read - large" {
 
     vfs.setRoot(test_fs.root_node.node);
 
-    const test_node = try vfs.openFile("/large_file2.txt", .NO_CREATION);
+    const test_node = try vfs.openFile("/large_file.txt", .NO_CREATION);
     defer test_node.close();
 
     var buff = [_]u8{0xAA} ** 8450;
     const read = try test_node.read(buff[0..]);
     expectEqual(read, 8450);
 
-    const large_file_content = @embedFile("../../../test/fat32/test_files/large_file2.txt");
+    const large_file_content = @embedFile("../../../test/fat32/test_files/large_file.txt");
     expectEqualSlices(u8, buff[0..], large_file_content[0..]);
 }
 
@@ -3905,6 +3905,10 @@ test "Fat32FS.read - all test files" {
 
     var it = test_files.iterate();
     while (try it.next()) |file| {
+        // Have tested the large file
+        if (std.mem.eql(u8, file.name, "large_file.txt")) {
+            continue;
+        }
         // Need to add a '/' at the beginning
         var file_name = try std.testing.allocator.alloc(u8, file.name.len + 1);
         defer std.testing.allocator.free(file_name);
