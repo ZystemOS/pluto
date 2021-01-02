@@ -29,7 +29,7 @@ pub const Node = union(enum) {
     /// The dir node if this represents a directory
     Dir: DirNode,
     /// The absolute path that this symlink is linked to
-    Symlink: []const u8,
+    Symlink: SymlinkNode,
 
     const Self = @This();
 
@@ -224,12 +224,28 @@ pub const DirNode = struct {
     pub fn close(self: *const DirNode) void {
         var fs = self.fs;
         var node = self;
-        if (self.mount) |mnt| {
-            fs = mnt.fs;
-            node = mnt;
-        }
+
         // TODO: Use @fieldParentPtr() once implemented for unions
-        return fs.close(fs, @ptrCast(*const Node, node));
+        const cast_node = @ptrCast(*const Node, node);
+        // Can't close the root node
+        if (cast_node == root) {
+            return;
+        }
+        return fs.close(fs, cast_node);
+    }
+};
+
+pub const SymlinkNode = struct {
+    /// The filesystem that handles operations on this directory
+    fs: *const FileSystem,
+
+    /// The absolute path that this symlink is linked to
+    path: []const u8,
+
+    /// See the documentation for FileSystem.Close
+    pub fn close(self: *const SymlinkNode) void {
+        // TODO: Use @fieldParentPtr() once implemented for unions
+        return self.fs.close(self.fs, @ptrCast(*const Node, self));
     }
 };
 
@@ -316,13 +332,16 @@ fn traversePath(path: []const u8, follow_symlinks: bool, flags: OpenFlags, args:
                 .File => Error.NotADirectory,
                 .Dir => |*dir| blk: {
                     var child = try dir.open(seg, rec_flags, .{});
+                    defer dir.close();
                     // If the segment refers to a symlink, redirect to the node it represents instead
                     if (child.isSymlink() and follow_links) {
-                        child = try traversePath(child.Symlink, follow_links, rec_flags, .{});
+                        const new_child = try traversePath(child.Symlink.path, follow_links, rec_flags, .{});
+                        child.Symlink.close();
+                        child = new_child;
                     }
                     break :blk try func(split, child, follow_links, rec_flags);
                 },
-                .Symlink => |target| if (follow_links) try func(split, try traversePath(target, follow_links, .NO_CREATION, .{}), follow_links, rec_flags) else Error.NotADirectory,
+                .Symlink => |target| if (follow_links) try func(split, try traversePath(target.path, follow_links, .NO_CREATION, .{}), follow_links, rec_flags) else Error.NotADirectory,
             };
         }
     };
@@ -343,12 +362,15 @@ fn traversePath(path: []const u8, follow_symlinks: bool, flags: OpenFlags, args:
             file.close();
             break :blk Error.NotADirectory;
         },
-        .Symlink => |target| if (follow_symlinks) try traversePath(target, follow_symlinks, .NO_CREATION, .{}) else result.parent,
+        .Symlink => |target| if (follow_symlinks) try traversePath(target.path, follow_symlinks, .NO_CREATION, .{}) else result.parent,
         .Dir => |*dir| blk: {
             var n = try dir.open(result.child, flags, args);
+            defer dir.close();
             if (n.isSymlink() and follow_symlinks) {
-                // If the child is a symnlink and we're following them, find the node it refers to
-                n = try traversePath(n.Symlink, follow_symlinks, flags, args);
+                // If the child is a symlink and we're following them, find the node it refers to
+                const new_n = try traversePath(n.Symlink.path, follow_symlinks, flags, args);
+                n.Symlink.close();
+                n = new_n;
             }
             break :blk n;
         },
@@ -370,6 +392,16 @@ pub fn mount(dir: *DirNode, fs: *const FileSystem) MountError!void {
         return MountError.DirAlreadyMounted;
     }
     dir.mount = fs.getRootNode(fs);
+}
+
+///
+/// Unmount the filesystem attached to a directory.
+///
+/// Arguments:
+///     IN dir: *DirNode - The directory to unmount from.
+///
+pub fn umount(dir: *DirNode) void {
+    dir.mount = null;
 }
 
 ///
@@ -419,8 +451,11 @@ pub fn openFile(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*
     var node = try open(path, true, flags, .{});
     return switch (node.*) {
         .File => &node.File,
-        .Dir => Error.IsADirectory,
-        // We instructed open to folow symlinks above, so this is impossible
+        .Dir => |*dir| blk: {
+            dir.close();
+            break :blk Error.IsADirectory;
+        },
+        // We instructed open to follow symlinks above, so this is impossible
         .Symlink => unreachable,
     };
 }
@@ -440,7 +475,7 @@ pub fn openFile(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*
 ///     Error.InvalidFlags - The flags were a value invalid when opening files
 ///     Error.NotADirectory - A segment within the path which is not at the end does not correspond to a directory
 ///     Error.NoSuchFileOrDir - The file/dir at the end of the path doesn't exist and the flags didn't specify to create it
-///     Error.NotADirectory - The path corresponds to a file rather than a directory
+///     Error.IsAFile - The path corresponds to a file rather than a directory
 ///
 pub fn openDir(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*DirNode {
     switch (flags) {
@@ -451,7 +486,7 @@ pub fn openDir(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*D
     return switch (node.*) {
         .File => |*file| blk: {
             file.close();
-            break :blk Error.NotADirectory;
+            break :blk Error.IsAFile;
         },
         // We instructed open to folow symlinks above, so this is impossible
         .Symlink => unreachable,
@@ -485,9 +520,15 @@ pub fn openSymlink(path: []const u8, target: ?[]const u8, flags: OpenFlags) (All
     }
     var node = try open(path, false, flags, .{ .symlink_target = target });
     return switch (node.*) {
-        .Symlink => |t| t,
-        .File => Error.IsAFile,
-        .Dir => Error.IsADirectory,
+        .Symlink => |t| t.path,
+        .File => |*file| blk: {
+            file.close();
+            break :blk Error.IsAFile;
+        },
+        .Dir => |*dir| blk: {
+            dir.close();
+            break :blk Error.IsADirectory;
+        },
     };
 }
 
@@ -540,7 +581,7 @@ const TestFS = struct {
     tree: TreeNode,
     fs: *FileSystem,
     allocator: *Allocator,
-    open_files_count: usize,
+    open_count: usize,
     instance: usize,
 
     const Self = @This();
@@ -589,7 +630,7 @@ const TestFS = struct {
 
     fn close(fs: *const FileSystem, node: *const Node) void {
         var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
-        test_fs.open_files_count -= 1;
+        test_fs.open_count -= 1;
     }
 
     fn read(fs: *const FileSystem, node: *const FileNode, bytes: []u8) (Allocator.Error || Error)!usize {
@@ -619,10 +660,8 @@ const TestFS = struct {
         // Check if the children match the file wanted
         for (parent.children.items) |child| {
             if (std.mem.eql(u8, child.name, name)) {
-                // Increment the open files count
-                if (child.val.isFile()) {
-                    test_fs.open_files_count += 1;
-                }
+                // Increment the open count
+                test_fs.open_count += 1;
                 return child.val;
             }
         }
@@ -643,7 +682,7 @@ const TestFS = struct {
                 .CREATE_SYMLINK => {
                     if (args.symlink_target) |target| {
                         child = try test_fs.allocator.create(Node);
-                        child.* = .{ .Symlink = target };
+                        child.* = .{ .Symlink = .{ .fs = test_fs.fs, .path = target } };
                     } else {
                         return Error.NoSymlinkTarget;
                     }
@@ -663,10 +702,8 @@ const TestFS = struct {
             child_tree.children.* = ArrayList(*TreeNode).init(test_fs.allocator);
             // Add it to the tree
             try parent.children.append(child_tree);
-            // Increment the open files count
-            if (child.isFile()) {
-                test_fs.open_files_count += 1;
-            }
+            // Increment the open count
+            test_fs.open_count += 1;
             return child;
         }
         return Error.NoSuchFileOrDir;
@@ -689,7 +726,7 @@ fn testInitFs(allocator: *Allocator) !*TestFS {
         },
         .fs = fs,
         .instance = 123,
-        .open_files_count = 0,
+        .open_count = 0,
         .allocator = allocator,
     };
     testfs.tree.children.* = ArrayList(*TestFS.TreeNode).init(allocator);
@@ -711,6 +748,7 @@ test "mount" {
     var testfs = try testInitFs(allocator);
     defer allocator.destroy(testfs);
     defer testfs.deinit();
+    defer testing.expectEqual(testfs.open_count, 0);
 
     testfs.instance = 1;
     root = testfs.tree.val;
@@ -719,11 +757,14 @@ test "mount" {
     var testfs2 = try testInitFs(allocator);
     defer allocator.destroy(testfs2);
     defer testfs2.deinit();
+    defer testing.expectEqual(testfs2.open_count, 0);
 
     testfs2.instance = 2;
     // Create the dir to mount to
     var dir = try openDir("/mnt", .CREATE_DIR);
+    defer dir.close();
     try mount(dir, testfs2.fs);
+    defer umount(dir);
     testing.expectError(MountError.DirAlreadyMounted, mount(dir, testfs2.fs));
 
     // Ensure the mount worked
@@ -731,6 +772,7 @@ test "mount" {
     testing.expectEqual((dir.mount orelse unreachable).fs, testfs2.fs);
     // Create a file within the mounted directory
     var test_file = try openFile("/mnt/123.txt", .CREATE_FILE);
+    defer test_file.close();
     testing.expectEqual(@ptrCast(*const FileSystem, testfs2.fs), test_file.fs);
     // This shouldn't be in the root fs
     testing.expectEqual(@as(usize, 1), testfs.tree.children.items.len);
@@ -760,14 +802,16 @@ test "traversePath" {
 
     // Same but with a directory
     var child2 = try test_root.Dir.open("child2", .CREATE_DIR, .{});
-    testing.expectEqual(child2, try traversePath("/child2", false, .NO_CREATION, .{}));
+    const child2_traversed = try traversePath("/child2", false, .NO_CREATION, .{});
+    testing.expectEqual(child2, child2_traversed);
 
     // Again but with a file within that directory
     var child3 = try child2.Dir.open("child3.txt", .CREATE_FILE, .{});
     var child3_traversed = try traversePath("/child2/child3.txt", false, .NO_CREATION, .{});
     testing.expectEqual(child3, child3_traversed);
     // Close the open files
-    child3.File.close();
+    child2.Dir.close();
+    child2_traversed.Dir.close();
     child3_traversed.File.close();
 
     // Create and open a symlink
@@ -777,6 +821,9 @@ test "traversePath" {
     var child5 = try traversePath("/child4", false, .CREATE_SYMLINK, .{ .symlink_target = "/child2" });
     var child5_linked = try traversePath("/child4/child3.txt", true, .NO_CREATION, .{});
     testing.expectEqual(child5_linked, child4_linked);
+    child3.File.close();
+    child4.Symlink.close();
+    child5.Symlink.close();
     child4_linked.File.close();
     child5_linked.File.close();
 
@@ -789,7 +836,7 @@ test "traversePath" {
     testing.expectError(Error.NoSymlinkTarget, traversePath("/childX.txt", false, .CREATE_SYMLINK, .{}));
 
     // Since we've closed all the files, the open files count should be zero
-    testing.expectEqual(testfs.open_files_count, 0);
+    testing.expectEqual(testfs.open_count, 0);
 }
 
 test "isAbsolute" {
@@ -808,7 +855,7 @@ test "isDir" {
     const fs: FileSystem = undefined;
     const dir = Node{ .Dir = .{ .fs = &fs, .mount = null } };
     const file = Node{ .File = .{ .fs = &fs } };
-    const symlink = Node{ .Symlink = "" };
+    const symlink = Node{ .Symlink = .{ .fs = &fs, .path = "" } };
     testing.expect(!symlink.isDir());
     testing.expect(!file.isDir());
     testing.expect(dir.isDir());
@@ -818,7 +865,7 @@ test "isFile" {
     const fs: FileSystem = undefined;
     const dir = Node{ .Dir = .{ .fs = &fs, .mount = null } };
     const file = Node{ .File = .{ .fs = &fs } };
-    const symlink = Node{ .Symlink = "" };
+    const symlink = Node{ .Symlink = .{ .fs = &fs, .path = "" } };
     testing.expect(!dir.isFile());
     testing.expect(!symlink.isFile());
     testing.expect(file.isFile());
@@ -828,7 +875,7 @@ test "isSymlink" {
     const fs: FileSystem = undefined;
     const dir = Node{ .Dir = .{ .fs = &fs, .mount = null } };
     const file = Node{ .File = .{ .fs = &fs } };
-    const symlink = Node{ .Symlink = "" };
+    const symlink = Node{ .Symlink = .{ .fs = &fs, .path = "" } };
     testing.expect(!dir.isSymlink());
     testing.expect(!file.isSymlink());
     testing.expect(symlink.isSymlink());

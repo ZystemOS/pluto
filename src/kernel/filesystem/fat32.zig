@@ -1182,10 +1182,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
             node.* = switch (flags) {
                 .CREATE_DIR => .{ .Dir = .{ .fs = self.fs, .mount = null } },
                 .CREATE_FILE => .{ .File = .{ .fs = self.fs } },
-                .CREATE_SYMLINK => if (open_args.symlink_target) |target|
-                    .{ .Symlink = target }
-                else
-                    return vfs.Error.NoSymlinkTarget,
+                .CREATE_SYMLINK => return vfs.Error.InvalidFlags,
                 .NO_CREATION => unreachable,
             };
 
