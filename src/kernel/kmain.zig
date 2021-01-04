@@ -129,7 +129,9 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         };
 
         // Need to init the vfs after the ramdisk as we need the root node from the ramdisk filesystem
-        vfs.setRoot(ramdisk_filesystem.root_node);
+        vfs.setRoot(ramdisk_filesystem.root_node) catch |e| {
+            panic_root.panic(@errorReturnTrace(), "Ramdisk root node isn't a directory node: {}\n", .{e});
+        };
     }
 
     scheduler.init(&kernel_heap.allocator, &mem_profile) catch |e| {

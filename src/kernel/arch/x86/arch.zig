@@ -30,6 +30,9 @@ const MemProfile = mem.MemProfile;
 /// The type of a device.
 pub const Device = pci.PciDeviceInfo;
 
+/// The type of the date and time structure.
+pub const DateTime = rtc.DateTime;
+
 /// The virtual end of the kernel code.
 extern var KERNEL_VADDR_END: *u32;
 
@@ -565,8 +568,30 @@ pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocato
     task.stack_pointer = @ptrToInt(&stack.*[kernel_stack_bottom]);
 }
 
+///
+/// Get a list of hardware devices attached to the system.
+///
+/// Arguments:
+///     IN allocator: *Allocator - An allocator for getting the devices
+///
+/// Return: []Device
+///     A list of hardware devices.
+///
+/// Error: Allocator.Error
+///     OutOfMemory - Unable to allocate space the operation.
+///
 pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
     return pci.getDevices(allocator);
+}
+
+///
+/// Get the system date and time.
+///
+/// Return: DateTime
+///     The current date and time.
+///
+pub fn getDateTime() DateTime {
+    return rtc.getDateTime();
 }
 
 ///

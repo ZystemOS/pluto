@@ -13,3 +13,4 @@
 # Custom ignore
 **/mock_framework.zig
 **/*.ramdisk
+**/*.img

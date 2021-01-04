@@ -523,8 +523,8 @@ pub const Fat32 = struct {
         }
 
         // Valid clusters are 1, 2, 4, 8, 16, 32, 64 and 128
-        if (options.cluster_size < 0 or options.cluster_size > 128 or !std.math.isPowerOfTwo(options.cluster_size)) {
-            log.err("Sectors per cluster is invalid. Must be less then 32 and a power of 2. Found: {}", .{options.cluster_size});
+        if (options.cluster_size < 1 or options.cluster_size > 128 or !std.math.isPowerOfTwo(options.cluster_size)) {
+            log.err("Sectors per cluster is invalid. Must be less then or equal to 128 and a power of 2. Found: {}", .{options.cluster_size});
             return Error.InvalidOptionValue;
         }
 

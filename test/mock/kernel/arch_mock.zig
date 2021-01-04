@@ -10,10 +10,19 @@ const paging = @import("paging_mock.zig");
 const Serial = @import("../../../src/kernel/serial.zig").Serial;
 const TTY = @import("../../../src/kernel/tty.zig").TTY;
 const Keyboard = @import("../../../src/kernel/keyboard.zig").Keyboard;
-
-pub const task = @import("../../../src/kernel/task.zig");
+const task = @import("../../../src/kernel/task.zig");
 
 pub const Device = pci.PciDeviceInfo;
+pub const DateTime = struct {
+    second: u32,
+    minute: u32,
+    hour: u32,
+    day: u32,
+    month: u32,
+    year: u32,
+    century: u32,
+    day_of_week: u32,
+};
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
@@ -151,10 +160,25 @@ pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
     return &[_]Device{};
 }
 
+pub fn getDateTime() DateTime {
+    // TODO: Use the std lib std.time.timestamp() and convert
+    // Hard code 12:12:13 12/12/12 for testing
+    return .{
+        .second = 13,
+        .minute = 12,
+        .hour = 12,
+        .day = 12,
+        .month = 12,
+        .year = 2012,
+        .century = 2000,
+        .day_of_week = 4,
+    };
+}
+
 pub fn init(mem_profile: *const MemProfile) void {
     // I'll get back to this as this doesn't effect the current testing.
     // When I come on to the mem.zig testing, I'll fix :)
-    //return mock_framework.performAction("init", void, mem_profile, allocator);
+    //return mock_framework.performAction("init", void, mem_profile);
 }
 
 // User defined mocked functions

@@ -24,8 +24,14 @@ const CURRENT_CENTURY: u32 = 2000;
 /// could report that the CMOS chip is faulty or the battery is dyeing.
 const CENTURY_REGISTER: bool = false;
 
+/// The error set that can be returned from some RTC functions.
+const RtcError = error{
+    /// If setting the rate for interrupts is less than 3 or greater than 15.
+    RateError,
+};
+
 /// A structure to hold all the date and time information in the RTC.
-const DateTime = struct {
+pub const DateTime = struct {
     second: u32,
     minute: u32,
     hour: u32,
@@ -34,12 +40,6 @@ const DateTime = struct {
     year: u32,
     century: u32,
     day_of_week: u32,
-};
-
-/// The error set that can be returned from some RTC functions.
-const RtcError = error{
-    /// If setting the rate for interrupts is less than 3 or greater than 15.
-    RateError,
 };
 
 /// The number of ticks that has passed when RTC was initially set up.
@@ -146,66 +146,6 @@ fn readRtcRegisters() DateTime {
 }
 
 ///
-/// Read a stable time from the real time clock registers on the CMOS chip and return a BCD and
-/// 12 hour converted date and time.
-///
-/// Return: DateTime
-///     The data from the CMOS RTC registers with correct BCD conversions, 12 hour conversions and
-///     the century added to the year.
-///
-fn readRtc() DateTime {
-    var date_time1 = readRtcRegisters();
-    var date_time2 = readRtcRegisters();
-
-    // Use the method: Read the registers twice and check if they are the same so to avoid
-    // inconsistent values due to RTC updates
-
-    var compare = false;
-
-    inline for (@typeInfo(DateTime).Struct.fields) |field| {
-        compare = compare or @field(date_time1, field.name) != @field(date_time2, field.name);
-    }
-
-    while (compare) {
-        date_time1 = readRtcRegisters();
-        date_time2 = readRtcRegisters();
-
-        compare = false;
-        inline for (@typeInfo(DateTime).Struct.fields) |field| {
-            compare = compare or @field(date_time1, field.name) != @field(date_time2, field.name);
-        }
-    }
-
-    // Convert BCD to binary if necessary
-    if (isBcd()) {
-        date_time1.second = bcdToBinary(date_time1.second);
-        date_time1.minute = bcdToBinary(date_time1.minute);
-        // Needs a special calculation because the upper bit is set
-        date_time1.hour = ((date_time1.hour & 0x0F) + (((date_time1.hour & 0x70) / 16) * 10)) | (date_time1.hour & 0x80);
-        date_time1.day = bcdToBinary(date_time1.day);
-        date_time1.month = bcdToBinary(date_time1.month);
-        date_time1.year = bcdToBinary(date_time1.year);
-        if (CENTURY_REGISTER) {
-            date_time1.century = bcdToBinary(date_time1.century);
-        }
-    }
-
-    // Need to add on the century to the year
-    if (CENTURY_REGISTER) {
-        date_time1.year += date_time1.century * 100;
-    } else {
-        date_time1.year += CURRENT_CENTURY;
-    }
-
-    // Convert to 24hr time
-    if (is12Hr(date_time1)) {
-        date_time1.hour = ((date_time1.hour & 0x7F) + 12) % 24;
-    }
-
-    return date_time1;
-}
-
-///
 /// The interrupt handler for the RTC.
 ///
 /// Arguments:
@@ -260,6 +200,66 @@ fn enableInterrupts() void {
 
     // Set the 7th bit to enable interrupt
     cmos.writeStatusRegister(cmos.StatusRegister.B, status_b | 0x40, true);
+}
+
+///
+/// Read a stable time from the real time clock registers on the CMOS chip and return a BCD and
+/// 12 hour converted date and time.
+///
+/// Return: DateTime
+///     The data from the CMOS RTC registers with correct BCD conversions, 12 hour conversions and
+///     the century added to the year.
+///
+pub fn getDateTime() DateTime {
+    var date_time1 = readRtcRegisters();
+    var date_time2 = readRtcRegisters();
+
+    // Use the method: Read the registers twice and check if they are the same so to avoid
+    // inconsistent values due to RTC updates
+
+    var compare = false;
+
+    inline for (@typeInfo(DateTime).Struct.fields) |field| {
+        compare = compare or @field(date_time1, field.name) != @field(date_time2, field.name);
+    }
+
+    while (compare) {
+        date_time1 = readRtcRegisters();
+        date_time2 = readRtcRegisters();
+
+        compare = false;
+        inline for (@typeInfo(DateTime).Struct.fields) |field| {
+            compare = compare or @field(date_time1, field.name) != @field(date_time2, field.name);
+        }
+    }
+
+    // Convert BCD to binary if necessary
+    if (isBcd()) {
+        date_time1.second = bcdToBinary(date_time1.second);
+        date_time1.minute = bcdToBinary(date_time1.minute);
+        // Needs a special calculation because the upper bit is set
+        date_time1.hour = ((date_time1.hour & 0x0F) + (((date_time1.hour & 0x70) / 16) * 10)) | (date_time1.hour & 0x80);
+        date_time1.day = bcdToBinary(date_time1.day);
+        date_time1.month = bcdToBinary(date_time1.month);
+        date_time1.year = bcdToBinary(date_time1.year);
+        if (CENTURY_REGISTER) {
+            date_time1.century = bcdToBinary(date_time1.century);
+        }
+    }
+
+    // Need to add on the century to the year
+    if (CENTURY_REGISTER) {
+        date_time1.year += date_time1.century * 100;
+    } else {
+        date_time1.year += CURRENT_CENTURY;
+    }
+
+    // Convert to 24hr time
+    if (is12Hr(date_time1)) {
+        date_time1.hour = ((date_time1.hour & 0x7F) + 12) % 24;
+    }
+
+    return date_time1;
 }
 
 ///
@@ -558,7 +558,7 @@ test "readRtc unstable read" {
         .century = 2000,
         .day_of_week = 5,
     };
-    const actual = readRtc();
+    const actual = getDateTime();
 
     expectEqual(expected, actual);
 }
@@ -611,7 +611,7 @@ test "readRtc is BCD" {
         .century = 2000,
         .day_of_week = 5,
     };
-    const actual = readRtc();
+    const actual = getDateTime();
 
     expectEqual(expected, actual);
 }
@@ -664,7 +664,7 @@ test "readRtc is 12 hours" {
         .century = 2000,
         .day_of_week = 5,
     };
-    const actual = readRtc();
+    const actual = getDateTime();
 
     expectEqual(expected, actual);
 }
