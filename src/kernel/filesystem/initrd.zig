@@ -371,7 +371,7 @@ test "open valid file" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
     defer file1.close();
@@ -401,7 +401,7 @@ test "open fail with invalid flags" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     expectError(error.InvalidFlags, vfs.openFile("/text10.txt", .CREATE_DIR));
     expectError(error.InvalidFlags, vfs.openFile("/text10.txt", .CREATE_FILE));
@@ -428,7 +428,7 @@ test "open fail with NoSuchFileOrDir" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
     expectError(error.NoSuchFileOrDir, vfs.openFile("/text10.txt", .NO_CREATION));
     expectError(error.NoSuchFileOrDir, vfs.openDir("/temp/", .NO_CREATION));
 }
@@ -443,7 +443,7 @@ test "open a file, out of memory" {
     var fs = try InitrdFS.init(&initrd_stream, &fa.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     expectError(error.OutOfMemory, vfs.openFile("/test1.txt", .NO_CREATION));
 }
@@ -456,7 +456,7 @@ test "open two of the same file" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     const file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
     defer file1.close();
@@ -482,7 +482,7 @@ test "close a file" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
 
@@ -514,7 +514,7 @@ test "close a non-opened file" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     // Open a valid file
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
@@ -541,7 +541,7 @@ test "read a file" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
     defer file1.close();
@@ -565,7 +565,7 @@ test "read a file, invalid/not opened/crafted *const Node" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     // Open a valid file
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
@@ -594,7 +594,7 @@ test "write does nothing" {
     var fs = try InitrdFS.init(&initrd_stream, std.testing.allocator);
     defer fs.deinit();
 
-    vfs.setRoot(fs.root_node);
+    try vfs.setRoot(fs.root_node);
 
     // Open a valid file
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
@@ -663,7 +663,9 @@ fn rt_openReadClose(allocator: *Allocator) void {
 fn runtimeTests(rd_fs: *InitrdFS) void {
     // There will be test files provided for the runtime tests
     // Need to init the VFS. This will be overridden after the tests.
-    vfs.setRoot(rd_fs.root_node);
+    vfs.setRoot(rd_fs.root_node) catch |e| {
+        panic(@errorReturnTrace(), "Ramdisk root node isn't a directory node: {}\n", .{e});
+    };
     rt_openReadClose(rd_fs.allocator);
     if (rd_fs.opened_files.count() != 0) {
         panic(@errorReturnTrace(), "FAILURE: Didn't close all files\n", .{});

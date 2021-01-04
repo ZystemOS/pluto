@@ -488,7 +488,7 @@ pub fn openDir(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*D
             file.close();
             break :blk Error.IsAFile;
         },
-        // We instructed open to folow symlinks above, so this is impossible
+        // We instructed open to follow symlinks above, so this is impossible
         .Symlink => unreachable,
         .Dir => &node.Dir,
     };
@@ -499,7 +499,7 @@ pub fn openDir(path: []const u8, flags: OpenFlags) (Allocator.Error || Error)!*D
 ///
 /// Arguments:
 ///     IN path: []const u8 - The path to open. Must be absolute (see isAbsolute)
-///     IN tareget: ?[]const u8 - The target to use when creating the symlink. Can be null if .NO_CREATION is used as the open flag
+///     IN target: ?[]const u8 - The target to use when creating the symlink. Can be null if .NO_CREATION is used as the open flag
 ///     IN flags: OpenFlags - The flags specifying if this node should be created if it doesn't exist. Cannot be CREATE_FILE
 ///
 /// Return: []const u8
@@ -552,7 +552,13 @@ pub fn isAbsolute(path: []const u8) bool {
 /// Arguments:
 ///     IN node: *Node - The node to initialise the root node.
 ///
-pub fn setRoot(node: *Node) void {
+/// Error: Error
+///     Error.NotADirectory - The node isn't a directory node.
+///
+pub fn setRoot(node: *Node) Error!void {
+    if (!node.isDir()) {
+        return Error.NotADirectory;
+    }
     root = node;
 }
 
@@ -972,8 +978,8 @@ test "read" {
     testing.expectEqual(test_link, "/foo.txt");
     var link_file = try openFile("/link", .NO_CREATION);
     {
-        const length = try link_file.read(buffer[0..0]);
-        testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
+        const length = try link_file.read(buffer[0..]);
+        testing.expect(std.mem.eql(u8, str[0..], buffer[0..length]));
     }
 }
 
