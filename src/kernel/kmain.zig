@@ -44,7 +44,7 @@ export var KERNEL_PHYSADDR_END: u32 = if (builtin.is_test) 0x14E000 else undefin
 // Just call the panic function, as this need to be in the root source file
 pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {
     @setCold(true);
-    panic_root.panic(error_return_trace, "{}", .{msg});
+    panic_root.panic(error_return_trace, "{s}", .{msg});
 }
 
 pub const log_level: std.log.Level = .debug;
@@ -173,7 +173,7 @@ fn initStage2() noreturn {
         \\                 | |      | |____  | |__| |    | |    | |__| |
         \\                 |_|      |______|  \____/     |_|     \____/
     ;
-    tty.print("{}\n\n", .{logo});
+    tty.print("{s}\n\n", .{logo});
 
     tty.print("Hello Pluto from kernel :)\n", .{});
 
