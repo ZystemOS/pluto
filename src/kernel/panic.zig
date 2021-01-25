@@ -1,6 +1,5 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const tty = @import("tty.zig");
 const arch = @import("arch.zig").internals;
 const multiboot = @import("multiboot.zig");
 const mem = @import("mem.zig");
@@ -112,7 +111,7 @@ var symbol_map: ?SymbolMap = null;
 ///
 fn logTraceAddress(addr: usize) void {
     const str = if (symbol_map) |syms| syms.search(addr) orelse "?????" else "(no symbols available)";
-    log.emerg("{x}: {}\n", .{ addr, str });
+    log.emerg("{x}: {s}\n", .{ addr, str });
 }
 
 ///

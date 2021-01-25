@@ -99,7 +99,7 @@ pub const RuntimeStep = struct {
         while (true) {
             const msg = self.get_msg() catch return true;
             defer self.builder.allocator.free(msg);
-            std.debug.warn("{}\n", .{msg});
+            std.debug.warn("{s}\n", .{msg});
         }
     }
 
@@ -117,7 +117,7 @@ pub const RuntimeStep = struct {
             const msg = self.get_msg() catch return false;
             defer self.builder.allocator.free(msg);
             // Print the line to see what is going on
-            std.debug.warn("{}\n", .{msg});
+            std.debug.warn("{s}\n", .{msg});
             if (std.mem.indexOf(u8, msg, "FAILURE")) |_| {
                 return false;
             } else if (std.mem.indexOf(u8, msg, "Kernel panic")) |_| {
@@ -142,7 +142,7 @@ pub const RuntimeStep = struct {
             const msg = self.get_msg() catch return false;
             defer self.builder.allocator.free(msg);
             // Print the line to see what is going on
-            std.debug.warn("{}\n", .{msg});
+            std.debug.warn("{s}\n", .{msg});
             if (std.mem.eql(u8, msg, "[emerg] (panic): Kernel panic: integer overflow")) {
                 return true;
             }
@@ -164,7 +164,7 @@ pub const RuntimeStep = struct {
             const msg = self.get_msg() catch return false;
             defer self.builder.allocator.free(msg);
 
-            std.debug.warn("{}\n", .{msg});
+            std.debug.warn("{s}\n", .{msg});
 
             // Make sure `[INFO] Switched` then `[INFO] SUCCESS: Scheduler variables preserved` are logged in this order
             if (std.mem.eql(u8, msg, "[info] (scheduler): Switched") and state == 0) {

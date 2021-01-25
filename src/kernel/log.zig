@@ -7,8 +7,8 @@ const scheduler = @import("scheduler.zig");
 /// The errors that can occur when logging
 const LoggingError = error{};
 
-/// The OutStream for the format function
-const OutStream = std.io.OutStream(void, LoggingError, logCallback);
+/// The Writer for the format function
+const Writer = std.io.Writer(void, LoggingError, logCallback);
 
 /// The serial object where the logs will be written to. This will be a COM serial port.
 var serial: Serial = undefined;
@@ -44,7 +44,7 @@ fn logCallback(context: void, str: []const u8) LoggingError!usize {
 ///
 pub fn log(comptime level: std.log.Level, comptime format: []const u8, args: anytype) void {
     scheduler.taskSwitching(false);
-    fmt.format(OutStream{ .context = {} }, "[" ++ @tagName(level) ++ "] " ++ format, args) catch unreachable;
+    fmt.format(Writer{ .context = {} }, "[" ++ @tagName(level) ++ "] " ++ format, args) catch unreachable;
     scheduler.taskSwitching(true);
 }
 
@@ -70,6 +70,6 @@ fn runtimeTests() void {
     inline for (@typeInfo(std.log.Level).Enum.fields) |field| {
         const level = @field(std.log.Level, field.name);
         log(level, "Test " ++ field.name ++ " level\n", .{});
-        log(level, "Test " ++ field.name ++ " level with args {}, {}\n", .{ "a", @as(u32, 1) });
+        log(level, "Test " ++ field.name ++ " level with args {s}, {}\n", .{ "a", @as(u32, 1) });
     }
 }

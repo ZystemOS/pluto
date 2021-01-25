@@ -7,7 +7,7 @@ const arch = @import("arch.zig").internals;
 const panic = @import("panic.zig").panic;
 
 /// The OutStream for the format function
-const OutStream = std.io.OutStream(void, anyerror, printCallback);
+const Writer = std.io.Writer(void, anyerror, printCallback);
 
 pub const TTY = struct {
     /// Print a already-formatted string
@@ -51,7 +51,7 @@ fn printCallback(ctx: void, str: []const u8) !usize {
 ///
 pub fn print(comptime format: []const u8, args: anytype) void {
     // Printing can't error because of the scrolling, if it does, we have a big problem
-    fmt.format(OutStream{ .context = {} }, format, args) catch |e| {
+    fmt.format(Writer{ .context = {} }, format, args) catch |e| {
         log.emerg("Error printing. Error: {}\n", .{e});
     };
 }
