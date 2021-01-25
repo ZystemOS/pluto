@@ -192,31 +192,6 @@ fn initStage2() noreturn {
         else => {},
     }
 
-    const kb = keyboard.getKeyboard(0) orelse unreachable;
-    var shift = false;
-    while (true) {
-        if (kb.readKey()) |key| {
-            if (key.released) {
-                if (key.position == keyboard.KeyPosition.LEFT_SHIFT) {
-                    shift = false;
-                }
-                continue;
-            }
-            var char: ?u8 = switch (key.position) {
-                keyboard.KeyPosition.LEFT_SHIFT, keyboard.KeyPosition.RIGHT_SHIFT => blk: {
-                    shift = true;
-                    break :blk null;
-                },
-                keyboard.KeyPosition.Q => if (shift) @as(u8, 'Q') else @as(u8, 'q'),
-                keyboard.KeyPosition.W => if (shift) @as(u8, 'W') else @as(u8, 'w'),
-                else => null,
-            };
-            if (char) |ch| {
-                tty.print("{c}", .{ch});
-            }
-        }
-    }
-
     // Can't return for now, later this can return maybe
     arch.spinWait();
 }
