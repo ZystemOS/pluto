@@ -198,7 +198,7 @@ var time_under_1_ns: u32 = undefined;
 /// Arguments:
 ///     IN cmd: u8 - The command to send to the PIT.
 ///
-inline fn sendCommand(cmd: u8) void {
+fn sendCommand(cmd: u8) callconv(.Inline) void {
     arch.out(COMMAND_REGISTER, cmd);
 }
 
@@ -211,7 +211,7 @@ inline fn sendCommand(cmd: u8) void {
 /// Return: u8
 ///     The mode the counter is operating in. Use the masks above to get each part.
 ///
-inline fn readBackCommand(counter: CounterSelect) u8 {
+fn readBackCommand(counter: CounterSelect) callconv(.Inline) u8 {
     sendCommand(0xC2);
     return 0x3F & arch.in(u8, counter.getRegister());
 }
@@ -223,7 +223,7 @@ inline fn readBackCommand(counter: CounterSelect) u8 {
 ///     IN counter: CounterSelect - The counter port to send the data to.
 ///     IN data: u8               - The data to send.
 ///
-inline fn sendDataToCounter(counter: CounterSelect, data: u8) void {
+fn sendDataToCounter(counter: CounterSelect, data: u8) callconv(.Inline) void {
     arch.out(counter.getRegister(), data);
 }
 

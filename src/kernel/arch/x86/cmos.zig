@@ -137,7 +137,7 @@ pub const RtcRegister = enum {
 ///     IN reg: u8                    - The register index to select in the CMOS chip.
 ///     IN comptime disable_nmi: bool - Whether to disable NMI when selecting a register.
 ///
-inline fn selectRegister(reg: u8, comptime disable_nmi: bool) void {
+fn selectRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) void {
     if (disable_nmi) {
         arch.out(ADDRESS, reg | NMI_BIT);
     } else {
@@ -151,7 +151,7 @@ inline fn selectRegister(reg: u8, comptime disable_nmi: bool) void {
 /// Arguments:
 ///     IN data: u8 - The data to write to the selected register.
 ///
-inline fn writeRegister(data: u8) void {
+fn writeRegister(data: u8) callconv(.Inline) void {
     arch.out(DATA, data);
 }
 
@@ -161,7 +161,7 @@ inline fn writeRegister(data: u8) void {
 /// Return: u8
 ///     The value in the selected register.
 ///
-inline fn readRegister() u8 {
+fn readRegister() callconv(.Inline) u8 {
     return arch.in(u8, DATA);
 }
 
@@ -176,7 +176,7 @@ inline fn readRegister() u8 {
 /// Return: u8
 ///     The value in the selected register.
 ///
-inline fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) u8 {
+fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) u8 {
     selectRegister(reg, disable_nmi);
     arch.ioWait();
     return readRegister();
@@ -191,7 +191,7 @@ inline fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) u8 {
 ///     IN data: u8                   - The data to write to the selected register.
 ///     IN comptime disable_nmi: bool - Whether to disable NMI when selecting a register.
 ///
-inline fn selectAndWriteRegister(reg: u8, data: u8, comptime disable_nmi: bool) void {
+fn selectAndWriteRegister(reg: u8, data: u8, comptime disable_nmi: bool) callconv(.Inline) void {
     selectRegister(reg, disable_nmi);
     arch.ioWait();
     writeRegister(data);
