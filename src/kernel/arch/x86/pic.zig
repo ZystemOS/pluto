@@ -251,7 +251,7 @@ var spurious_irq_counter: u32 = 0;
 /// Arguments:
 ///     IN cmd: u8 - The command to send.
 ///
-inline fn sendCommandMaster(cmd: u8) void {
+fn sendCommandMaster(cmd: u8) callconv(.Inline) void {
     arch.out(MASTER_COMMAND_REG, cmd);
 }
 
@@ -261,7 +261,7 @@ inline fn sendCommandMaster(cmd: u8) void {
 /// Arguments:
 ///     IN cmd: u8 - The command to send.
 ///
-inline fn sendCommandSlave(cmd: u8) void {
+fn sendCommandSlave(cmd: u8) callconv(.Inline) void {
     arch.out(SLAVE_COMMAND_REG, cmd);
 }
 
@@ -271,7 +271,7 @@ inline fn sendCommandSlave(cmd: u8) void {
 /// Arguments:
 ///     IN data: u8 - The data to send.
 ///
-inline fn sendDataMaster(data: u8) void {
+fn sendDataMaster(data: u8) callconv(.Inline) void {
     arch.out(MASTER_DATA_REG, data);
 }
 
@@ -281,7 +281,7 @@ inline fn sendDataMaster(data: u8) void {
 /// Arguments:
 ///     IN data: u8 - The data to send.
 ///
-inline fn sendDataSlave(data: u8) void {
+fn sendDataSlave(data: u8) callconv(.Inline) void {
     arch.out(SLAVE_DATA_REG, data);
 }
 
@@ -291,7 +291,7 @@ inline fn sendDataSlave(data: u8) void {
 /// Return: u8
 ///     The data that is stored in the master data register.
 ///
-inline fn readDataMaster() u8 {
+fn readDataMaster() callconv(.Inline) u8 {
     return arch.in(u8, MASTER_DATA_REG);
 }
 
@@ -301,7 +301,7 @@ inline fn readDataMaster() u8 {
 /// Return: u8
 ///     The data that is stored in the salve data register.
 ///
-inline fn readDataSlave() u8 {
+fn readDataSlave() callconv(.Inline) u8 {
     return arch.in(u8, SLAVE_DATA_REG);
 }
 
@@ -311,7 +311,7 @@ inline fn readDataSlave() u8 {
 /// Return: u8
 ///     The data that is stored in the master IRR.
 ///
-inline fn readMasterIrr() u8 {
+fn readMasterIrr() callconv(.Inline) u8 {
     sendCommandMaster(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_IRR);
     return arch.in(u8, MASTER_STATUS_REG);
 }
@@ -322,7 +322,7 @@ inline fn readMasterIrr() u8 {
 /// Return: u8
 ///     The data that is stored in the slave IRR.
 ///
-inline fn readSlaveIrr() u8 {
+fn readSlaveIrr() callconv(.Inline) u8 {
     sendCommandSlave(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_IRR);
     return arch.in(u8, SLAVE_STATUS_REG);
 }
@@ -333,7 +333,7 @@ inline fn readSlaveIrr() u8 {
 /// Return: u8
 ///     The data that is stored in the master ISR.
 ///
-inline fn readMasterIsr() u8 {
+fn readMasterIsr() callconv(.Inline) u8 {
     sendCommandMaster(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_ISR);
     return arch.in(u8, MASTER_STATUS_REG);
 }
@@ -344,7 +344,7 @@ inline fn readMasterIsr() u8 {
 /// Return: u8
 ///     The data that is stored in the slave ISR.
 ///
-inline fn readSlaveIsr() u8 {
+fn readSlaveIsr() callconv(.Inline) u8 {
     sendCommandSlave(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_ISR);
     return arch.in(u8, SLAVE_STATUS_REG);
 }

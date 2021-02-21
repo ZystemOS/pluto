@@ -389,7 +389,7 @@ fn Mock() type {
                     switch (action.action) {
                         ActionType.TestValue, ActionType.ConsumeFunctionCall => {
                             // These need to be all consumed
-                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{}'\n", .{ action.action, @as(DataElementType, action.data), next.key });
+                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{s}'\n", .{ action.action, @as(DataElementType, action.data), next.key });
                         },
                         ActionType.RepeatFunctionCall => {
                             // As this is a repeat action, the function will still be here

@@ -150,7 +150,7 @@ pub var kernel_directory: Directory align(@truncate(u29, PAGE_SIZE_4KB)) = Direc
 /// Return: usize
 ///     The index into an array of directory entries.
 ///
-inline fn virtToDirEntryIdx(virt: usize) usize {
+fn virtToDirEntryIdx(virt: usize) callconv(.Inline) usize {
     return virt / PAGE_SIZE_4MB;
 }
 
@@ -163,7 +163,7 @@ inline fn virtToDirEntryIdx(virt: usize) usize {
 /// Return: usize
 ///     The index into an array of table entries.
 ///
-inline fn virtToTableEntryIdx(virt: usize) usize {
+fn virtToTableEntryIdx(virt: usize) callconv(.Inline) usize {
     return (virt / PAGE_SIZE_4KB) % ENTRIES_PER_TABLE;
 }
 
@@ -174,7 +174,7 @@ inline fn virtToTableEntryIdx(virt: usize) usize {
 ///     val: *align(1) u32 - The entry to modify
 ///     attr: u32 - The bits corresponding to the attribute to set
 ///
-inline fn setAttribute(val: *align(1) u32, attr: u32) void {
+fn setAttribute(val: *align(1) u32, attr: u32) callconv(.Inline) void {
     val.* |= attr;
 }
 
@@ -185,7 +185,7 @@ inline fn setAttribute(val: *align(1) u32, attr: u32) void {
 ///     val: *align(1) u32 - The entry to modify
 ///     attr: u32 - The bits corresponding to the attribute to clear
 ///
-inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
+fn clearAttribute(val: *align(1) u32, attr: u32) callconv(.Inline) void {
     val.* &= ~attr;
 }
 

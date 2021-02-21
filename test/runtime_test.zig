@@ -299,7 +299,7 @@ pub const RuntimeStep = struct {
     pub fn create(builder: *Builder, test_mode: TestMode, qemu_args: [][]const u8) *RuntimeStep {
         const runtime_step = builder.allocator.create(RuntimeStep) catch unreachable;
         runtime_step.* = RuntimeStep{
-            .step = Step.init(.Custom, builder.fmt("Runtime {}", .{@tagName(test_mode)}), builder.allocator, make),
+            .step = Step.init(.Custom, builder.fmt("Runtime {s}", .{@tagName(test_mode)}), builder.allocator, make),
             .builder = builder,
             .msg_queue = Queue.init(),
             .os_proc = undefined,

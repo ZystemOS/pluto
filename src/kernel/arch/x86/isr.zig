@@ -160,7 +160,7 @@ export fn isrHandler(ctx: *arch.CpuState) usize {
                 ret_esp = handler(ctx);
             } else {
                 log.info("State: {X}\n", .{ctx});
-                panic(@errorReturnTrace(), "ISR {} ({}) triggered with error code 0x{X} but not registered\n", .{ exception_msg[isr_num], isr_num, ctx.error_code });
+                panic(@errorReturnTrace(), "ISR {s} ({}) triggered with error code 0x{X} but not registered\n", .{ exception_msg[isr_num], isr_num, ctx.error_code });
             }
         }
     } else {

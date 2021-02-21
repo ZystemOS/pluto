@@ -121,7 +121,7 @@ var cursor_scanline_end: u8 = undefined;
 ///     IN index: u8 - The index to send to the port address to select the register to write data
 ///                    to.
 ///
-inline fn sendPort(index: u8) void {
+fn sendPort(index: u8) callconv(.Inline) void {
     arch.out(PORT_ADDRESS, index);
 }
 
@@ -131,7 +131,7 @@ inline fn sendPort(index: u8) void {
 /// Arguments:
 ///     IN data: u8 - The data to send to the selected register.
 ///
-inline fn sendData(data: u8) void {
+fn sendData(data: u8) callconv(.Inline) void {
     arch.out(PORT_DATA, data);
 }
 
@@ -141,7 +141,7 @@ inline fn sendData(data: u8) void {
 /// Return: u8
 ///     The data in the selected register.
 ///
-inline fn getData() u8 {
+fn getData() callconv(.Inline) u8 {
     return arch.in(u8, PORT_DATA);
 }
 ///
@@ -152,7 +152,7 @@ inline fn getData() u8 {
 //                     data to.
 ///     IN data: u8 - The data to send to the selected register.
 ///
-inline fn sendPortData(index: u8, data: u8) void {
+fn sendPortData(index: u8, data: u8) callconv(.Inline) void {
     sendPort(index);
     sendData(data);
 }
@@ -167,7 +167,7 @@ inline fn sendPortData(index: u8, data: u8) void {
 /// Return: u8
 ///     The data in the selected register.
 ///
-inline fn getPortData(index: u8) u8 {
+fn getPortData(index: u8) callconv(.Inline) u8 {
     sendPort(index);
     return getData();
 }

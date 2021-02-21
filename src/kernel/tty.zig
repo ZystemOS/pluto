@@ -88,7 +88,7 @@ pub fn clear() void {
         spaces[col] = "\n"[0];
         var row: u8 = 0;
         while (row < tty.rows) : (row += 1) {
-            print("{}", .{spaces});
+            print("{s}", .{spaces});
         }
         tty.setCursor(0, 0);
     }
