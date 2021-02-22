@@ -177,6 +177,6 @@ export fn exceptionHandler() noreturn {
     rpi.spinLed(100);
 }
 
-pub inline fn currentExceptionLevel() u2 {
+pub fn currentExceptionLevel() callconv(.Inline) u2 {
     return @truncate(u2, Cpu.CurrentEL.read() >> 2);
 }

@@ -183,13 +183,13 @@ pub const Cpu = struct {
 
     fn cpuRegister(comptime register_name: []const u8) type {
         return struct {
-            pub inline fn read() usize {
+            pub fn read() callconv(.Inline) usize {
                 const data = asm ("mov %[data], " ++ register_name
                     : [data] "=r" (-> usize)
                 );
                 return data;
             }
-            pub inline fn write(data: usize) void {
+            pub fn write(data: usize) callconv(.Inline) void {
                 asm volatile ("mov " ++ register_name ++ ", %[data]"
                     :
                     : [data] "r" (data)
@@ -199,7 +199,7 @@ pub const Cpu = struct {
     }
     fn systemRegisterPerExceptionLevel(comptime available_levels: AvailableLevels, comptime register_name: []const u8) type {
         return struct {
-            pub inline fn el(exception_level: u2) type {
+            pub fn el(exception_level: u2) callconv(.Inline) type {
                 const level_string = switch (exception_level) {
                     0 => string: {
                         assert(available_levels == .JustLevelZero);
@@ -224,16 +224,16 @@ pub const Cpu = struct {
     }
     fn systemRegister(comptime register_name: []const u8) type {
         return struct {
-            pub inline fn read() usize {
+            pub fn read() callconv(.Inline) usize {
                 const word = asm ("mrs %[word], " ++ register_name
                     : [word] "=r" (-> usize)
                 );
                 return word;
             }
-            pub inline fn readSetWrite(bits: usize) void {
+            pub fn readSetWrite(bits: usize) callconv(.Inline) void {
                 write(read() | bits);
             }
-            pub inline fn write(data: usize) void {
+            pub fn write(data: usize) callconv(.Inline) void {
                 asm volatile ("msr " ++ register_name ++ ", %[data]"
                     :
                     : [data] "r" (data)
@@ -241,7 +241,7 @@ pub const Cpu = struct {
             }
         };
     }
-    pub inline fn isb() void {
+    pub fn isb() callconv(.Inline) void {
         asm volatile (
             \\ isb
         );
@@ -251,7 +251,7 @@ pub const Cpu = struct {
         return cntfrq.el(0).read() != 0;
     }
 
-    pub inline fn wfe() void {
+    pub fn wfe() callconv(.Inline) void {
         asm volatile (
             \\ wfe
         );

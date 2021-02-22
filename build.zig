@@ -90,9 +90,8 @@ pub fn build(b: *Builder) !void {
     exec.addPackage(arch_mock_pkg);
 
     const make_iso = switch (target.getCpuArch()) {
-        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
+        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec_output_path, ramdisk_path, output_iso }),
         .aarch64 => makeRpiImage: {
-            const elf = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "pluto.elf" });
             const kernel_image = "kernel8.img";
             const sdcard_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard.img" });
 
@@ -247,7 +246,7 @@ pub fn build(b: *Builder) !void {
             try qemu_args_al.append("-cdrom");
             try qemu_args_al.append(output_iso);
         },
-        .aarch64 => try qemu_args_al.appendSlice(&[_][]const u8{ "-kernel", exec.getOutputPath(), "-machine", "raspi3" }),
+        .aarch64 => try qemu_args_al.appendSlice(&[_][]const u8{ "-kernel", exec_output_path, "-machine", "raspi3" }),
         else => unreachable,
     }
     if (disable_display) {
