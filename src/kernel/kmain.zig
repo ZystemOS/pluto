@@ -144,12 +144,12 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     // Initialisation is finished, now does other stuff
     kmain_log.info("Init\n", .{});
 
-    // Main initialisation finished so can enable interrupts
-    arch.enableInterrupts();
+    if (builtin.arch != .aarch64) {
+        // Main initialisation finished so can enable interrupts
+        arch.enableInterrupts();
 
-    kmain_log.info("Creating init2\n", .{});
+        kmain_log.info("Creating init2\n", .{});
 
-    if (builtin.arch != aarch64) {
         // Create a init2 task
         var stage2_task = task.Task.create(@ptrToInt(initStage2), true, kernel_vmm, &kernel_heap.allocator) catch |e| {
             panic_root.panic(@errorReturnTrace(), "Failed to create init stage 2 task: {}\n", .{e});
