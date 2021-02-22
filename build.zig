@@ -38,7 +38,6 @@ pub fn build(b: *Builder) !void {
 
     const main_src = "src/kernel/kmain.zig";
     const arch_root = "src/kernel/arch";
-    const constants_path = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "constants.zig" });
     const linker_script_path = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "link.ld" });
     const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
     const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso" });
@@ -60,7 +59,6 @@ pub fn build(b: *Builder) !void {
     const disable_display = b.option(bool, "disable-display", "Disable the qemu window") orelse false;
 
     const exec = b.addExecutable("pluto.elf", main_src);
-    exec.addPackagePath("constants", constants_path);
     exec.setOutputDir(b.cache_root);
     exec.addBuildOption(TestMode, "test_mode", test_mode);
     exec.setBuildMode(build_mode);
@@ -108,7 +106,6 @@ pub fn build(b: *Builder) !void {
     const unit_tests = b.addTest(main_src);
     unit_tests.setBuildMode(build_mode);
     unit_tests.setMainPkgPath(".");
-    unit_tests.addPackagePath("constants", constants_path);
     unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
     unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
     unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);

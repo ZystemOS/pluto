@@ -1,4 +1,3 @@
-const constants = @import("constants");
 const arch = @import("arch.zig");
 
 /// The multiboot header
@@ -13,7 +12,7 @@ const MEMINFO = 1 << 1;
 const MAGIC = 0x1BADB002;
 const FLAGS = ALIGN | MEMINFO;
 
-const KERNEL_PAGE_NUMBER = constants.KERNEL_ADDR_OFFSET >> 22;
+const KERNEL_PAGE_NUMBER = 0xC0000000 >> 22;
 // The number of pages occupied by the kernel, will need to be increased as we add a heap etc.
 const KERNEL_NUM_PAGES = 1;
 
