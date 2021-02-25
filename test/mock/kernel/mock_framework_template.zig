@@ -92,7 +92,7 @@ fn Mock() type {
         ///
         fn createDataElement(arg: anytype) DataElement {
             return switch (@TypeOf(arg)) {
-            ////createDataElement////
+                ////createDataElement////
             };
         }
 
@@ -107,7 +107,7 @@ fn Mock() type {
         ///
         fn getDataElementType(comptime T: type) DataElementType {
             return switch (T) {
-            ////getDataElementType////
+                ////getDataElementType////
             };
         }
 
@@ -124,7 +124,7 @@ fn Mock() type {
         ///
         fn getDataValue(comptime T: type, element: DataElement) T {
             return switch (T) {
-            ////getDataValue////
+                ////getDataValue////
             };
         }
 

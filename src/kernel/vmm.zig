@@ -79,12 +79,13 @@ pub fn Mapper(comptime Payload: type) type {
         /// Arguments:
         ///     IN virtual_start: usize - The start of the virtual region to unmap
         ///     IN virtual_end: usize - The end of the virtual region to unmap
+        ///     IN/OUT allocator: Allocator - The allocator to use to free the mapping
         ///     IN spec: Payload - The payload to pass to the mapper
         ///
-        /// Error: AllocatorError || MapperError
+        /// Error: MapperError
         ///     The causes depend on the mapper used
         ///
-        unmapFn: fn (virtual_start: usize, virtual_end: usize, spec: Payload) (Allocator.Error || MapperError)!void,
+        unmapFn: fn (virtual_start: usize, virtual_end: usize, allocator: *Allocator, spec: Payload) MapperError!void,
     };
 }
 
@@ -482,7 +483,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                     self.mapper.mapFn(v, v_end, p, p_end, .{ .kernel = true, .writable = true, .cachable = true }, self.allocator, self.payload) catch |e| {
                         // If we fail to map one of the blocks then attempt to free all previously mapped
                         if (i > 0) {
-                            self.mapper.unmapFn(v_start, v_end, self.payload) catch |e2| {
+                            self.mapper.unmapFn(v_start, v_end, self.allocator, self.payload) catch |e2| {
                                 // If we can't unmap then just panic
                                 panic(@errorReturnTrace(), "Failed to unmap region 0x{X} -> 0x{X}: {}\n", .{ v_start, v_end, e2 });
                             };
@@ -532,7 +533,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                 // Unmap the entire range
                 const region_start = vaddr;
                 const region_end = vaddr + (num_physical_allocations * BLOCK_SIZE);
-                self.mapper.unmapFn(region_start, region_end, self.payload) catch |e| {
+                self.mapper.unmapFn(region_start, region_end, self.allocator, self.payload) catch |e| {
                     panic(@errorReturnTrace(), "Failed to unmap VMM reserved memory from 0x{X} to 0x{X}: {}\n", .{ region_start, region_end, e });
                 };
                 // The allocation is freed so remove from the map
@@ -903,7 +904,7 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
 ///     IN vend: usize - The end of the virtual region to unmap
 ///     IN payload: u8 - The payload value. Expected to be 39
 ///
-fn testUnmap(vstart: usize, vend: usize, payload: u8) (Allocator.Error || MapperError)!void {
+fn testUnmap(vstart: usize, vend: usize, allocator: *Allocator, payload: u8) MapperError!void {
     std.testing.expectEqual(@as(u8, 39), payload);
     var vaddr = vstart;
     var allocations = test_allocations.?;

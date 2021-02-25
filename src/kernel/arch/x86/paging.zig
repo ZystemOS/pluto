@@ -26,23 +26,6 @@ pub const Directory = packed struct {
     /// The tables allocated for the directory. This is ignored by the CPU.
     tables: [ENTRIES_PER_DIRECTORY]?*Table,
 
-    /// The allocator used to allocate and free tables
-    allocator: *std.mem.Allocator,
-
-    ///
-    /// Free the state occupied by the directory. It will be unusable afterwards.
-    ///
-    /// Arguments:
-    ///     IN self: *Self - The directory to deinitialise.
-    ///
-    pub fn deinit(self: *@This()) void {
-        for (self.tables) |table| {
-            if (table) |t| {
-                self.allocator.destroy(t);
-            }
-        }
-    }
-
     ///
     /// Copy the page directory. Changes to one copy will not affect the other
     ///
@@ -139,7 +122,7 @@ pub const PAGE_SIZE_4MB: usize = 0x400000;
 pub const PAGE_SIZE_4KB: usize = PAGE_SIZE_4MB / 1024;
 
 /// The kernel's page directory. Should only be used to map kernel-owned code and data
-pub var kernel_directory: Directory align(@truncate(u29, PAGE_SIZE_4KB)) = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = &mem.fixed_buffer_allocator.allocator };
+pub var kernel_directory: Directory align(@truncate(u29, PAGE_SIZE_4KB)) = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
 
 ///
 /// Convert a virtual address to an index within an array of directory entries.
@@ -290,13 +273,13 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
 ///     IN virt_addr: usize - The start of the virtual space to map
 ///     IN virt_end: usize - The end of the virtual space to map
 ///     OUT dir: *Directory - The directory that this entry is in
+///     IN allocator: *Allocator - The allocator used to map the region to be freed.
 ///
 /// Error: vmm.MapperError
 ///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
 ///
-fn unmapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize) vmm.MapperError!void {
+fn unmapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, allocator: *Allocator) vmm.MapperError!void {
     const entry = virtToDirEntryIdx(virt_start);
-    var dir_entry = &dir.entries[entry];
     const table = dir.tables[entry] orelse return vmm.MapperError.NotMapped;
     var addr = virt_start;
     while (addr < virt_end) : (addr += PAGE_SIZE_4KB) {
@@ -393,10 +376,10 @@ pub fn map(virtual_start: usize, virtual_end: usize, phys_start: usize, phys_end
 ///     IN virtual_end: usize - The end (exclusive) of the virtual region to unmap
 ///     IN/OUT dir: *Directory - The page directory to unmap within
 ///
-/// Error: Allocator.Error || vmm.MapperError
+/// Error: vmm.MapperError
 ///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
 ///
-pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (Allocator.Error || vmm.MapperError)!void {
+pub fn unmap(virtual_start: usize, virtual_end: usize, allocator: *Allocator, dir: *Directory) vmm.MapperError!void {
     var virt_addr = virtual_start;
     var virt_next = std.math.min(virtual_end, std.mem.alignBackward(virt_addr, PAGE_SIZE_4MB) + PAGE_SIZE_4MB);
     var entry_idx = virtToDirEntryIdx(virt_addr);
@@ -405,9 +388,13 @@ pub fn unmap(virtual_start: usize, virtual_end: usize, dir: *Directory) (Allocat
         virt_next = std.math.min(virtual_end, virt_next + PAGE_SIZE_4MB);
         entry_idx += 1;
     }) {
-        try unmapDirEntry(dir, virt_addr, virt_next);
-        if (virt_next - virt_addr >= PAGE_SIZE_4MB) {
+        try unmapDirEntry(dir, virt_addr, virt_next, allocator);
+        if (std.mem.isAligned(virt_addr, PAGE_SIZE_4MB) and virt_next - virt_addr >= PAGE_SIZE_4MB) {
             clearAttribute(&dir.entries[entry_idx], DENTRY_PRESENT);
+
+            const table = dir.tables[entry_idx] orelse return vmm.MapperError.NotMapped;
+            const table_free = @ptrCast([*]Table, table)[0..1];
+            allocator.free(table_free);
         }
     }
 }
@@ -533,8 +520,7 @@ test "virtToTableEntryIdx" {
 
 test "mapDirEntry" {
     var allocator = std.testing.allocator;
-    var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = allocator };
-    defer dir.deinit();
+    var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
     const attrs = vmm.Attributes{ .kernel = false, .writable = false, .cachable = false };
     vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(PAGE_SIZE_4MB, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, undefined);
     defer vmm.kernel_vmm.deinit();
@@ -548,8 +534,10 @@ test "mapDirEntry" {
 
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
-        const table = dir.tables[entry_idx] orelse unreachable;
+        const table = dir.tables[entry_idx].?;
         checkDirEntry(entry, virt, virt_end, phys, attrs, table, true);
+        const table_free = @ptrCast([*]Table, table)[0..1];
+        allocator.free(table_free);
     }
     {
         const phys: usize = 7 * PAGE_SIZE_4MB;
@@ -561,14 +549,16 @@ test "mapDirEntry" {
 
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
-        const table = dir.tables[entry_idx] orelse unreachable;
+        const table = dir.tables[entry_idx].?;
         checkDirEntry(entry, virt, virt_end, phys, attrs, table, true);
+        const table_free = @ptrCast([*]Table, table)[0..1];
+        allocator.free(table_free);
     }
 }
 
 test "mapDirEntry returns errors correctly" {
     var allocator = std.testing.allocator;
-    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = undefined, .allocator = allocator };
+    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = undefined };
     const attrs = vmm.Attributes{ .kernel = true, .writable = true, .cachable = true };
     testing.expectError(vmm.MapperError.MisalignedVirtualAddress, mapDirEntry(&dir, 1, PAGE_SIZE_4KB + 1, 0, PAGE_SIZE_4KB, attrs, allocator));
     testing.expectError(vmm.MapperError.MisalignedPhysicalAddress, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB + 1, attrs, allocator));
@@ -579,8 +569,7 @@ test "mapDirEntry returns errors correctly" {
 
 test "map and unmap" {
     var allocator = std.testing.allocator;
-    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = allocator };
-    defer dir.deinit();
+    var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
 
     vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(PAGE_SIZE_4MB, 0xFFFFFFFF, allocator, arch.VMM_MAPPER, undefined);
     defer vmm.kernel_vmm.deinit();
@@ -590,7 +579,7 @@ test "map and unmap" {
     const phys_end: usize = PAGE_SIZE_4MB * 4;
     const virt_end: usize = PAGE_SIZE_4MB * 6;
     const attrs = vmm.Attributes{ .kernel = true, .writable = true, .cachable = true };
-    map(virt_start, virt_end, phys_start, phys_end, attrs, allocator, &dir) catch unreachable;
+    try map(virt_start, virt_end, phys_start, phys_end, attrs, allocator, &dir);
 
     var virt = virt_start;
     var phys = phys_start;
@@ -600,11 +589,11 @@ test "map and unmap" {
     }) {
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
-        const table = dir.tables[entry_idx] orelse unreachable;
+        const table = dir.tables[entry_idx].?;
         checkDirEntry(entry, virt, virt + PAGE_SIZE_4MB, phys, attrs, table, true);
     }
 
-    unmap(virt_start, virt_end, &dir) catch unreachable;
+    try unmap(virt_start, virt_end, allocator, &dir);
     virt = virt_start;
     phys = phys_start;
     while (virt < virt_end) : ({
@@ -613,14 +602,14 @@ test "map and unmap" {
     }) {
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
-        const table = dir.tables[entry_idx] orelse unreachable;
+        const table = dir.tables[entry_idx].?;
         checkDirEntry(entry, virt, virt + PAGE_SIZE_4MB, phys, attrs, table, false);
     }
 }
 
 test "copy" {
     // Create a dummy page dir
-    var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY, .allocator = std.testing.allocator };
+    var dir: Directory = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = [_]?*Table{null} ** ENTRIES_PER_DIRECTORY };
     dir.entries[0] = 123;
     dir.entries[56] = 794;
     var table0 = Table{ .entries = [_]TableEntry{654} ** ENTRIES_PER_TABLE };
