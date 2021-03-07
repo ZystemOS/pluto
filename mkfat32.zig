@@ -556,6 +556,29 @@ pub const Fat32 = struct {
     }
 
     ///
+    /// Clear the stream. This is the same as writeByteNTimes but with a bigger buffer (4096 bytes).
+    /// This improves performance a lot.
+    ///
+    /// Arguments:
+    ///     IN stream: anytype - The stream to clear.
+    ///     IN size: usize     - The size to clear from the beginning
+    ///
+    /// Error: @TypeOf(stream).WriteError
+    ///     @TypeOf(stream).WriteError - Error writing to the stream.
+    ///
+    fn clearStream(stream: anytype, size: usize) ErrorSet(@TypeOf(stream))!void {
+        comptime const buff_size = 4096;
+        comptime const bytes: [buff_size]u8 = [_]u8{0x00} ** buff_size;
+
+        var remaining: usize = size;
+        while (remaining > 0) {
+            const to_write = std.math.min(remaining, bytes.len);
+            try stream.writer().writeAll(bytes[0..to_write]);
+            remaining -= to_write;
+        }
+    }
+
+    ///
     /// Make a FAT32 image. This will either use the default options or modified defaults from the
     /// user. The file will be saved to the path specified. If quick format is on, then the entire
     /// stream is zeroed else the reserved and FAT sectors are zeroed.
@@ -568,7 +591,7 @@ pub const Fat32 = struct {
     ///     IN quick_format: bool - Whether to completely zero the stream initially or zero just
     ///                             the important sectors.
     ///
-    /// Error:  @TypeOf(stream).WriteError ||  @TypeOf(stream).SeekError || Error
+    /// Error: @TypeOf(stream).WriteError || @TypeOf(stream).SeekError || Error
     ///     @TypeOf(stream).WriteError       - If there is an error when writing. See the relevant error for the stream.
     ///     @TypeOf(stream).SeekError        - If there is an error when seeking. See the relevant error for the stream.
     ///     Error.InvalidOptionValue         - In the user has provided invalid options.
@@ -583,10 +606,10 @@ pub const Fat32 = struct {
         try stream.seekableStream().seekTo(0);
         if (quick_format) {
             // Zero just the reserved and FAT sectors
-            try stream.writer().writeByteNTimes(0x00, (fat32_header.reserved_sectors + (fat32_header.sectors_per_fat * 2)) * fat32_header.bytes_per_sector);
+            try clearStream(stream, (fat32_header.reserved_sectors + (fat32_header.sectors_per_fat * 2)) * fat32_header.bytes_per_sector);
         } else {
             const image_size = std.mem.alignBackward(options.image_size, fat32_header.bytes_per_sector);
-            try stream.writer().writeByteNTimes(0x00, image_size);
+            try clearStream(stream, image_size);
         }
 
         // Write the boot sector with the bootstrap code and header and the backup boot sector.

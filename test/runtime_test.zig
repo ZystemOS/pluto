@@ -206,7 +206,7 @@ pub const RuntimeStep = struct {
         try self.os_proc.spawn();
 
         // Start up the read thread
-        var thread = try Thread.spawn(self, read_logs);
+        var thread = try Thread.spawn(read_logs, self);
 
         // Call the testing function
         const res = self.test_func(self);
