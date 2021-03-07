@@ -562,7 +562,7 @@ pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) Allocator
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 
-    kernel_vmm = try VirtualMemoryManager(arch.VmmPayload).init(@ptrToInt(&KERNEL_ADDR_OFFSET), 0xFFFFFFFF, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
+    kernel_vmm = try VirtualMemoryManager(arch.VmmPayload).init(@ptrToInt(&KERNEL_ADDR_OFFSET), arch.END_VIRTUAL_MEMORY, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
 
     // Map all the reserved virtual addresses.
     for (mem_profile.virtual_reserved) |entry| {

@@ -92,7 +92,14 @@ pub fn blocksFree() usize {
     return bitmap.num_free_entries;
 }
 
-/// Intiialise the physical memory manager and set all unavailable regions as occupied (those from the memory map and those from the linker symbols).
+///
+/// Free the internal state of the PMM. Is unusable afterwards unless re-initialised
+///
+pub fn deinit() void {
+    bitmap.deinit();
+}
+
+/// Initialise the physical memory manager and set all unavailable regions as occupied (those from the memory map and those from the linker symbols).
 ///
 /// Arguments:
 ///     IN mem: *const MemProfile - The system's memory profile.
@@ -127,13 +134,6 @@ pub fn init(mem_profile: *const MemProfile, allocator: *Allocator) void {
         .Initialisation => runtimeTests(mem_profile, allocator),
         else => {},
     }
-}
-
-///
-/// Free the internal state of the PMM. Is unusable aftwards unless re-initialised
-///
-pub fn deinit() void {
-    bitmap.deinit();
 }
 
 test "alloc" {
@@ -173,18 +173,18 @@ test "free" {
 }
 
 test "setAddr and isSet" {
-    const num_entries: u32 = 32;
+    const num_entries: usize = 32;
     bitmap = try Bitmap(u32).init(num_entries, testing.allocator);
     defer bitmap.deinit();
-    var addr: u32 = 0;
-    var i: u32 = 0;
+    var addr: usize = 0;
+    var i: usize = 0;
     while (i < num_entries) : ({
         i += 1;
         addr += BLOCK_SIZE;
     }) {
         // Ensure all previous blocks are still set
-        var h: u32 = 0;
-        var addr2: u32 = 0;
+        var h: usize = 0;
+        var addr2: usize = 0;
         while (h < i) : ({
             h += 1;
             addr2 += BLOCK_SIZE;
@@ -199,8 +199,8 @@ test "setAddr and isSet" {
         testing.expectEqual(blocksFree(), num_entries - i - 1);
 
         // Ensure all successive entries are not set
-        var j: u32 = i + 1;
-        var addr3: u32 = addr + BLOCK_SIZE;
+        var j: usize = i + 1;
+        var addr3: usize = addr + BLOCK_SIZE;
         while (j < num_entries) : ({
             j += 1;
             addr3 += BLOCK_SIZE;

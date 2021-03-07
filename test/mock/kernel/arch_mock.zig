@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const builtin = @import("builtin");
 const mem = @import("../../../src/kernel/mem.zig");
 const MemProfile = mem.MemProfile;
 const pci = @import("pci_mock.zig");
@@ -61,6 +62,11 @@ pub const STACK_SIZE: u32 = MEMORY_BLOCK_SIZE / @sizeOf(u32);
 pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = undefined;
 pub const BootPayload = u8;
 pub const Task = task.Task;
+pub const END_VIRTUAL_MEMORY: usize = switch (builtin.arch) {
+    .i386 => 0xFFFFFFFF,
+    .x86_64 => 0xFFFFFFFFFFFFFFFF,
+    else => unreachable,
+};
 
 // The virtual/physical start/end of the kernel code
 var KERNEL_PHYSADDR_START: u32 = 0x00100000;

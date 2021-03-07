@@ -21,10 +21,34 @@ const x86_i686 = CrossTarget{
     .cpu_model = .{ .explicit = &Target.x86.cpu._i686 },
 };
 
+const x86_64 = brk: {
+    var tmp = CrossTarget{
+        .cpu_arch = .x86_64,
+        .os_tag = .freestanding,
+    };
+    var disabled_features = std.Target.Cpu.Feature.Set.empty;
+    var enabled_features = std.Target.Cpu.Feature.Set.empty;
+
+    const features = std.Target.x86.Feature;
+    // Disable SIMD registers
+    disabled_features.addFeature(@enumToInt(features.mmx));
+    disabled_features.addFeature(@enumToInt(features.sse));
+    disabled_features.addFeature(@enumToInt(features.sse2));
+    disabled_features.addFeature(@enumToInt(features.avx));
+    disabled_features.addFeature(@enumToInt(features.avx2));
+
+    enabled_features.addFeature(@enumToInt(features.soft_float));
+
+    tmp.cpu_features_sub = disabled_features;
+    tmp.cpu_features_add = enabled_features;
+    break :brk tmp;
+};
+
 pub fn build(b: *Builder) !void {
-    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{x86_i686}, .default_target = x86_i686 });
+    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{ x86_i686, x86_64 }, .default_target = x86_64 });
     const arch = switch (target.getCpuArch()) {
         .i386 => "x86",
+        .x86_64 => "x86_64",
         else => unreachable,
     };
 
@@ -36,7 +60,11 @@ pub fn build(b: *Builder) !void {
     });
     b.default_step.dependOn(&fmt_step.step);
 
-    const main_src = "src/kernel/kmain.zig";
+    const main_src = switch (target.getCpuArch()) {
+        .i386 => "src/kernel/kmain.zig",
+        .x86_64 => "src/kernel/kmain_64.zig",
+        else => unreachable,
+    };
     const arch_root = "src/kernel/arch";
     const linker_script_path = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "link.ld" });
     const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
@@ -64,9 +92,11 @@ pub fn build(b: *Builder) !void {
     exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath(linker_script_path);
     exec.setTarget(target);
+    exec.code_model = .kernel;
 
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
+        .x86_64 => b.addSystemCommand(&[_][]const u8{ "./makeiso_64.sh", b.exe_dir, exec.getOutputPath(), output_iso, ramdisk_path }),
         else => unreachable,
     };
     make_iso.step.dependOn(&exec.step);
@@ -135,6 +165,7 @@ pub fn build(b: *Builder) !void {
 
     switch (target.getCpuArch()) {
         .i386 => try qemu_args_al.append("qemu-system-i386"),
+        .x86_64 => try qemu_args_al.append("qemu-system-x86_64"),
         else => unreachable,
     }
     try qemu_args_al.append("-serial");
@@ -146,6 +177,10 @@ pub fn build(b: *Builder) !void {
             try qemu_args_al.append("-cdrom");
             try qemu_args_al.append(output_iso);
         },
+        .x86_64 => {
+            try qemu_args_al.append("-drive");
+            try qemu_args_al.append(try std.mem.join(b.allocator, "", &[_][]const u8{ "format=raw,file=", output_iso }));
+        },
         else => unreachable,
     }
     if (disable_display) {
@@ -155,9 +190,12 @@ pub fn build(b: *Builder) !void {
 
     var qemu_args = qemu_args_al.toOwnedSlice();
 
-    const rt_step = RuntimeStep.create(b, test_mode, qemu_args);
-    rt_step.step.dependOn(&make_iso.step);
-    rt_test_step.dependOn(&rt_step.step);
+    // 64 bit build don't have full support for these tests yet
+    if (target.getCpuArch() == .i386) {
+        const rt_step = RuntimeStep.create(b, test_mode, qemu_args);
+        rt_step.step.dependOn(&make_iso.step);
+        rt_test_step.dependOn(&rt_step.step);
+    }
 
     const run_step = b.step("run", "Run with qemu");
     const run_debug_step = b.step("debug-run", "Run with qemu and wait for a gdb connection");
@@ -333,6 +371,7 @@ const RamdiskStep = struct {
         const self = @fieldParentPtr(RamdiskStep, "step", step);
         switch (self.target.getCpuArch()) {
             .i386 => try writeRamdisk(u32, self),
+            .x86_64 => try writeRamdisk(u64, self),
             else => unreachable,
         }
     }

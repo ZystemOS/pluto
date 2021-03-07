@@ -6,7 +6,6 @@ const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const tty = @import("tty.zig");
-const vga = @import("vga.zig");
 const log_root = @import("log.zig");
 const pmm = @import("pmm.zig");
 const serial = @import("serial.zig");
@@ -25,7 +24,8 @@ comptime {
     if (!is_test) {
         switch (builtin.arch) {
             .i386 => _ = @import("arch/x86/boot.zig"),
-            else => unreachable,
+            .x86_64 => _ = @import("arch/x86_64/boot.zig"),
+            else => {},
         }
     }
 }
@@ -66,7 +66,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     log_root.init(serial_stream);
 
     const mem_profile = arch.initMem(boot_payload) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise memory profile: {}", .{e});
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise memory profile: {}\n", .{e});
     };
     var fixed_allocator = mem_profile.fixed_allocator;
 
@@ -76,7 +76,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
 
     pmm.init(&mem_profile, &fixed_allocator.allocator);
     var kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}\n", .{e});
     };
 
     kmain_log.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
@@ -101,7 +101,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
 
     tty.init(&kernel_heap.allocator, boot_payload);
     var arch_kb = keyboard.init(&fixed_allocator.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to inititalise keyboard: {}\n", .{e});
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise keyboard: {}\n", .{e});
     };
     if (arch_kb) |kb| {
         keyboard.addKeyboard(kb) catch |e| panic_root.panic(@errorReturnTrace(), "Failed to add architecture keyboard: {}\n", .{e});
