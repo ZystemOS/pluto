@@ -768,7 +768,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
                         return;
                     }
                     // This will also allow for forwards and backwards iteration of the FAT
-                    const table_offset = self.cluster / self.fat.len;
+                    const table_offset = self.cluster / @intCast(u32, self.fat.len);
                     if (table_offset != self.table_offset) {
                         self.table_offset = table_offset;
                         try self.stream.seekableStream().seekTo((self.fat_config.reserved_sectors + self.table_offset) * self.fat_config.bytes_per_sector);
@@ -792,7 +792,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
             ///     IN self: *ClusterChainIteratorSelf - Self iterator.
             ///     IN buff: []u8                      - The buffer to read the data into.
             ///
-            /// Return: ?usize
+            /// Return: ?u32
             ///     The end index into the buffer where the next read should start. If returned
             ///     null, then the buffer is full or the end of the cluster chain is reached.
             ///
@@ -801,7 +801,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
             ///     ReadError       - If there is an error reading from the stream.
             ///     SeekError       - If there is an error seeking the stream.
             ///
-            pub fn read(self: *ClusterChainIteratorSelf, buff: []u8) (Fat32Self.Error || ReadError || SeekError)!?usize {
+            pub fn read(self: *ClusterChainIteratorSelf, buff: []u8) (Fat32Self.Error || ReadError || SeekError)!?u32 {
                 // FAT32 is really FAT28, so the top 4 bits are not used, so mask them out
                 if (buff.len != 0 and self.cluster != 0 and (self.cluster & 0x0FFFFFFF) < self.fat_config.cluster_end_marker) {
                     // Seek to the sector where the cluster is
@@ -861,7 +861,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
                 var fat = try allocator.alloc(u32, fat_config.bytes_per_sector / @sizeOf(u32));
                 errdefer allocator.free(fat);
 
-                const table_offset = cluster / fat.len;
+                const table_offset = cluster / @intCast(u32, fat.len);
 
                 // Seek to the FAT
                 // The FAT is just after the reserved sectors + the index
@@ -1234,8 +1234,8 @@ pub fn Fat32FS(comptime StreamType: type) type {
             // Update the entry the size for the file.
             const entry_sector = self.fat_config.clusterToSector(opened_node.entry_cluster);
             self.stream.seekableStream().seekTo(entry_sector * self.fat_config.bytes_per_sector + opened_node.entry_offset) catch return vfs.Error.Unexpected;
-            self.stream.writer().writeIntLittle(u32, bytes.len) catch return vfs.Error.Unexpected;
-            opened_node.size = bytes.len;
+            self.stream.writer().writeIntLittle(u32, @intCast(u32, bytes.len)) catch return vfs.Error.Unexpected;
+            opened_node.size = @intCast(u32, bytes.len);
             return bytes.len;
         }
 
@@ -2041,7 +2041,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
                 try self.stream.writer().writeAll(write_buff[write_index..write_next_index]);
             }
 
-            const ret = .{ .cluster = write_cluster, .offset = (index + write_buff.len - 32) % cluster_size };
+            const ret = .{ .cluster = write_cluster, .offset = (index + @intCast(u32, write_buff.len) - 32) % cluster_size };
             return ret;
         }
 
@@ -2283,7 +2283,7 @@ fn testFAT32FS(allocator: *Allocator, stream: anytype, fat_config: FATConfig) an
 
     var temp_stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, temp_stream, true);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, temp_stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, temp_stream);
     test_fs.stream = stream;
@@ -4019,7 +4019,7 @@ test "Fat32FS.open - no create - hand crafted" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, true);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -4104,7 +4104,7 @@ test "Fat32FS.open - create file" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, true);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -4135,7 +4135,7 @@ test "Fat32FS.open - create directory" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, true);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -4159,7 +4159,7 @@ test "Fat32FS.open - create symlink" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, true);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -4175,7 +4175,7 @@ test "Fat32FS.open - create nested directories" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, true);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -5688,7 +5688,7 @@ test "Fat32FS.write - small file" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, false);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, false);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -5724,7 +5724,7 @@ test "Fat32FS.write - large file" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, false);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, false);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -5816,7 +5816,7 @@ test "Fat32FS.write - test files" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, false);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, false);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -5839,7 +5839,7 @@ test "Fat32FS.write - not enough space" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, stream, false);
+    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, false);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;

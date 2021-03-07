@@ -33,6 +33,9 @@ pub const Device = pci.PciDeviceInfo;
 /// The type of the date and time structure.
 pub const DateTime = rtc.DateTime;
 
+/// The end virtual address.
+pub const END_VIRTUAL_MEMORY: usize = 0xFFFFFFFF;
+
 /// The virtual end of the kernel code.
 extern var KERNEL_VADDR_END: *u32;
 

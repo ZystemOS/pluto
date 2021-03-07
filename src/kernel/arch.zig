@@ -6,9 +6,14 @@ const mock_path = build_options.mock_path;
 
 pub const internals = if (is_test) @import(mock_path ++ "arch_mock.zig") else switch (builtin.arch) {
     .i386 => @import("arch/x86/arch.zig"),
+    .x86_64 => @import("arch/x86_64/arch.zig"),
     else => unreachable,
 };
 
 test "" {
-    _ = @import("arch/x86/arch.zig");
+    _ = switch (builtin.arch) {
+        .i386 => @import("arch/x86/arch.zig"),
+        .x86_64 => @import("arch/x86_64/arch.zig"),
+        else => unreachable,
+    };
 }

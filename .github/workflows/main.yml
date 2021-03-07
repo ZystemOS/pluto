@@ -15,12 +15,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+      with:
+        submodules: true
     
     - name: Download zig
       run: |
         export PYTHONIOENCODING=utf8
         wget $(curl -s 'https://ziglang.org/download/index.json' | python3 -c "import sys, json; print(json.load(sys.stdin)['master']['x86_64-linux']['tarball'])")
-        sudo apt-get install mtools
+        sudo apt-get install mtools uuid-dev
         tar -xvf zig*
     - name: Install qemu
       run: |
