@@ -66,6 +66,9 @@ export fn kmain(boot_payload: *const arch.BootPayload) void {
     };
 
     pmm.init(&mem_profile, &fixed_allocator.allocator);
+    var kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
+    };
 
     @panic("test");
 }
