@@ -664,7 +664,7 @@ test "toArch" {
     inline for (@typeInfo(Architecture).Enum.fields) |field| {
         const architecture = @field(Architecture, field.name);
 
-        const is_known = for (known_architectures) |known_architecture, i| {
+        const is_known = inline for (known_architectures) |known_architecture, i| {
             if (known_architecture == architecture) {
                 testing.expectEqual(architecture.toArch(), known_archs[i]);
                 break true;
@@ -682,7 +682,7 @@ test "hasData" {
 
     inline for (@typeInfo(SectionType).Enum.fields) |field| {
         const sec_type = @field(SectionType, field.name);
-        const has_data = for (no_data) |no_data_type| {
+        const has_data = inline for (no_data) |no_data_type| {
             if (sec_type == no_data_type) {
                 break false;
             }

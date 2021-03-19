@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.x86_64_arch);
 const serial = @import("serial.zig");
 const stivale2 = @import("stivale2.zig");
+const paging = @import("paging.zig");
 const tty = @import("tty.zig");
 const mem = @import("../../mem.zig");
 const vmm = @import("../../vmm.zig");
@@ -110,27 +111,23 @@ comptime {
     std.debug.assert(@sizeOf(SMPInfo) == 32);
 }
 
-// TODO
 /// The type of the payload passed to a virtual memory mapper.
 /// For x86 it's the page directory that should be mapped.
-pub const VmmPayload = void;
+pub const VmmPayload = *paging.PageMapLevel4;
 
 /// The end virtual address.
 pub const END_VIRTUAL_MEMORY: usize = 0xFFFFFFFFFFFFFFFF;
 
-// TODO
 /// The payload used in the kernel virtual memory manager.
 /// For x86 it's the kernel's page directory.
-pub const KERNEL_VMM_PAYLOAD: VmmPayload = {};
+pub const KERNEL_VMM_PAYLOAD: VmmPayload = &paging.kernel_pml4;
 
-// TODO
 /// The architecture's virtual memory mapper.
 /// For x86, it simply forwards the calls to the paging subsystem.
-pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = vmm.Mapper(VmmPayload){ .mapFn = undefined, .unmapFn = undefined };
+pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = vmm.Mapper(VmmPayload){ .mapFn = paging.map, .unmapFn = paging.unmap };
 
-// TODO
 /// The size of each allocatable block of memory, normally set to the page size.
-pub const MEMORY_BLOCK_SIZE: usize = 4096;
+pub const MEMORY_BLOCK_SIZE: usize = paging.PAGE_SIZE_4KB;
 
 /// The virtual end of the kernel code.
 extern var KERNEL_VADDR_END: *u32;
@@ -325,6 +322,7 @@ pub fn initMem(boot_payload: BootPayload) Allocator.Error!MemProfile {
 
     // Reserve the unavailable sections from the memory map
     // Also calculate the total RAM in the same loop
+    // TTY buffer is mapped in here
     for (boot_payload.memmap) |entry| {
         var base_addr = entry.base_addr;
         var entry_len = entry.len;
@@ -376,20 +374,6 @@ pub fn initMem(boot_payload: BootPayload) Allocator.Error!MemProfile {
     try reserved_virtual_mem.append(.{
         .virtual = kernel_virt,
         .physical = kernel_phy,
-    });
-
-    // Map the tty buffer
-    const tty_addr = mem.virtToPhys(tty.getVideoBufferAddress());
-    const tty_region = mem.Range{
-        .start = tty_addr,
-        .end = tty_addr + 32 * 1024,
-    };
-    try reserved_virtual_mem.append(.{
-        .physical = tty_region,
-        .virtual = .{
-            .start = mem.physToVirt(tty_region.start),
-            .end = mem.physToVirt(tty_region.end),
-        },
     });
 
     // Map the kernel stack
