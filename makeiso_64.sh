@@ -41,7 +41,8 @@ parted -s $OUTPUT_FILE mklabel msdos
 parted -s $OUTPUT_FILE mkpart primary 1 100%
 ./echfs/echfs-utils -m -p0 $OUTPUT_FILE quick-format 32768
 ./echfs/echfs-utils -m -p0 $OUTPUT_FILE import limine.cfg limine.cfg
+./echfs/echfs-utils -m -p0 $OUTPUT_FILE import limine/limine.sys limine.sys
 ./echfs/echfs-utils -m -p0 $OUTPUT_FILE import $PLUTO_ELF pluto.elf
 ./echfs/echfs-utils -m -p0 $OUTPUT_FILE import $RAMDISK initrd.ramdisk
 ./echfs/echfs-utils -m -p0 $OUTPUT_FILE import $MAP_FILE kernel.map
-./limine/limine-install ./limine/limine.bin $OUTPUT_FILE
+./limine/limine-install $OUTPUT_FILE
