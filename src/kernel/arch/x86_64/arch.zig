@@ -1,6 +1,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.x86_64_arch);
+const gdt = @import("gdt.zig");
+const idt = @import("idt.zig");
 const serial = @import("serial.zig");
 const stivale2 = @import("stivale2.zig");
 const paging = @import("paging.zig");
@@ -224,6 +226,97 @@ pub fn ioWait() void {
 }
 
 ///
+/// Load the GDT and refreshing the code segment with the code segment offset of the kernel as we
+/// are still in kernel land. Also loads the kernel data segment into all the other segment
+/// registers.
+///
+/// Arguments:
+///     IN gdt_ptr: *gdt.GdtPtr - The address to the GDT.
+///
+pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
+    // Load the GDT into the CPU
+    asm volatile ("lgdt %[gdt_ptr]"
+        :
+        : [gdt_ptr] "*p" (gdt_ptr)
+    );
+
+    // Load the kernel data segment, index into the GDT
+    asm volatile (
+        \\mov %[offset], %%ds
+        \\mov %[offset], %%fs
+        \\mov %[offset], %%gs
+        \\mov %[offset], %%es
+        \\mov %[offset], %%ss
+        :
+        : [offset] "rm" (gdt.KERNEL_DATA_OFFSET)
+    );
+
+    // Load the kernel code segment into the CS register
+    asm volatile (
+        \\push %[offset]
+        \\push $1f
+        \\lretq
+        \\1:
+        :
+        : [offset] "i" (gdt.KERNEL_CODE_OFFSET)
+    );
+}
+
+///
+/// Get the previously loaded GDT from the CPU.
+///
+/// Return: gdt.GdtPtr
+///     The previously loaded GDT from the CPU.
+///
+pub fn sgdt() gdt.GdtPtr {
+    var gdt_ptr = gdt.GdtPtr{ .limit = undefined, .base = undefined };
+    asm volatile ("sgdt %[tab]"
+        : [tab] "=m" (gdt_ptr)
+    );
+    return gdt_ptr;
+}
+
+///
+/// Tell the CPU where the TSS is located in the GDT.
+///
+/// Arguments:
+///     IN offset: u16 - The offset in the GDT where the TSS segment is located.
+///
+pub fn ltr(offset: u16) void {
+    asm volatile ("ltr %%ax"
+        :
+        : [offset] "{ax}" (offset)
+    );
+}
+
+///
+/// Load the IDT into the CPU.
+///
+/// Arguments:
+///     IN idt_ptr: *const idt.IdtPtr - The address of the iDT.
+///
+pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
+    asm volatile ("lidt (%%eax)"
+        :
+        : [idt_ptr] "{eax}" (idt_ptr)
+    );
+}
+
+///
+/// Get the previously loaded IDT from the CPU.
+///
+/// Return: idt.IdtPtr
+///     The previously loaded IDT from the CPU.
+///
+pub fn sidt() idt.IdtPtr {
+    var idt_ptr = idt.IdtPtr{ .limit = undefined, .base = undefined };
+    asm volatile ("sidt %[tab]"
+        : [tab] "=m" (idt_ptr)
+    );
+    return idt_ptr;
+}
+
+///
 /// Enable interrupts.
 ///
 pub fn enableInterrupts() void {
@@ -423,6 +516,18 @@ pub fn initMem(boot_payload: BootPayload) Allocator.Error!MemProfile {
         .virtual_reserved = reserved_virtual_mem.items,
         .fixed_allocator = mem.fixed_buffer_allocator,
     };
+}
+
+///
+/// Initialise the architecture
+///
+/// Arguments:
+///     IN mem_profile: *const MemProfile - The memory profile of the computer. Used to set up
+///                                         paging.
+///
+pub fn init(mem_profile: *const MemProfile) void {
+    gdt.init();
+    idt.init();
 }
 
 test "" {

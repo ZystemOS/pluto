@@ -1,5 +1,9 @@
-const src_idt = @import("../../../src/kernel/arch/x86/idt.zig");
-
+const builtin = @import("builtin");
+const src_idt = switch (builtin.arch) {
+    .i386 => @import("../../../src/kernel/arch/x86/idt.zig"),
+    .x86_64 => @import("../../../src/kernel/arch/x86_64/idt.zig"),
+    else => unreachable,
+};
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;
 pub const freeTest = mock_framework.freeTest;
