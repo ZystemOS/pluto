@@ -9,7 +9,7 @@ RAMDISK=$4
 
 if [[ ! -f ./echfs/echfs-utils ]]
 then
-    echo "Biulding echfs-utils"
+    echo "Building echfs-utils"
 	cd echfs
 	make echfs-utils
 	cd ..
@@ -17,7 +17,7 @@ fi
 
 if [[ ! -f ./limine/limine-install ]]
 then
-    echo "Biulding limine-install"
+    echo "Building limine-install"
 	cd limine
 	make limine-install
 	cd ..
