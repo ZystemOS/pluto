@@ -264,7 +264,7 @@ const RamdiskStep = struct {
     out_file_path: []const u8,
 
     /// The possible errors for creating a ramdisk
-    const Error = (error{EndOfStream} || File.ReadError || File.GetPosError || Allocator.Error || File.WriteError || File.OpenError);
+    const Error = (error{EndOfStream} || File.ReadError || File.SeekError || Allocator.Error || File.WriteError || File.OpenError);
 
     ///
     /// Create and write the files to a raw ramdisk in the format:
