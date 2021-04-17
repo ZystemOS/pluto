@@ -9,6 +9,7 @@ const Step = std.build.Step;
 const Target = std.Target;
 const CrossTarget = std.zig.CrossTarget;
 const fs = std.fs;
+const File = fs.File;
 const Mode = builtin.Mode;
 const TestMode = rt.TestMode;
 const ArrayList = std.ArrayList;
