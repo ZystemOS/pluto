@@ -38,13 +38,21 @@ pub fn build(b: *Builder) !void {
     const main_src = "src/kernel/kmain.zig";
     const arch_root = "src/kernel/arch";
     const linker_script_path = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "link.ld" });
+    std.log.debug("linker_script_path {s}\n", .{linker_script_path});
     const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
+    std.log.debug("output_iso {s}\n", .{output_iso});
     const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso" });
+    std.log.debug("iso_dir_path {s}\n", .{iso_dir_path});
     const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
+    std.log.debug("boot_path {s}\n", .{boot_path});
     const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
+    std.log.debug("modules_path {s}\n", .{modules_path});
     const ramdisk_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "initrd.ramdisk" });
+    std.log.debug("ramdisk_path {s}\n", .{ramdisk_path});
     const fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "fat32.img" });
+    std.log.debug("fat32_image_path {s}\n", .{fat32_image_path});
     const test_fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ "test", "fat32", "test_fat32.img" });
+    std.log.debug("test_fat32_image_path {s}\n", .{test_fat32_image_path});
 
     const build_mode = b.standardReleaseOptions();
     comptime var test_mode_desc: []const u8 = "\n                         ";
