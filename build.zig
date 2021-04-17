@@ -104,10 +104,10 @@ pub fn build(b: *Builder) !void {
     const arch_mock_path = "../../../../test/mock/kernel/";
     const unit_tests = b.addTest(main_src);
     unit_tests.setBuildMode(build_mode);
-    unit_tests.setMainPkgPath(".");
-    unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
-    unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
-    unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
+    //unit_tests.setMainPkgPath(".");
+    //unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
+    //unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
+    //unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
     unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
 
     if (builtin.os.tag != .windows) {
