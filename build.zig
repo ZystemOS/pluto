@@ -54,7 +54,7 @@ pub fn build(b: *Builder) !void {
         test_mode_desc = test_mode_desc ++ "\n                         ";
     }
 
-    //const test_mode = b.option(TestMode, "test-mode", "Run a specific runtime test. This option is for the rt-test step. Available options: " ++ test_mode_desc) orelse .None;
+    const test_mode = b.option(TestMode, "test-mode", "Run a specific runtime test. This option is for the rt-test step. Available options: " ++ test_mode_desc) orelse .None;
     const disable_display = b.option(bool, "disable-display", "Disable the qemu window") orelse false;
 
     const exec = b.addExecutable("pluto.elf", main_src);
@@ -156,7 +156,7 @@ pub fn build(b: *Builder) !void {
 
     const rt_step = RuntimeStep.create(b, test_mode, qemu_args);
     rt_step.step.dependOn(&make_iso.step);
-    rt_test_step.dependOn(&rt_step.step);
+    //rt_test_step.dependOn(&rt_step.step);
 
     const run_step = b.step("run", "Run with qemu");
     const run_debug_step = b.step("debug-run", "Run with qemu and wait for a gdb connection");
