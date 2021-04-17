@@ -54,7 +54,7 @@ pub fn build(b: *Builder) !void {
         test_mode_desc = test_mode_desc ++ "\n                         ";
     }
 
-    const test_mode = b.option(TestMode, "test-mode", "Run a specific runtime test. This option is for the rt-test step. Available options: " ++ test_mode_desc) orelse .None;
+    //const test_mode = b.option(TestMode, "test-mode", "Run a specific runtime test. This option is for the rt-test step. Available options: " ++ test_mode_desc) orelse .None;
     const disable_display = b.option(bool, "disable-display", "Disable the qemu window") orelse false;
 
     const exec = b.addExecutable("pluto.elf", main_src);
@@ -104,10 +104,10 @@ pub fn build(b: *Builder) !void {
     const arch_mock_path = "../../../../test/mock/kernel/";
     const unit_tests = b.addTest(main_src);
     unit_tests.setBuildMode(build_mode);
-    //unit_tests.setMainPkgPath(".");
-    //unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
-    //unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
-    //unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
+    unit_tests.setMainPkgPath(".");
+    unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
+    unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
+    unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
     unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
 
     if (builtin.os.tag != .windows) {
@@ -128,7 +128,7 @@ pub fn build(b: *Builder) !void {
 
     test_step.dependOn(&unit_tests.step);
 
-    const rt_test_step = b.step("rt-test", "Run runtime tests");
+    //const rt_test_step = b.step("rt-test", "Run runtime tests");
     var qemu_args_al = ArrayList([]const u8).init(b.allocator);
     defer qemu_args_al.deinit();
 
@@ -186,177 +186,3 @@ pub fn build(b: *Builder) !void {
     });
     debug_step.dependOn(&debug_cmd.step);
 }
-
-/// The FAT32 step for creating a FAT32 image.
-const Fat32BuilderStep = struct {
-    /// The Step, that is all you need to know
-    step: Step,
-
-    /// The builder pointer, also all you need to know
-    builder: *Builder,
-
-    /// The path to where the ramdisk will be written to.
-    out_file_path: []const u8,
-
-    /// Options for creating the FAT32 image.
-    options: Fat32.Options,
-
-    ///
-    /// The make function that is called by the builder.
-    ///
-    /// Arguments:
-    ///     IN step: *Step - The step of this step.
-    ///
-    /// Error: error{EndOfStream} || File.OpenError || File.ReadError || File.WriteError || File.SeekError || Allocator.Error || Fat32.Error || Error
-    ///     error{EndOfStream} || File.OpenError || File.ReadError || File.WriteError || File.SeekError - Error related to file operations. See std.fs.File.
-    ///     Allocator.Error - If there isn't enough memory to allocate for the make step.
-    ///     Fat32.Error     - If there was an error creating the FAT image. This will be invalid options.
-    ///
-    fn make(step: *Step) (error{EndOfStream} || File.OpenError || File.ReadError || File.WriteError || File.SeekError || Fat32.Error)!void {
-        const self = @fieldParentPtr(Fat32BuilderStep, "step", step);
-        // Open the out file
-        const image = try std.fs.cwd().createFile(self.out_file_path, .{ .read = true });
-
-        // If there was an error, delete the image as this will be invalid
-        errdefer (std.fs.cwd().deleteFile(self.out_file_path) catch unreachable);
-        defer image.close();
-        try Fat32.make(self.options, image, false);
-    }
-
-    ///
-    /// Create a FAT32 builder step.
-    ///
-    /// Argument:
-    ///     IN builder: *Builder               - The build builder.
-    ///     IN options: Options                - Options for creating FAT32 image.
-    ///
-    /// Return: *Fat32BuilderStep
-    ///     The FAT32 builder step pointer to add to the build process.
-    ///
-    pub fn create(builder: *Builder, options: Fat32.Options, out_file_path: []const u8) *Fat32BuilderStep {
-        const fat32_builder_step = builder.allocator.create(Fat32BuilderStep) catch unreachable;
-        fat32_builder_step.* = .{
-            .step = Step.init(.Custom, builder.fmt("Fat32BuilderStep", .{}), builder.allocator, make),
-            .builder = builder,
-            .options = options,
-            .out_file_path = out_file_path,
-        };
-        return fat32_builder_step;
-    }
-};
-
-/// The ramdisk make step for creating the initial ramdisk.
-const RamdiskStep = struct {
-    /// The Step, that is all you need to know
-    step: Step,
-
-    /// The builder pointer, also all you need to know
-    builder: *Builder,
-
-    /// The target for the build
-    target: CrossTarget,
-
-    /// The list of files to be added to the ramdisk
-    files: []const []const u8,
-
-    /// The path to where the ramdisk will be written to.
-    out_file_path: []const u8,
-
-    /// The possible errors for creating a ramdisk
-    const Error = (error{EndOfStream} || File.ReadError || File.SeekError || Allocator.Error || File.WriteError || File.OpenError);
-
-    ///
-    /// Create and write the files to a raw ramdisk in the format:
-    /// (NumOfFiles:usize)[(name_length:usize)(name:u8[name_length])(content_length:usize)(content:u8[content_length])]*
-    ///
-    /// Argument:
-    ///     IN comptime Usize: type - The usize type for the architecture.
-    ///     IN self: *RamdiskStep   - Self.
-    ///
-    /// Error: Error
-    ///     Errors for opening, reading and writing to and from files and for allocating memory.
-    ///
-    fn writeRamdisk(comptime Usize: type, self: *RamdiskStep) Error!void {
-        // 1GB, don't think the ram disk should be very big
-        const max_file_size = 1024 * 1024 * 1024;
-
-        // Open the out file
-        var ramdisk = try fs.cwd().createFile(self.out_file_path, .{});
-        defer ramdisk.close();
-
-        // Get the targets endian
-        const endian = self.target.getCpuArch().endian();
-
-        // First write the number of files/headers
-        std.debug.assert(self.files.len < std.math.maxInt(Usize));
-        try ramdisk.writer().writeInt(Usize, @truncate(Usize, self.files.len), endian);
-        var current_offset: usize = 0;
-        for (self.files) |file_path| {
-            // Open, and read the file. Can get the size from this as well
-            const file_content = try fs.cwd().readFileAlloc(self.builder.allocator, file_path, max_file_size);
-
-            // Get the last occurrence of / for the file name, if there isn't one, then the file_path is the name
-            const file_name_index = if (std.mem.lastIndexOf(u8, file_path, "/")) |index| index + 1 else 0;
-
-            // Write the header and file content to the ramdisk
-            // Name length
-            std.debug.assert(file_path[file_name_index..].len < std.math.maxInt(Usize));
-            try ramdisk.writer().writeInt(Usize, @truncate(Usize, file_path[file_name_index..].len), endian);
-
-            // Name
-            try ramdisk.writer().writeAll(file_path[file_name_index..]);
-
-            // Length
-            std.debug.assert(file_content.len < std.math.maxInt(Usize));
-            try ramdisk.writer().writeInt(Usize, @truncate(Usize, file_content.len), endian);
-
-            // File contest
-            try ramdisk.writer().writeAll(file_content);
-
-            // Increment the offset to the new location
-            current_offset += @sizeOf(Usize) * 3 + file_path[file_name_index..].len + file_content.len;
-        }
-    }
-
-    ///
-    /// The make function that is called by the builder. This will switch on the target to get the
-    /// correct usize length for the target.
-    ///
-    /// Arguments:
-    ///     IN step: *Step - The step of this step.
-    ///
-    /// Error: Error
-    ///     Errors for opening, reading and writing to and from files and for allocating memory.
-    ///
-    fn make(step: *Step) Error!void {
-        const self = @fieldParentPtr(RamdiskStep, "step", step);
-        switch (self.target.getCpuArch()) {
-            .i386 => try writeRamdisk(u32, self),
-            else => unreachable,
-        }
-    }
-
-    ///
-    /// Create a ramdisk step.
-    ///
-    /// Argument:
-    ///     IN builder: *Builder         - The build builder.
-    ///     IN target: CrossTarget       - The target for the build.
-    ///     IN files: []const []const u8 - The file names to be added to the ramdisk.
-    ///     IN out_file_path: []const u8 - The output file path.
-    ///
-    /// Return: *RamdiskStep
-    ///     The ramdisk step pointer to add to the build process.
-    ///
-    pub fn create(builder: *Builder, target: CrossTarget, files: []const []const u8, out_file_path: []const u8) *RamdiskStep {
-        const ramdisk_step = builder.allocator.create(RamdiskStep) catch unreachable;
-        ramdisk_step.* = .{
-            .step = Step.init(.Custom, builder.fmt("Ramdisk", .{}), builder.allocator, make),
-            .builder = builder,
-            .target = target,
-            .files = files,
-            .out_file_path = out_file_path,
-        };
-        return ramdisk_step;
-    }
-};
