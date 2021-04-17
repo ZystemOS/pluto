@@ -30,6 +30,15 @@ jobs:
       run: zig*/zig fmt --check src
     - name: Build kernel
       run: zig*/zig build ${{ matrix.build_mode }}
+    - name: File path checks
+      run: |
+              ls zig-cache/bin/pluto.iso
+              ls zig-cache/bin/iso
+              ls zig-cache/bin/iso/boot
+              ls zig-cache/bin/iso/modules
+              ls zig-cache/initrd.ramdisk
+              ls zig-cache/fat32.img
+              ls test/fat32/test_fat32.img
     - name: Run unit tests
       run: zig*/zig build test ${{ matrix.build_mode }}
     - name: Run runtime test - Initialisation
