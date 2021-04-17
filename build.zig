@@ -71,8 +71,8 @@ pub fn build(b: *Builder) !void {
     };
     make_iso.step.dependOn(&exec.step);
 
-    var fat32_builder_step = Fat32BuilderStep.create(b, .{}, fat32_image_path);
-    make_iso.step.dependOn(&fat32_builder_step.step);
+    //var fat32_builder_step = Fat32BuilderStep.create(b, .{}, fat32_image_path);
+    //make_iso.step.dependOn(&fat32_builder_step.step);
 
     var ramdisk_files_al = ArrayList([]const u8).init(b.allocator);
     defer ramdisk_files_al.deinit();
@@ -122,10 +122,10 @@ pub fn build(b: *Builder) !void {
     unit_tests.step.dependOn(&mock_gen_run.step);
 
     // Create test FAT32 image
-    const test_fat32_img_step = Fat32BuilderStep.create(b, .{}, test_fat32_image_path);
-    const copy_test_files_step = b.addSystemCommand(&[_][]const u8{ "./fat32_cp.sh", test_fat32_image_path });
-    copy_test_files_step.step.dependOn(&test_fat32_img_step.step);
-    unit_tests.step.dependOn(&copy_test_files_step.step);
+    //const test_fat32_img_step = Fat32BuilderStep.create(b, .{}, test_fat32_image_path);
+    //const copy_test_files_step = b.addSystemCommand(&[_][]const u8{ "./fat32_cp.sh", test_fat32_image_path });
+    //copy_test_files_step.step.dependOn(&test_fat32_img_step.step);
+    //unit_tests.step.dependOn(&copy_test_files_step.step);
 
     test_step.dependOn(&unit_tests.step);
 
