@@ -222,6 +222,7 @@ const Fat32BuilderStep = struct {
     ///     Fat32.Error     - If there was an error creating the FAT image. This will be invalid options.
     ///
     fn make(step: *Step) (error{EndOfStream} || File.OpenError || File.ReadError || File.WriteError || File.SeekError || Fat32.Error)!void {
+        std.log.debug("Making FAT32\n", .{});
         const self = @fieldParentPtr(Fat32BuilderStep, "step", step);
         // Open the out file
         const image = try std.fs.cwd().createFile(self.out_file_path, .{ .read = true });
@@ -338,6 +339,7 @@ const RamdiskStep = struct {
     ///     Errors for opening, reading and writing to and from files and for allocating memory.
     ///
     fn make(step: *Step) Error!void {
+        std.log.debug("Making INITRD\n", .{});
         const self = @fieldParentPtr(RamdiskStep, "step", step);
         switch (self.target.getCpuArch()) {
             .i386 => try writeRamdisk(u32, self),

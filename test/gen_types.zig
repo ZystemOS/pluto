@@ -173,6 +173,7 @@ fn genGetDataValue() []const u8 {
 ///     File.ReadError  - Error reading the mocking template file.
 ///
 pub fn main() (Allocator.Error || File.OpenError || File.WriteError || File.ReadError)!void {
+    std.log.debug("Running MOCK gen\n", .{});
     // Create the file output mocking framework file
     const mock_file = try std.fs.cwd().createFile("test/mock/kernel/mock_framework.zig", .{});
     defer mock_file.close();
