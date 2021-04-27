@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     name: Build mode ${{ matrix.build_mode }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     strategy:
       matrix:
         build_mode: ["", -Drelease-fast, -Drelease-safe, -Drelease-small]
