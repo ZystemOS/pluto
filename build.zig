@@ -59,7 +59,7 @@ pub fn build(b: *Builder) !void {
     const disable_display = b.option(bool, "disable-display", "Disable the qemu window") orelse false;
 
     const exec = b.addExecutable("pluto.elf", main_src);
-    exec.setOutputDir(b.cache_root);
+    exec.setOutputDir(b.install_path);
     exec.addBuildOption(TestMode, "test_mode", test_mode);
     exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath(linker_script_path);
@@ -84,14 +84,16 @@ pub fn build(b: *Builder) !void {
     } else if (test_mode == .Scheduler) {
         // Add some test files for the user mode runtime tests
         const user_program = b.addAssemble("user_program", "test/user_program.s");
-        user_program.setOutputDir(b.cache_root);
+        user_program.setOutputDir(b.install_path);
         user_program.setTarget(target);
         user_program.setBuildMode(build_mode);
         user_program.strip = true;
 
-        const copy_user_program = b.addSystemCommand(&[_][]const u8{ "objcopy", "-O", "binary", "zig-cache/user_program.o", "zig-cache/user_program" });
+        const user_program_path = try std.mem.join(b.allocator, "/", &[_][]const u8{ b.install_path, "user_program" });
+        const user_program_obj_path = try std.mem.join(b.allocator, "/", &[_][]const u8{ b.install_path, "user_program.o" });
+        const copy_user_program = b.addSystemCommand(&[_][]const u8{ "objcopy", "-O", "binary", user_program_obj_path, user_program_path });
         copy_user_program.step.dependOn(&user_program.step);
-        try ramdisk_files_al.append("zig-cache/user_program");
+        try ramdisk_files_al.append(user_program_path);
         exec.step.dependOn(&copy_user_program.step);
     }
 
