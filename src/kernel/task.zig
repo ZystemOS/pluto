@@ -186,11 +186,11 @@ pub const Task = struct {
         return self.file_handles.num_free_entries > 0;
     }
 
-    pub fn addVFSHandle(self: *@This(), node: *vfs.Node) ?Handle {
+    pub fn addVFSHandle(self: *@This(), node: *vfs.Node) std.mem.Allocator.Error!?Handle {
         if (self.hasFreeVFSHandle()) {
             // Cannot error as we've already checked that there is a free entry
             const handle = @intCast(Handle, self.file_handles.setFirstFree() orelse unreachable);
-            self.file_handle_mapping.put(handle, node) catch unreachable;
+            try self.file_handle_mapping.put(handle, node);
             return handle;
         }
         return null;
@@ -411,12 +411,12 @@ test "addVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = task.addVFSHandle(&node1) orelse unreachable;
+    const handle1 = (try task.addVFSHandle(&node1)) orelse unreachable;
     expectEqual(handle1, 0);
     expectEqual(&node1, task.file_handle_mapping.get(handle1).?);
     expectEqual(true, try task.file_handles.isSet(handle1));
 
-    const handle2 = task.addVFSHandle(&node2) orelse unreachable;
+    const handle2 = (try task.addVFSHandle(&node2)) orelse unreachable;
     expectEqual(handle2, 1);
     expectEqual(&node2, task.file_handle_mapping.get(handle2).?);
     expectEqual(true, try task.file_handles.isSet(handle2));
@@ -429,7 +429,7 @@ test "hasFreeVFSHandle" {
 
     expect(task.hasFreeVFSHandle());
 
-    const handle1 = task.addVFSHandle(&node1) orelse unreachable;
+    const handle1 = (try task.addVFSHandle(&node1)) orelse unreachable;
     expect(task.hasFreeVFSHandle());
 
     var i: usize = 0;
@@ -447,10 +447,10 @@ test "getVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = task.addVFSHandle(&node1) orelse unreachable;
+    const handle1 = (try task.addVFSHandle(&node1)) orelse unreachable;
     expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
 
-    const handle2 = task.addVFSHandle(&node2) orelse unreachable;
+    const handle2 = (try task.addVFSHandle(&node2)) orelse unreachable;
     expectEqual(&node2, (try task.getVFSHandle(handle2)).?);
     expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
 
@@ -463,8 +463,8 @@ test "clearVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = task.addVFSHandle(&node1) orelse unreachable;
-    const handle2 = task.addVFSHandle(&node2) orelse unreachable;
+    const handle1 = (try task.addVFSHandle(&node1)) orelse unreachable;
+    const handle2 = (try task.addVFSHandle(&node2)) orelse unreachable;
 
     try task.clearVFSHandle(handle1);
     expectEqual(false, try task.hasVFSHandle(handle1));

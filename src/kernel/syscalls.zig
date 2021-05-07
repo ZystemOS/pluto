@@ -170,7 +170,7 @@ fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, args: usize, ignor
     defer if (!current_task.kernel) allocator.free(path);
 
     var node = try vfs.open(path, true, open_flags, open_args);
-    return current_task.addVFSHandle(node) orelse panic(null, "Failed to add a VFS handle to current_task\n", .{});
+    return (try current_task.addVFSHandle(node)) orelse panic(null, "Failed to add a VFS handle to current_task\n", .{});
 }
 
 fn handleRead(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: usize, ignored2: usize) Error!usize {
