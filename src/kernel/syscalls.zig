@@ -16,28 +16,7 @@ var allocator: *std.mem.Allocator = undefined;
 pub const USER_MAX_DATA_LEN = 16 * 1024;
 
 /// A compilation of all errors that syscall handlers could return.
-pub const Error = error{
-    OutOfMemory,
-    NoMoreFSHandles,
-    InvalidFlags,
-    TooBig,
-    NoSuchFileOrDir,
-    NotADirectory,
-    IsADirectory,
-    IsAFile,
-    NotAFile,
-    NotAbsolutePath,
-    NotOpened,
-    NoSymlinkTarget,
-    OutOfBounds,
-    NotAllocated,
-    AlreadyAllocated,
-    PhysicalAlreadyAllocated,
-    PhysicalVirtualMismatch,
-    InvalidVirtAddresses,
-    InvalidPhysAddresses,
-    Unexpected,
-};
+pub const Error = error{ NoMoreFSHandles, TooBig, NotAFile } || std.mem.Allocator.Error || vfs.Error || vmm.VmmError || bitmap.Bitmap(usize).BitmapError;
 
 /// All implemented syscalls
 pub const Syscall = enum {
