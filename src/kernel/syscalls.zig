@@ -179,12 +179,15 @@ fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, args: usize, ignor
 }
 
 fn handleRead(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: usize, ignored2: usize) Error!usize {
+    if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
+        return error.OutOfBounds;
+    const real_handle = @intCast(task.Handle, node_handle);
     if (buff_len > USER_MAX_DATA_LEN) {
         return Error.TooBig;
     }
 
     const current_task = scheduler.current_task;
-    const node_opt = current_task.getVFSHandle(node_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{node_handle});
+    const node_opt = current_task.getVFSHandle(real_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{real_handle});
     if (node_opt) |node| {
         const file = switch (node.*) {
             .File => |*f| f,
@@ -203,12 +206,15 @@ fn handleRead(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: us
 }
 
 fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: usize, ignored2: usize) Error!usize {
+    if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
+        return error.OutOfBounds;
+    const real_handle = @intCast(task.Handle, node_handle);
     if (buff_len > USER_MAX_DATA_LEN) {
         return Error.TooBig;
     }
 
     const current_task = scheduler.current_task;
-    const node_opt = current_task.getVFSHandle(node_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{node_handle});
+    const node_opt = current_task.getVFSHandle(real_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{real_handle});
     if (node_opt) |node| {
         const file = switch (node.*) {
             .File => |f| f,
@@ -227,11 +233,14 @@ fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: u
 }
 
 fn handleClose(node_handle: usize, ignored1: usize, ignored2: usize, ignored3: usize, ignored4: usize) Error!usize {
+    if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
+        return error.OutOfBounds;
+    const real_handle = @intCast(task.Handle, node_handle);
     const current_task = scheduler.current_task;
-    const node_opt = current_task.getVFSHandle(node_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{node_handle});
+    const node_opt = current_task.getVFSHandle(real_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{real_handle});
     if (node_opt) |node| {
         //try node.close();
-        current_task.clearVFSHandle(node_handle) catch |e| return switch (e) {
+        current_task.clearVFSHandle(real_handle) catch |e| return switch (e) {
             error.VFSHandleNotSet, error.OutOfBounds => Error.NotOpened,
         };
     }
@@ -293,7 +302,7 @@ test "handleOpen" {
 
     // Creating a file
     const name1 = "/abc.txt";
-    var test_handle = try handleOpen(@ptrToInt(name1), name1.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined);
+    var test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name1), name1.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined));
     var test_node = (try current_task.getVFSHandle(test_handle)).?;
     testing.expectEqual(testfs.tree.children.items.len, 1);
     var tree = testfs.tree.children.items[0];
@@ -305,7 +314,7 @@ test "handleOpen" {
 
     // Creating a dir
     const name2 = "/def";
-    test_handle = try handleOpen(@ptrToInt(name2), name2.len, @enumToInt(vfs.OpenFlags.CREATE_DIR), undefined, undefined);
+    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name2), name2.len, @enumToInt(vfs.OpenFlags.CREATE_DIR), undefined, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
     testing.expectEqual(testfs.tree.children.items.len, 2);
     tree = testfs.tree.children.items[1];
@@ -317,7 +326,7 @@ test "handleOpen" {
 
     // Creating a file under a new dir
     const name3 = "/def/ghi.zig";
-    test_handle = try handleOpen(@ptrToInt(name3), name3.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined);
+    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name3), name3.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
     testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
     tree = testfs.tree.children.items[1].children.items[0];
@@ -328,7 +337,7 @@ test "handleOpen" {
     testing.expectEqual(tree.children.items.len, 0);
 
     // Opening an existing file
-    test_handle = try handleOpen(@ptrToInt(name3), name3.len, @enumToInt(vfs.OpenFlags.NO_CREATION), undefined, undefined);
+    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name3), name3.len, @enumToInt(vfs.OpenFlags.NO_CREATION), undefined, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
     testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
     testing.expect(test_node.isFile());
@@ -350,7 +359,7 @@ test "handleRead" {
     defer scheduler.current_task.destroy(allocator);
     var current_task = scheduler.current_task;
 
-    var test_file = try handleOpen(@ptrToInt("/foo.txt"), "/foo.txt".len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined);
+    var test_file = @intCast(task.Handle, try handleOpen(@ptrToInt("/foo.txt"), "/foo.txt".len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined));
     var f_data = &testfs.tree.children.items[0].data;
     var str = "test123";
     f_data.* = try std.mem.dupe(testing.allocator, u8, str);
@@ -382,7 +391,7 @@ test "handleRead" {
     }
     // Try reading from a symlink
     const args = vfs.OpenArgs{ .symlink_target = "/foo.txt" };
-    var test_link = try handleOpen(@ptrToInt("/link"), "/link".len, @enumToInt(vfs.OpenFlags.CREATE_SYMLINK), @ptrToInt(&args), undefined);
+    var test_link = @intCast(task.Handle, try handleOpen(@ptrToInt("/link"), "/link".len, @enumToInt(vfs.OpenFlags.CREATE_SYMLINK), @ptrToInt(&args), undefined));
     {
         const length = try handleRead(test_link, @ptrToInt(&buffer[0]), buffer.len, undefined, undefined);
         testing.expect(std.mem.eql(u8, str[0..str.len], buffer[0..length]));

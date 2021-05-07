@@ -21,14 +21,11 @@ const log = std.log.scoped(.task);
 /// as we cannot deallocate this.
 extern var KERNEL_STACK_START: *u32;
 
-/// The number of vfs handles that a process can have. This is arbitrarily set to 65535
-pub const VFS_HANDLES_PER_PROCESS = 65535;
+/// The number of vfs handles that a process can have
+pub const VFS_HANDLES_PER_PROCESS = std.math.maxInt(Handle);
 
-comptime {
-    std.debug.assert(VFS_HANDLES_PER_PROCESS < std.math.maxInt(Handle));
-}
-
-pub const Handle = usize;
+/// A vfs handle. 65k is probably a good limit for the number of files a task can have open at once so we use u16 as the type
+pub const Handle = u16;
 
 /// The function type for the entry point.
 pub const EntryPoint = usize;
@@ -185,10 +182,10 @@ pub const Task = struct {
         return self.file_handles.num_free_entries > 0;
     }
 
-    pub fn addVFSHandle(self: *@This(), node: *vfs.Node) ?usize {
+    pub fn addVFSHandle(self: *@This(), node: *vfs.Node) ?Handle {
         if (self.hasFreeVFSHandle()) {
             // Cannot error as we've already checked that there is a free entry
-            const handle = self.file_handles.setFirstFree() orelse unreachable;
+            const handle = @intCast(Handle, self.file_handles.setFirstFree() orelse unreachable);
             self.file_handle_mapping.put(handle, node) catch unreachable;
             return handle;
         }
