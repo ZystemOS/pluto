@@ -48,6 +48,22 @@ pub const Syscall = enum {
             .Test3 => handleTest3,
         };
     }
+
+    ///
+    /// Check if the syscall is just used for testing, and therefore shouldn't be exposed at runtime
+    ///
+    /// Arguments:
+    ///     IN self: Syscall - The syscall to check
+    ///
+    /// Return: bool
+    ///     true if the syscall is only to be used for testing, else false
+    ///
+    pub fn isTest(self: @This()) bool {
+        return switch (self) {
+            .Test1, .Test2, .Test3 => true,
+            else => false,
+        };
+    }
 };
 
 /// A function that can handle a syscall and return a result or an error

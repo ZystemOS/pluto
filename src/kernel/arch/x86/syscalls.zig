@@ -344,9 +344,11 @@ pub fn init() void {
 
     inline for (std.meta.fields(syscalls.Syscall)) |field| {
         const syscall = @intToEnum(syscalls.Syscall, field.value);
-        registerSyscall(field.value, makeHandler(syscall)) catch |e| {
-            panic(@errorReturnTrace(), "Failed to register syscall for '" ++ field.name ++ "': {}\n", .{e});
-        };
+        if (!syscall.isTest()) {
+            registerSyscall(field.value, makeHandler(syscall)) catch |e| {
+                panic(@errorReturnTrace(), "Failed to register syscall for '" ++ field.name ++ "': {}\n", .{e});
+            };
+        }
     }
 
     switch (build_options.test_mode) {
