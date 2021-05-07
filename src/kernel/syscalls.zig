@@ -39,23 +39,6 @@ pub const Error = error{
     Unexpected,
 };
 
-comptime {
-    // Make sure toErrorCode and fromErrorCode are synchronised, and that no errors share the same error code
-    @setEvalBranchQuota(1000000);
-    inline for (@typeInfo(Error).ErrorSet.?) |err| {
-        const error_instance = @field(Error, err.name);
-        if (fromErrorCode(toErrorCode(error_instance)) != error_instance) {
-            @compileError("toErrorCode and fromErrorCode are not synchronised for syscall error '" ++ err.name ++ "'\n");
-        }
-        inline for (@typeInfo(Error).ErrorSet.?) |err2| {
-            const error2_instance = @field(Error, err2.name);
-            if (error_instance != error2_instance and toErrorCode(error_instance) == toErrorCode(error2_instance)) {
-                @compileError("Syscall errors '" ++ err.name ++ "' and '" ++ err2.name ++ "' share the same error code\n");
-            }
-        }
-    }
-}
-
 /// All implemented syscalls
 pub const Syscall = enum {
     Open,
@@ -97,6 +80,7 @@ pub fn init(alloc: *std.mem.Allocator) void {
 
 ///
 /// Convert an error code to an instance of Error. The conversion must be synchronised with toErrorCode
+/// Passing an error code that does not correspond to an error results in safety-protected undefined behaviour
 ///
 /// Arguments:
 ///     IN code: usize - The erorr code to convert
@@ -105,29 +89,7 @@ pub fn init(alloc: *std.mem.Allocator) void {
 ///     The error corresponding to the error code
 ///
 pub fn fromErrorCode(code: usize) Error {
-    return switch (code) {
-        1 => Error.OutOfMemory,
-        2 => Error.NoMoreFSHandles,
-        3 => Error.InvalidFlags,
-        4 => Error.TooBig,
-        5 => Error.NoSuchFileOrDir,
-        6 => Error.NotADirectory,
-        7 => Error.IsADirectory,
-        8 => Error.IsAFile,
-        9 => Error.NotAbsolutePath,
-        10 => Error.NotOpened,
-        11 => Error.NoSymlinkTarget,
-        12 => Error.OutOfBounds,
-        13 => Error.NotAllocated,
-        14 => Error.NotAFile,
-        15 => Error.AlreadyAllocated,
-        16 => Error.PhysicalAlreadyAllocated,
-        17 => Error.PhysicalVirtualMismatch,
-        18 => Error.InvalidVirtAddresses,
-        19 => Error.InvalidPhysAddresses,
-        20 => Error.Unexpected,
-        else => unreachable,
-    };
+    return @intToError(code);
 }
 
 ///
@@ -140,28 +102,7 @@ pub fn fromErrorCode(code: usize) Error {
 ///     The error code corresponding to the error
 ///
 pub fn toErrorCode(err: Error) usize {
-    return switch (err) {
-        Error.OutOfMemory => 1,
-        Error.NoMoreFSHandles => 2,
-        Error.InvalidFlags => 3,
-        Error.TooBig => 4,
-        Error.NoSuchFileOrDir => 5,
-        Error.NotADirectory => 6,
-        Error.IsADirectory => 7,
-        Error.IsAFile => 8,
-        Error.NotAbsolutePath => 9,
-        Error.NotOpened => 10,
-        Error.NoSymlinkTarget => 11,
-        Error.OutOfBounds => 12,
-        Error.NotAllocated => 13,
-        Error.NotAFile => 14,
-        Error.AlreadyAllocated => 15,
-        Error.PhysicalAlreadyAllocated => 16,
-        Error.PhysicalVirtualMismatch => 17,
-        Error.InvalidVirtAddresses => 18,
-        Error.InvalidPhysAddresses => 19,
-        Error.Unexpected => 20,
-    };
+    return @errorToInt(err);
 }
 
 ///
