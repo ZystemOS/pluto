@@ -187,11 +187,10 @@ pub const Task = struct {
     }
 
     pub fn addVFSHandle(self: *@This(), node: *vfs.Node) std.mem.Allocator.Error!?Handle {
-        if (self.hasFreeVFSHandle()) {
-            // Cannot error as we've already checked that there is a free entry
-            const handle = @intCast(Handle, self.file_handles.setFirstFree() orelse unreachable);
-            try self.file_handle_mapping.put(handle, node);
-            return handle;
+        if (self.file_handles.setFirstFree()) |handle| {
+            const real_handle = @intCast(Handle, handle);
+            try self.file_handle_mapping.put(real_handle, node);
+            return real_handle;
         }
         return null;
     }
