@@ -17,7 +17,11 @@ pub const INTERRUPT: u16 = 0x80;
 pub const NUM_HANDLERS: u16 = 256;
 
 /// A syscall handler
+<<<<<<< HEAD
 pub const Handler = fn (arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize;
+=======
+pub const Handler = fn (ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize;
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
 
 /// Errors that syscall utility functions can throw
 pub const Error = error{
@@ -108,21 +112,31 @@ pub fn registerSyscall(syscall: usize, handler: Handler) Error!void {
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
+<<<<<<< HEAD
 inline fn syscall0(syscall: usize) syscalls.Error!usize {
+=======
+fn syscall0(syscall: usize) callconv(.Inline) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
         : "ebx"
     );
+<<<<<<< HEAD
     const err = asm (""
         : [ret] "={ebx}" (-> usize),
     );
+=======
+    const err = @intCast(u16, asm (""
+        : [ret] "={ebx}" (-> usize)
+    ));
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -137,21 +151,31 @@ inline fn syscall0(syscall: usize) syscalls.Error!usize {
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
+<<<<<<< HEAD
 inline fn syscall1(syscall: usize, arg: usize) syscalls.Error!usize {
+=======
+fn syscall1(syscall: usize, arg: usize) callconv(.Inline) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg),
     );
+<<<<<<< HEAD
     const err = asm (""
         : [ret] "={ebx}" (-> usize),
     );
+=======
+    const err = @intCast(u16, asm (""
+        : [ret] "={ebx}" (-> usize)
+    ));
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -167,10 +191,14 @@ inline fn syscall1(syscall: usize, arg: usize) syscalls.Error!usize {
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
+<<<<<<< HEAD
 inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) syscalls.Error!usize {
+=======
+fn syscall2(syscall: usize, arg1: usize, arg2: usize) callconv(.Inline) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
@@ -178,11 +206,17 @@ inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) syscalls.Error!usiz
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
     );
+<<<<<<< HEAD
     const err = asm (""
         : [ret] "={ebx}" (-> usize),
     );
+=======
+    const err = @intCast(u16, asm (""
+        : [ret] "={ebx}" (-> usize)
+    ));
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -199,10 +233,14 @@ inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) syscalls.Error!usiz
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
+<<<<<<< HEAD
 inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) syscalls.Error!usize {
+=======
+fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) callconv(.Inline) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
@@ -211,11 +249,17 @@ inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) syscal
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
     );
+<<<<<<< HEAD
     const err = asm (""
         : [ret] "={ebx}" (-> usize),
     );
+=======
+    const err = @intCast(u16, asm (""
+        : [ret] "={ebx}" (-> usize)
+    ));
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -233,10 +277,14 @@ inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) syscal
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
+<<<<<<< HEAD
 inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize) syscalls.Error!usize {
+=======
+fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize) callconv(.Inline) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
@@ -246,11 +294,17 @@ inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: 
           [arg3] "{edx}" (arg3),
           [arg4] "{esi}" (arg4),
     );
+<<<<<<< HEAD
     const err = asm (""
         : [ret] "={ebx}" (-> usize),
     );
+=======
+    const err = @intCast(u16, asm (""
+        : [ret] "={ebx}" (-> usize)
+    ));
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -269,10 +323,14 @@ inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: 
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
+<<<<<<< HEAD
 inline fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+=======
+fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) callconv(.Inline) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
@@ -283,11 +341,17 @@ inline fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: 
           [arg4] "{esi}" (arg4),
           [arg5] "{edi}" (arg5),
     );
+<<<<<<< HEAD
     const err = asm (""
         : [ret] "={ebx}" (-> usize),
     );
+=======
+    const err = @intCast(u16, asm (""
+        : [ret] "={ebx}" (-> usize)
+    ));
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -325,7 +389,11 @@ inline fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) usize {
 ///
 fn makeHandler(comptime syscall: syscalls.Syscall) Handler {
     return struct {
+<<<<<<< HEAD
         fn func(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+=======
+        fn func(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
             return syscalls.handle(syscall, arg1, arg2, arg3, arg4, arg5);
         }
     }.func;
@@ -360,6 +428,7 @@ pub fn init() void {
 /// Tests
 var test_int: u32 = 0;
 
+<<<<<<< HEAD
 fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
     // Suppress unused variable warnings
     _ = arg1;
@@ -367,49 +436,73 @@ fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     _ = arg3;
     _ = arg4;
     _ = arg5;
+=======
+fn testHandler0(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     test_int += 1;
     return 0;
 }
 
+<<<<<<< HEAD
 fn testHandler1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
     // Suppress unused variable warnings
     _ = arg2;
     _ = arg3;
     _ = arg4;
     _ = arg5;
+=======
+fn testHandler1(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     test_int += arg1;
     return 1;
 }
 
+<<<<<<< HEAD
 fn testHandler2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
     // Suppress unused variable warnings
     _ = arg3;
     _ = arg4;
     _ = arg5;
+=======
+fn testHandler2(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     test_int += arg1 + arg2;
     return 2;
 }
 
+<<<<<<< HEAD
 fn testHandler3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
     // Suppress unused variable warnings
     _ = arg4;
     _ = arg5;
+=======
+fn testHandler3(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     test_int += arg1 + arg2 + arg3;
     return 3;
 }
 
+<<<<<<< HEAD
 fn testHandler4(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
     // Suppress unused variable warnings
     _ = arg5;
+=======
+fn testHandler4(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     test_int += arg1 + arg2 + arg3 + arg4;
     return 4;
 }
 
+<<<<<<< HEAD
 fn testHandler5(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+=======
+fn testHandler5(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
     test_int += arg1 + arg2 + arg3 + arg4 + arg5;
     return 5;
 }
 
+<<<<<<< HEAD
 fn testHandler6(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
     // Suppress unused variable warnings
     _ = arg1;
@@ -418,6 +511,10 @@ fn testHandler6(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     _ = arg4;
     _ = arg5;
     return syscalls.Error.OutOfMemory;
+=======
+fn testHandler6(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+    return anyerror.OutOfMemory;
+>>>>>>> d3d4298 (Fix error code int types and use anyerror)
 }
 
 test "registerSyscall returns SyscallExists" {
@@ -489,7 +586,7 @@ fn runtimeTests() void {
     if (syscall0(121)) {
         panic(@errorReturnTrace(), "FAILURE syscall6\n", .{});
     } else |e| {
-        if (e != syscalls.Error.OutOfMemory) {
+        if (e != error.OutOfMemory) {
             panic(@errorReturnTrace(), "FAILURE syscall6 returned the wrong error: {}\n", .{e});
         }
     }
