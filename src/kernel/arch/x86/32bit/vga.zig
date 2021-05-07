@@ -5,7 +5,7 @@ const expectEqual = std.testing.expectEqual;
 const log = std.log.scoped(.x86_vga);
 const build_options = @import("build_options");
 const arch = if (is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const panic = @import("../../panic.zig").panic;
+const panic = @import("../../../panic.zig").panic;
 
 /// The port address for the VGA register selection.
 const PORT_ADDRESS: u16 = 0x03D4;

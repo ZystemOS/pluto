@@ -2,10 +2,11 @@
 
 which readelf > /dev/null || exit_missing
 
-BIN_PATH=$1
-PLUTO_ELF=$2
-OUTPUT_FILE=$3
-RAMDISK=$4
+INSTALL_PATH=$1
+BIN_PATH=$2
+PLUTO_ELF=$3
+OUTPUT_FILE=$4
+RAMDISK=$5
 
 if [[ ! -f ./echfs/echfs-utils ]]
 then
@@ -23,7 +24,7 @@ then
 	cd ..
 fi
 
-MAP_FILE="zig-cache/kernel.map"
+MAP_FILE=$INSTALL_PATH/"kernel.map"
 
 # Read the symbols from the binary, remove all the unnecessary columns with awk and emit to a map file
 readelf -s --wide $PLUTO_ELF | grep -F "FUNC" | awk '{$1=$3=$4=$5=$6=$7=""; print $0}' | sort -k 1 > $MAP_FILE

@@ -12,8 +12,8 @@ const pic = @import("pic.zig");
 const pit = @import("pit.zig");
 const irq = @import("irq.zig");
 const cmos = if (is_test) @import(mock_path ++ "cmos_mock.zig") else @import("cmos.zig");
-const panic = @import("../../panic.zig").panic;
-const scheduler = @import("../../scheduler.zig");
+const panic = @import("../../../panic.zig").panic;
+const scheduler = @import("../../../scheduler.zig");
 
 /// The Century register is unreliable. We need a APIC interface to infer if we have a century
 /// register. So this is a current TODO.
