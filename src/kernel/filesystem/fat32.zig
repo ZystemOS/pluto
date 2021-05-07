@@ -8,11 +8,12 @@ const log = std.log.scoped(.fat32);
 const AutoHashMap = std.AutoHashMap;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const arch = @import("../arch.zig").internals;
+const time = @import("../time.zig");
 const vfs = @import("vfs.zig");
 const mem = @import("../mem.zig");
 const CodePage = @import("../code_page/code_page.zig").CodePage;
-const mkfat32 = @import("../../../mkfat32.zig");
+const makefs = @import("makefs.zig");
+const fs_common = @import("filesystem_common.zig");
 
 /// The boot record for FAT32. This is use for parsing the initial boot sector to extract the
 /// relevant information for todays FAT32.
@@ -558,34 +559,6 @@ fn initBytes(comptime Type: type, copy_struct: Type, bytes: []u8) void {
 }
 
 ///
-/// A convenient function for returning the error types for reading, writing and seeking a stream.
-///
-/// Arguments:
-///     IN comptime StreamType: type - The stream to get the error set from.
-///
-/// Return: type
-///     The Error set for reading, writing and seeking the stream.
-///
-fn ErrorSet(comptime StreamType: type) type {
-    const ReadError = switch (@typeInfo(StreamType)) {
-        .Pointer => |p| p.child.ReadError,
-        else => StreamType.ReadError,
-    };
-
-    const WriteError = switch (@typeInfo(StreamType)) {
-        .Pointer => |p| p.child.WriteError,
-        else => StreamType.WriteError,
-    };
-
-    const SeekError = switch (@typeInfo(StreamType)) {
-        .Pointer => |p| p.child.SeekError,
-        else => StreamType.SeekError,
-    };
-
-    return ReadError || WriteError || SeekError;
-}
-
-///
 /// FAT32 filesystem.
 ///
 /// Arguments:
@@ -695,28 +668,16 @@ pub fn Fat32FS(comptime StreamType: type) type {
         // Can't directly access the fields of a pointer type, idk if this is a bug?
 
         /// The errors that can occur when reading from the stream.
-        const ReadError = switch (@typeInfo(StreamType)) {
-            .Pointer => |p| p.child.ReadError,
-            else => StreamType.ReadError,
-        };
+        const ReadError = fs_common.GetReadError(StreamType);
 
         /// The errors that can occur when writing to the stream.
-        const WriteError = switch (@typeInfo(StreamType)) {
-            .Pointer => |p| p.child.WriteError,
-            else => StreamType.WriteError,
-        };
+        const WriteError = fs_common.GetWriteError(StreamType);
 
         /// The errors that can occur when seeking the stream.
-        const SeekError = switch (@typeInfo(StreamType)) {
-            .Pointer => |p| p.child.SeekError,
-            else => StreamType.SeekError,
-        };
+        const SeekError = fs_common.GetSeekError(StreamType);
 
         /// The errors that can occur when getting the seek position of the stream.
-        const GetPosError = switch (@typeInfo(StreamType)) {
-            .Pointer => |p| p.child.GetPosError,
-            else => StreamType.GetPosError,
-        };
+        const GetPosError = fs_common.GetGetSeekPosError(StreamType);
 
         /// An iterator for looping over the cluster chain in the FAT and reading the cluster data.
         const ClusterChainIterator = struct {
@@ -754,12 +715,12 @@ pub fn Fat32FS(comptime StreamType: type) type {
             /// Arguments:
             ///     IN self: *ClusterChainIteratorSelf - Iterator self.
             ///
-            /// Error: Fat32Self.Error || ReadError || SeekError
-            ///     Fat32Self.Error - If reading the stream didn't fill the cache FAT array.
+            /// Error: Error || ReadError || SeekError
+            ///     Error - If reading the stream didn't fill the cache FAT array.
             ///     ReadError       - If there is an error reading from the stream.
             ///     SeekError       - If there is an error seeking the stream.
             ///
-            fn checkRead(self: *ClusterChainIteratorSelf) (Fat32Self.Error || ReadError || SeekError)!void {
+            fn checkRead(self: *ClusterChainIteratorSelf) (Error || ReadError || SeekError)!void {
                 if (self.cluster_offset >= self.fat_config.bytes_per_sector * self.fat_config.sectors_per_cluster) {
                     self.cluster = self.fat[self.cluster - self.table_offset];
                     self.cluster_offset = 0;
@@ -774,7 +735,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
                         try self.stream.seekableStream().seekTo((self.fat_config.reserved_sectors + self.table_offset) * self.fat_config.bytes_per_sector);
                         const read_count = try self.stream.reader().readAll(std.mem.sliceAsBytes(self.fat));
                         if (read_count != self.fat.len * @sizeOf(u32)) {
-                            return Fat32Self.Error.BadRead;
+                            return Error.BadRead;
                         }
                     }
                 }
@@ -796,12 +757,12 @@ pub fn Fat32FS(comptime StreamType: type) type {
             ///     The end index into the buffer where the next read should start. If returned
             ///     null, then the buffer is full or the end of the cluster chain is reached.
             ///
-            /// Error: Fat32Self.Error || ReadError || SeekError
-            ///     Fat32Self.Error - (BadRead) If the buffer isn't aligned to the bytes per cluster boundary.
+            /// Error: Error || ReadError || SeekError
+            ///     Error - (BadRead) If the buffer isn't aligned to the bytes per cluster boundary.
             ///     ReadError       - If there is an error reading from the stream.
             ///     SeekError       - If there is an error seeking the stream.
             ///
-            pub fn read(self: *ClusterChainIteratorSelf, buff: []u8) (Fat32Self.Error || ReadError || SeekError)!?u32 {
+            pub fn read(self: *ClusterChainIteratorSelf, buff: []u8) (Error || ReadError || SeekError)!?u32 {
                 // FAT32 is really FAT28, so the top 4 bits are not used, so mask them out
                 if (buff.len != 0 and self.cluster != 0 and (self.cluster & 0x0FFFFFFF) < self.fat_config.cluster_end_marker) {
                     // Seek to the sector where the cluster is
@@ -816,7 +777,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
                     //       So would read from the cache rather than the stream itself.
                     const read_count = try self.stream.reader().readAll(buff[0..read_len]);
                     if (read_count != read_len) {
-                        return Fat32Self.Error.BadRead;
+                        return Error.BadRead;
                     }
 
                     // Increment the cluster
@@ -850,13 +811,13 @@ pub fn Fat32FS(comptime StreamType: type) type {
             /// Return: ClusterChainIteratorSelf
             ///     A cluster chain iterator.
             ///
-            /// Error: Allocator.Error || Fat32Self.Error || ReadError || SeekError
+            /// Error: Allocator.Error || Error || ReadError || SeekError
             ///     Allocator.Error - If there is an error allocating the initial FAT cache.
-            ///     Fat32Self.Error - If reading the stream didn't fill the cache FAT array.
+            ///     Error - If reading the stream didn't fill the cache FAT array.
             ///     ReadError       - If there is an error reading from the stream.
             ///     SeekError       - If there is an error seeking the stream.
             ///
-            pub fn init(allocator: *Allocator, fat_config: FATConfig, cluster: u32, stream: StreamType) (Allocator.Error || Fat32Self.Error || ReadError || SeekError)!ClusterChainIteratorSelf {
+            pub fn init(allocator: *Allocator, fat_config: FATConfig, cluster: u32, stream: StreamType) (Allocator.Error || Error || ReadError || SeekError)!ClusterChainIteratorSelf {
                 // Create a bytes per sector sized cache of the FAT.
                 var fat = try allocator.alloc(u32, fat_config.bytes_per_sector / @sizeOf(u32));
                 errdefer allocator.free(fat);
@@ -868,7 +829,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
                 try stream.seekableStream().seekTo((fat_config.reserved_sectors + table_offset) * fat_config.bytes_per_sector);
                 const read_count = try stream.reader().readAll(std.mem.sliceAsBytes(fat));
                 if (read_count != fat.len * @sizeOf(u32)) {
-                    return Fat32Self.Error.BadRead;
+                    return Error.BadRead;
                 }
 
                 return ClusterChainIteratorSelf{
@@ -943,13 +904,13 @@ pub fn Fat32FS(comptime StreamType: type) type {
             /// Arguments:
             ///     IN self: *EntryIteratorSelf - Iterator self.
             ///
-            /// Error: Fat32Self.Error || ReadError || SeekError || EntryItError
-            ///     Fat32Self.Error       - Error reading the cluster chain if the buffer isn't aligned.
+            /// Error: Error || ReadError || SeekError || EntryItError
+            ///     Error       - Error reading the cluster chain if the buffer isn't aligned.
             ///     ReadError             - Error reading from the stream in the cluster iterator.
             ///     SeekError             - Error seeking the stream in the cluster iterator.
             ///     error.EndClusterChain - Reading the next cluster and reach the end unexpectedly.
             ///
-            fn checkRead(self: *EntryIteratorSelf) (Fat32Self.Error || ReadError || SeekError || EntryItError)!void {
+            fn checkRead(self: *EntryIteratorSelf) (Error || ReadError || SeekError || EntryItError)!void {
                 if (self.index >= self.cluster_block.len) {
                     // Read the next block
                     var index: u32 = 0;
@@ -978,9 +939,9 @@ pub fn Fat32FS(comptime StreamType: type) type {
             /// Return: ?Entry
             ///     The FAT entry. Will return null if there are no more entries for the directory.
             ///
-            /// Error: Allocator.Error || Fat32Self.Error || ReadError || SeekError || EntryItError
+            /// Error: Allocator.Error || Error || ReadError || SeekError || EntryItError
             ///     Allocator.Error - Error allocating memory for fields in the return entry.
-            ///     Fat32Self.Error - Error reading the cluster chain if the buffer isn't aligned.
+            ///     Error - Error reading the cluster chain if the buffer isn't aligned.
             ///     ReadError       - Error reading from the underlying stream.
             ///     SeekError       - Error seeking the underlying stream.
             ///     error.Orphan    - If there is a long entry without a short name entry or the
@@ -988,7 +949,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
             ///                       short entry or the long entry is missing entry parts.
             ///     error.EndClusterChain - Reading the next cluster and reach the end unexpectedly.
             ///
-            fn nextImp(self: *EntryIteratorSelf) (Allocator.Error || Fat32Self.Error || ReadError || SeekError || LongName.Error || EntryItError)!?Entry {
+            fn nextImp(self: *EntryIteratorSelf) (Allocator.Error || Error || ReadError || SeekError || LongName.Error || EntryItError)!?Entry {
                 // Do we need to read the next block
                 try self.checkRead();
 
@@ -1088,13 +1049,13 @@ pub fn Fat32FS(comptime StreamType: type) type {
             ///     The FAT entry. Will return null if there are no more entries for the directory.
             ///     The entry must be free using the deinit() function.
             ///
-            /// Error: Allocator.Error || Fat32Self.Error || ReadError || SeekError
+            /// Error: Allocator.Error || Error || ReadError || SeekError
             ///     Allocator.Error - Error allocating memory for fields in the return entry.
-            ///     Fat32Self.Error - Error reading the cluster chain if the buffer isn't aligned.
+            ///     Error - Error reading the cluster chain if the buffer isn't aligned.
             ///     ReadError       - Error reading from the underlying stream.
             ///     SeekError       - Error seeking the underlying stream.
             ///
-            pub fn next(self: *EntryIteratorSelf) (Allocator.Error || Fat32Self.Error || ReadError || SeekError || LongName.Error)!?Entry {
+            pub fn next(self: *EntryIteratorSelf) (Allocator.Error || Error || ReadError || SeekError || LongName.Error)!?Entry {
                 // If there is a orphan file, then just get the next one
                 // If we hit the end of the cluster chain, return null
                 while (true) {
@@ -1103,7 +1064,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
                     } else |e| switch (e) {
                         error.Orphan => continue,
                         error.EndClusterChain => return null,
-                        else => return @errSetCast(Allocator.Error || Fat32Self.Error || ReadError || SeekError || LongName.Error, e),
+                        else => return @errSetCast(Allocator.Error || Error || ReadError || SeekError || LongName.Error, e),
                     }
                 }
             }
@@ -1132,13 +1093,13 @@ pub fn Fat32FS(comptime StreamType: type) type {
             /// Return: EntryIteratorSelf
             ///     The entry iterator.
             ///
-            /// Error: Allocator.Error || Fat32Self.Error || ReadError || SeekError
+            /// Error: Allocator.Error || Error || ReadError || SeekError
             ///     Allocator.Error - Error allocating memory for fields in the return entry.
-            ///     Fat32Self.Error - Error reading the cluster chain if the buffer isn't aligned.
+            ///     Error - Error reading the cluster chain if the buffer isn't aligned.
             ///     ReadError       - Error reading from the underlying stream.
             ///     SeekError       - Error seeking the underlying stream.
             ///
-            pub fn init(allocator: *Allocator, fat_config: FATConfig, cluster: u32, stream: StreamType) (Allocator.Error || Fat32Self.Error || ReadError || SeekError)!EntryIteratorSelf {
+            pub fn init(allocator: *Allocator, fat_config: FATConfig, cluster: u32, stream: StreamType) (Allocator.Error || Error || ReadError || SeekError)!EntryIteratorSelf {
                 var cluster_block = try allocator.alloc(u8, fat_config.bytes_per_sector * fat_config.sectors_per_cluster);
                 errdefer allocator.free(cluster_block);
                 var it = try ClusterChainIterator.init(allocator, fat_config, cluster, stream);
@@ -1398,15 +1359,15 @@ pub fn Fat32FS(comptime StreamType: type) type {
         /// Return: u32
         ///     The next free cluster to use.
         ///
-        /// Error: Allocator.Error || ReadError || SeekError || Fat32Self.Error
+        /// Error: Allocator.Error || ReadError || SeekError || Error
         ///     Allocator.Error - Not enough memory for allocating memory.
         ///     WriteError      - Error while updating the FAT with the new cluster.
         ///     ReadError       - Error while reading the stream.
         ///     SeekError       - Error while seeking the stream.
-        ///     Fat32Self.Error.BadRead  - Error reading the FAT, not aligned to the sector.
-        ///     Fat32Self.Error.DiskFull - No free clusters.
+        ///     Error.BadRead   - Error reading the FAT, not aligned to the sector.
+        ///     Error.DiskFull  - No free clusters.
         ///
-        fn findNextFreeCluster(self: *Fat32Self, cluster_hint: u32, parent_cluster: ?u32) (Allocator.Error || WriteError || ReadError || SeekError || Fat32Self.Error)!u32 {
+        fn findNextFreeCluster(self: *Fat32Self, cluster_hint: u32, parent_cluster: ?u32) (Allocator.Error || WriteError || ReadError || SeekError || Error)!u32 {
             var fat_buff = try self.allocator.alloc(u32, self.fat_config.bytes_per_sector / @sizeOf(u32));
             defer self.allocator.free(fat_buff);
             var sector_offset = cluster_hint / fat_buff.len;
@@ -1418,7 +1379,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
             try seeker.seekTo((self.fat_config.reserved_sectors + sector_offset) * self.fat_config.bytes_per_sector);
             var fat_read = try reader.readAll(std.mem.sliceAsBytes(fat_buff));
             if (fat_read != self.fat_config.bytes_per_sector) {
-                return Fat32Self.Error.BadRead;
+                return Error.BadRead;
             }
 
             // Check for a free cluster by checking the FAT for a 0x00000000 entry (free)
@@ -1435,13 +1396,13 @@ pub fn Fat32FS(comptime StreamType: type) type {
                         if (self.fat_config.has_fs_info) {
                             std.debug.assert(self.fat_config.number_free_clusters == 0);
                         }
-                        return Fat32Self.Error.DiskFull;
+                        return Error.DiskFull;
                     }
                     sector_offset = check_offset;
                     try seeker.seekTo((self.fat_config.reserved_sectors + sector_offset) * self.fat_config.bytes_per_sector);
                     fat_read = try reader.readAll(std.mem.sliceAsBytes(fat_buff));
                     if (fat_read != fat_buff.len * @sizeOf(u32)) {
-                        return Fat32Self.Error.BadRead;
+                        return Error.BadRead;
                     }
                 }
             }
@@ -1593,11 +1554,11 @@ pub fn Fat32FS(comptime StreamType: type) type {
         /// Return: FatDirEntry
         ///     The full FAT entry ready to be copies to disk, byte by byte.
         ///
-        /// Error: Allocator.Error || Fat32Self.Error
+        /// Error: Allocator.Error || Error
         ///     Allocator.Error - Error allocating memory.
-        ///     Fat32Self.Error - The name provided cannot be converted to a valid FAT32 name.
+        ///     Error           - The name provided cannot be converted to a valid FAT32 name.
         ///
-        fn createEntries(allocator: *Allocator, name: []const u8, cluster: u32, attributes: ShortName.Attributes, existing_short_names: []const [11]u8) (Allocator.Error || Fat32Self.Error)!FatDirEntry {
+        fn createEntries(allocator: *Allocator, name: []const u8, cluster: u32, attributes: ShortName.Attributes, existing_short_names: []const [11]u8) (Allocator.Error || Error)!FatDirEntry {
             const long_name = try nameToLongName(allocator, name);
             defer allocator.free(long_name);
             const short_name = try longNameToShortName(long_name, existing_short_names);
@@ -1620,11 +1581,11 @@ pub fn Fat32FS(comptime StreamType: type) type {
         /// Return: []const u16
         ///     A valid UTF-16 FAT32 long file name.
         ///
-        /// Error: Allocator.Error || Fat32Self.Error
-        ///     Allocator.Error             - Error allocating memory.
-        ///     Fat32Self.Error.InvalidName - The file name cannot be converted to a valid long name.
+        /// Error: Allocator.Error || Error
+        ///     Allocator.Error   - Error allocating memory.
+        ///     Error.InvalidName - The file name cannot be converted to a valid long name.
         ///
-        fn nameToLongName(allocator: *Allocator, name: []const u8) (Allocator.Error || Fat32Self.Error)![]const u16 {
+        fn nameToLongName(allocator: *Allocator, name: []const u8) (Allocator.Error || Error)![]const u16 {
             // Allocate a buffer to translate to UFT16. Then length of the UFT8 will be more than enough
             // TODO: Calc the total length and use appendAssumeCapacity
             var utf16_buff = try ArrayList(u16).initCapacity(allocator, name.len);
@@ -1632,7 +1593,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
 
             // The name is in UTF8, this needs to be conversed to UTF16
             // This also checks for valid UTF8 characters
-            const utf8_view = std.unicode.Utf8View.init(name) catch return Fat32Self.Error.InvalidName;
+            const utf8_view = std.unicode.Utf8View.init(name) catch return Error.InvalidName;
             var utf8_it = utf8_view.iterator();
             // Make sure the code points as valid for the long name
             var ignored_leading = false;
@@ -1645,14 +1606,14 @@ pub fn Fat32FS(comptime StreamType: type) type {
                 // If it is larger than 0xFFFF, then it cannot fit in UTF16 so invalid.
                 // Can't have control characters (including the DEL key)
                 if (code_point > 0xFFFF or code_point < 0x20 or code_point == 0x7F) {
-                    return Fat32Self.Error.InvalidName;
+                    return Error.InvalidName;
                 }
 
                 // Check for invalid characters
                 const invalid_chars = "\"*/:<>?\\|";
                 inline for (invalid_chars) |char| {
                     if (char == code_point) {
-                        return Fat32Self.Error.InvalidName;
+                        return Error.InvalidName;
                     }
                 }
 
@@ -1667,7 +1628,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
 
             // Check the generated name is a valid length
             if (long_name.len > 255) {
-                return Fat32Self.Error.InvalidName;
+                return Error.InvalidName;
             }
             return long_name;
         }
@@ -1719,10 +1680,10 @@ pub fn Fat32FS(comptime StreamType: type) type {
         /// Return: [11]u8
         ///     The converted short name.
         ///
-        /// Error: Fat32Self.Error
-        ///     Fat32Self.Error.InvalidName - If the directory is fill of the same short file name.
+        /// Error: Error
+        ///     Error.InvalidName - If the directory is fill of the same short file name.
         ///
-        fn longNameToShortName(long_name: []const u16, existing_names: []const [11]u8) Fat32Self.Error![11]u8 {
+        fn longNameToShortName(long_name: []const u16, existing_names: []const [11]u8) Error![11]u8 {
             // Pad with spaces
             var sfn: [11]u8 = [_]u8{' '} ** 11;
             var sfn_i: u8 = 0;
@@ -1946,22 +1907,22 @@ pub fn Fat32FS(comptime StreamType: type) type {
         ///     The short name entry with the current time used.
         ///
         fn createShortNameEntry(name: [11]u8, attributes: ShortName.Attributes, cluster: u32) ShortName {
-            const date_time = arch.getDateTime();
+            const date_time = time.getDateTime();
 
-            const date = @intCast(u16, date_time.day | date_time.month << 5 | (date_time.year - 1980) << 9);
-            const time = @intCast(u16, date_time.second / 2 | date_time.minute << 5 | date_time.hour << 11);
+            const dt_date = @intCast(u16, date_time.day | date_time.month << 5 | (date_time.year - 1980) << 9);
+            const dt_time = @intCast(u16, date_time.second / 2 | date_time.minute << 5 | date_time.hour << 11);
 
             return .{
                 .name = name[0..8].*,
                 .extension = name[8..11].*,
                 .attributes = @enumToInt(attributes),
                 .time_created_tenth = @intCast(u8, (date_time.second % 2) * 100),
-                .time_created = time,
-                .date_created = date,
-                .date_last_access = date,
+                .time_created = dt_time,
+                .date_created = dt_date,
+                .date_last_access = dt_date,
                 .cluster_high = @truncate(u16, cluster >> 16),
-                .time_last_modification = time,
-                .date_last_modification = date,
+                .time_last_modification = dt_time,
+                .date_last_modification = dt_date,
                 .cluster_low = @truncate(u16, cluster),
                 .size = 0x00000000,
             };
@@ -1990,9 +1951,9 @@ pub fn Fat32FS(comptime StreamType: type) type {
         ///     WriteError      - Error writing to the underlying stream.
         ///     ReadError       - Error reading the underlying stream.
         ///     SeekError       - Error seeking the underlying stream.
-        ///     Fat32Self.Error - This will relate to allocating a new cluster.
+        ///     Error           - This will relate to allocating a new cluster.
         ///
-        fn writeEntries(self: *Fat32Self, entries: FatDirEntry, at_cluster: u32, next_free_cluster_hint: u32, initial_cluster_offset: u32) (Allocator.Error || WriteError || ReadError || SeekError || Fat32Self.Error)!struct { cluster: u32, offset: u32 } {
+        fn writeEntries(self: *Fat32Self, entries: FatDirEntry, at_cluster: u32, next_free_cluster_hint: u32, initial_cluster_offset: u32) (Allocator.Error || WriteError || ReadError || SeekError || Error)!struct { cluster: u32, offset: u32 } {
             // Each entry is 32 bytes short + 32 * long len
             const entries_size_bytes = 32 + (32 * entries.long_entry.len);
             std.debug.assert(at_cluster >= 2);
@@ -2047,15 +2008,19 @@ pub fn Fat32FS(comptime StreamType: type) type {
 
         ///
         /// Deinitialise this file system. This frees the root node, virtual filesystem and self.
-        /// This asserts that there are no open files left.
+        /// This asserts that there are no open files left and will return an error if there are.
+        /// If an error is returned, then the the filesystem is still valid.
         ///
         /// Arguments:
         ///     IN self: *Fat32Self - Self to free.
         ///
-        pub fn destroy(self: *Fat32Self) Fat32Self.Error!void {
+        /// Error: Error
+        ///     Error.FilesStillOpen - There are files still open.
+        ///
+        pub fn destroy(self: *Fat32Self) Error!void {
             // Make sure we have closed all files
             if (self.opened_files.count() != 0) {
-                return Fat32Self.Error.FilesStillOpen;
+                return Error.FilesStillOpen;
             }
             self.opened_files.deinit();
             self.allocator.destroy(self.root_node.node);
@@ -2073,14 +2038,14 @@ pub fn Fat32FS(comptime StreamType: type) type {
         /// Return: *Fat32
         ///     The pointer to a FAT32 filesystem.
         ///
-        /// Error: Allocator.Error || ReadError || SeekError || Fat32Self.Error
+        /// Error: Allocator.Error || ReadError || SeekError || Error
         ///     Allocator.Error - If there is no more memory. Any memory allocated will be freed.
         ///     ReadError       - If there is an error reading from the stream.
         ///     SeekError       - If there si an error seeking the stream.
-        ///     Fat32Self.Error - If there is an error when parsing the stream to set up a fAT32
+        ///     Error           - If there is an error when parsing the stream to set up a fAT32
         ///                       filesystem. See Error for the list of possible errors.
         ///
-        pub fn create(allocator: *Allocator, stream: StreamType) (Allocator.Error || ReadError || SeekError || Fat32Self.Error)!*Fat32Self {
+        pub fn create(allocator: *Allocator, stream: StreamType) (Allocator.Error || ReadError || SeekError || Error)!*Fat32Self {
             log.debug("Init\n", .{});
             defer log.debug("Done\n", .{});
             // We need to get the root directory sector. For this we need to read the boot sector.
@@ -2252,15 +2217,17 @@ pub fn Fat32FS(comptime StreamType: type) type {
 /// Return: *Fat32FS(@TypeOf(stream))
 ///     A pointer to a FAT32 filesystem.
 ///
-/// Error: Allocator.Error || Fat32FS(@TypeOf(stream)).Error
+/// Error: Allocator.Error || ReadError || SeekError
 ///     Allocator.Error - If there isn't enough memory to create the filesystem.
+///     ReadError       - Error reading from the stream.
+///     SeekError       - Error seeking the stream.
 ///
-pub fn initialiseFAT32(allocator: *Allocator, stream: anytype) (Allocator.Error || ErrorSet(@TypeOf(stream)) || Fat32FS(@TypeOf(stream)).Error)!*Fat32FS(@TypeOf(stream)) {
+pub fn initialiseFAT32(allocator: *Allocator, stream: anytype) (Allocator.Error || Fat32FS(@TypeOf(stream)).ReadError || Fat32FS(@TypeOf(stream)).SeekError || Fat32FS(@TypeOf(stream)).Error)!*Fat32FS(@TypeOf(stream)) {
     return Fat32FS(@TypeOf(stream)).create(allocator, stream);
 }
 
 ///
-/// Create a test FAT32 filesystem. This will use mkfat32 to create the temporary FAT32 then the
+/// Create a test FAT32 filesystem. This will use makefs.FAT32 to create the temporary FAT32 then the
 /// stream and fat_config will be replaced by the provided ones. Returned will need to be deinit().
 /// This will also set the VFS root node so can use the VFS interfaces without manual setup.
 ///
@@ -2283,7 +2250,7 @@ fn testFAT32FS(allocator: *Allocator, stream: anytype, fat_config: FATConfig) an
 
     var temp_stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, temp_stream, true);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len), .quick_format = true }, temp_stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, temp_stream);
     test_fs.stream = stream;
@@ -4019,7 +3986,7 @@ test "Fat32FS.open - no create - hand crafted" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len), .quick_format = true }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -4104,7 +4071,7 @@ test "Fat32FS.open - create file" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len), .quick_format = true }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -4135,7 +4102,7 @@ test "Fat32FS.open - create directory" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len), .quick_format = true }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -4159,7 +4126,7 @@ test "Fat32FS.open - create symlink" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len), .quick_format = true }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -4175,7 +4142,7 @@ test "Fat32FS.open - create nested directories" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, true);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len), .quick_format = true }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -5688,7 +5655,7 @@ test "Fat32FS.write - small file" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, false);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -5724,7 +5691,7 @@ test "Fat32FS.write - large file" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, false);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -5816,7 +5783,7 @@ test "Fat32FS.write - test files" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, false);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -5839,7 +5806,7 @@ test "Fat32FS.write - not enough space" {
 
     var stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
-    try mkfat32.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream, false);
+    try makefs.Fat32.make(.{ .image_size = @intCast(u32, test_file_buf.len) }, stream);
 
     var test_fs = try initialiseFAT32(std.testing.allocator, stream);
     defer test_fs.destroy() catch unreachable;
@@ -6009,7 +5976,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
         var test_fs = try initialiseFAT32(std.testing.allocator, stream);
         defer test_fs.destroy() catch unreachable;
 
-        // This is the default config that should be produced from mkfat32.Fat32
+        // This is the default config that should be produced from makefs.Fat32
         const expected = FATConfig{
             .bytes_per_sector = 512,
             .sectors_per_cluster = 1,
@@ -6038,7 +6005,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
         var test_fs = try initialiseFAT32(std.testing.allocator, stream);
         defer test_fs.destroy() catch unreachable;
 
-        // This is the default config that should be produced from mkfat32.Fat32
+        // This is the default config that should be produced from makefs.Fat32
         const expected = FATConfig{
             .bytes_per_sector = 512,
             .sectors_per_cluster = 1,
@@ -6070,7 +6037,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
         var test_fs = try initialiseFAT32(std.testing.allocator, stream);
         defer test_fs.destroy() catch unreachable;
 
-        // This is the default config that should be produced from mkfat32.Fat32
+        // This is the default config that should be produced from makefs.Fat32
         const expected = FATConfig{
             .bytes_per_sector = 512,
             .sectors_per_cluster = 1,
