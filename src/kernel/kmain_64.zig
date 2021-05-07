@@ -79,4 +79,8 @@ export fn kmain(boot_payload: *const arch.BootPayload) void {
 
 test "" {
     std.testing.refAllDecls(@This());
+
+    // Force testing file system stuff
+    _ = @import("filesystem/fat32.zig");
+    _ = @import("filesystem/mbr.zig");
 }

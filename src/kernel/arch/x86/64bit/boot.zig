@@ -6,7 +6,7 @@ const arch = @import("arch.zig");
 const Header = packed struct {
     /// The kernel entry point or 0 for entry point of Elf file.
     entry_point: u64,
-    /// THe stack address.
+    /// The stack address.
     stack: *u8,
     /// Unused flags
     flags: u64,

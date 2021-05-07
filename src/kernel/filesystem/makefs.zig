@@ -1,52 +1,8 @@
 const std = @import("std");
-
-// This is the assembly for the FAT bootleader.
-//     [bits   16]
-//     [org    0x7C00]
-//
-//     jmp     short _start
-//     nop
-//
-// times 87 db 0xAA
-//
-// _start:
-//     jmp     long 0x0000:start_16bit
-//
-// start_16bit:
-//     cli
-//     mov     ax, cs
-//     mov     ds, ax
-//     mov     es, ax
-//     mov     ss, ax
-//     mov     sp, 0x7C00
-//     lea     si, [message]
-// .print_string_with_new_line:
-//     mov     ah, 0x0E
-//     xor     bx, bx
-// .print_string_loop:
-//     lodsb
-//     cmp     al, 0
-//     je      .print_string_done
-//     int     0x10
-//     jmp     short .print_string_loop
-// .print_string_done:
-//     mov     al, 0x0A
-//     int     0x10
-//     mov     al, 0x0D
-//     int     0x10
-//
-// .reboot:
-//     xor     ah, ah
-//     int     0x16
-//     int     0x19
-//
-// .loop_forever:
-//     hlt
-//     jmp .loop_forever
-
-// message db "This is not a bootable disk. Please insert a bootable floppy and press any key to try again", 0
-// times 510 - ($ - $$) db 0
-// dw 0xAA55
+const expectError = std.testing.expectError;
+const builtin = @import("builtin");
+const fs_common = @import("filesystem_common.zig");
+const mbr_driver = @import("mbr.zig");
 
 /// A FAT32 static structure for creating a empty FAT32 image. This contains helper functions
 /// for creating a empty FAT32 image.
@@ -177,14 +133,18 @@ pub const Fat32 = struct {
         /// The formatted volume name. Volume names shorter than 11 characters must have trailing
         /// spaces. Default NO MANE.
         volume_name: [11]u8 = getDefaultVolumeName(),
+
+        /// Whether to quick format the filesystem. Whether to completely zero the stream
+        /// initially or zero just the important sectors.
+        quick_format: bool = false,
     };
 
     /// The error set for the static functions for creating a FAT32 image.
     pub const Error = error{
-        /// If the FAT image that the user want's to create is too small: < 17.5KB.
+        /// If the FAT image that the user wants to create is too small: < 17.5KB.
         TooSmall,
 
-        /// If the FAT image that the user want's to create is too large: > 2TB.
+        /// If the FAT image that the user wants to create is too large: > 2TB.
         TooLarge,
 
         /// The value in a option provided from the user is invalid.
@@ -193,65 +153,6 @@ pub const Fat32 = struct {
 
     /// The log function for printing errors when creating a FAT32 image.
     const log = std.log.scoped(.mkfat32);
-
-    /// The bootloader code for the FAT32 boot sector.
-    const bootsector_boot_code = [512]u8{
-        0xEB, 0x58, 0x90, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0x66, 0xEA, 0x62, 0x7C, 0x00, 0x00,
-        0x00, 0x00, 0xFA, 0x8C, 0xC8, 0x8E, 0xD8, 0x8E, 0xC0, 0x8E, 0xD0, 0xBC, 0x00, 0x7C, 0x8D, 0x36,
-        0x8F, 0x7C, 0xB4, 0x0E, 0x31, 0xDB, 0xAC, 0x3C, 0x00, 0x74, 0x04, 0xCD, 0x10, 0xEB, 0xF7, 0xB0,
-        0x0A, 0xCD, 0x10, 0xB0, 0x0D, 0xCD, 0x10, 0x30, 0xE4, 0xCD, 0x16, 0xCD, 0x19, 0xEB, 0xFE, 0x54,
-        0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x6E, 0x6F, 0x74, 0x20, 0x61, 0x20, 0x62, 0x6F, 0x6F,
-        0x74, 0x61, 0x62, 0x6C, 0x65, 0x20, 0x64, 0x69, 0x73, 0x6B, 0x2E, 0x20, 0x50, 0x6C, 0x65, 0x61,
-        0x73, 0x65, 0x20, 0x69, 0x6E, 0x73, 0x65, 0x72, 0x74, 0x20, 0x61, 0x20, 0x62, 0x6F, 0x6F, 0x74,
-        0x61, 0x62, 0x6C, 0x65, 0x20, 0x66, 0x6C, 0x6F, 0x70, 0x70, 0x79, 0x20, 0x61, 0x6E, 0x64, 0x20,
-        0x70, 0x72, 0x65, 0x73, 0x73, 0x20, 0x61, 0x6E, 0x79, 0x20, 0x6B, 0x65, 0x79, 0x20, 0x74, 0x6F,
-        0x20, 0x74, 0x72, 0x79, 0x20, 0x61, 0x67, 0x61, 0x69, 0x6E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x55, 0xAA,
-    };
-
-    ///
-    /// A convenient function for returning the error types for reading, writing and seeking a stream.
-    ///
-    /// Argument:
-    ///     IN comptime StreamType: type - The stream to get the error set from.
-    ///
-    /// Return: type
-    ///     The Error set for reading, writing and seeking the stream.
-    ///
-    fn ErrorSet(comptime StreamType: type) type {
-        const WriteError = switch (@typeInfo(StreamType)) {
-            .Pointer => |p| p.child.WriteError,
-            else => StreamType.WriteError,
-        };
-
-        const SeekError = switch (@typeInfo(StreamType)) {
-            .Pointer => |p| p.child.SeekError,
-            else => StreamType.SeekError,
-        };
-
-        return WriteError || SeekError;
-    }
 
     ///
     /// Get the number of reserved sectors. The number of reserved sectors doesn't have to be 32,
@@ -386,7 +287,7 @@ pub const Fat32 = struct {
     ///     @TypeOf(stream).WriteError - If there is an error when writing. See the relevant error for the stream.
     ///     @TypeOf(stream).SeekError  - If there is an error when seeking. See the relevant error for the stream.
     ///
-    fn writeFSInfo(stream: anytype, fat32_header: Header, free_cluster_num: u32, next_free_cluster: u32) ErrorSet(@TypeOf(stream))!void {
+    fn writeFSInfo(stream: anytype, fat32_header: Header, free_cluster_num: u32, next_free_cluster: u32) (fs_common.GetSeekError(@TypeOf(stream)) || fs_common.GetWriteError(@TypeOf(stream)))!void {
         const seekable_stream = stream.seekableStream();
         const writer = stream.writer();
 
@@ -437,7 +338,7 @@ pub const Fat32 = struct {
     ///     @TypeOf(stream).WriteError - If there is an error when writing. See the relevant error for the stream.
     ///     @TypeOf(stream).SeekError  - If there is an error when seeking. See the relevant error for the stream.
     ///
-    fn writeFAT(stream: anytype, fat32_header: Header) ErrorSet(@TypeOf(stream))!void {
+    fn writeFAT(stream: anytype, fat32_header: Header) (fs_common.GetSeekError(@TypeOf(stream)) || fs_common.GetWriteError(@TypeOf(stream)))!void {
         const seekable_stream = stream.seekableStream();
         const writer = stream.writer();
 
@@ -471,12 +372,12 @@ pub const Fat32 = struct {
     ///     @TypeOf(stream).WriteError - If there is an error when writing. See the relevant error for the stream.
     ///     @TypeOf(stream).SeekError  - If there is an error when seeking. See the relevant error for the stream.
     ///
-    fn writeBootSector(stream: anytype, fat32_header: Header) ErrorSet(@TypeOf(stream))!void {
+    fn writeBootSector(stream: anytype, fat32_header: Header) (fs_common.GetSeekError(@TypeOf(stream)) || fs_common.GetWriteError(@TypeOf(stream)))!void {
         const seekable_stream = stream.seekableStream();
         const writer = stream.writer();
 
         var boot_sector: [512]u8 = undefined;
-        std.mem.copy(u8, &boot_sector, &bootsector_boot_code);
+        std.mem.copy(u8, &boot_sector, &fs_common.filesystem_bootsector_boot_code);
 
         // Write the header into the boot sector variable
         var fat32_header_stream = std.io.fixedBufferStream(boot_sector[3..90]);
@@ -556,40 +457,15 @@ pub const Fat32 = struct {
     }
 
     ///
-    /// Clear the stream. This is the same as writeByteNTimes but with a bigger buffer (4096 bytes).
-    /// This improves performance a lot.
-    ///
-    /// Arguments:
-    ///     IN stream: anytype - The stream to clear.
-    ///     IN size: usize     - The size to clear from the beginning
-    ///
-    /// Error: @TypeOf(stream).WriteError
-    ///     @TypeOf(stream).WriteError - Error writing to the stream.
-    ///
-    fn clearStream(stream: anytype, size: usize) ErrorSet(@TypeOf(stream))!void {
-        comptime const buff_size = 4096;
-        comptime const bytes: [buff_size]u8 = [_]u8{0x00} ** buff_size;
-
-        var remaining: usize = size;
-        while (remaining > 0) {
-            const to_write = std.math.min(remaining, bytes.len);
-            try stream.writer().writeAll(bytes[0..to_write]);
-            remaining -= to_write;
-        }
-    }
-
-    ///
     /// Make a FAT32 image. This will either use the default options or modified defaults from the
     /// user. The file will be saved to the path specified. If quick format is on, then the entire
     /// stream is zeroed else the reserved and FAT sectors are zeroed.
     ///
     /// Argument:
-    ///     IN options: Options   - The FAT32 options that the user can provide to change the
-    ///                             parameters of a FAT32 image.
-    ///     IN stream: anytype    - The stream to create a new FAT32 image. This stream must
-    ///                             support reader(), writer() and seekableStream() interfaces.
-    ///     IN quick_format: bool - Whether to completely zero the stream initially or zero just
-    ///                             the important sectors.
+    ///     IN options: Options - The FAT32 options that the user can provide to change the
+    ///                           parameters of a FAT32 image.
+    ///     IN stream: anytype  - The stream to create a new FAT32 image. This stream must support
+    ///                           reader(), writer() and seekableStream() interfaces.
     ///
     /// Error: @TypeOf(stream).WriteError || @TypeOf(stream).SeekError || Error
     ///     @TypeOf(stream).WriteError       - If there is an error when writing. See the relevant error for the stream.
@@ -598,18 +474,23 @@ pub const Fat32 = struct {
     ///     Error.TooLarge                   - The stream size is too small. < 17.5KB.
     ///     Error.TooSmall                   - The stream size is to large. > 2TB.
     ///
-    pub fn make(options: Options, stream: anytype, quick_format: bool) (ErrorSet(@TypeOf(stream)) || Error)!void {
+    pub fn make(options: Options, stream: anytype) (fs_common.GetSeekError(@TypeOf(stream)) || fs_common.GetWriteError(@TypeOf(stream)) || Error)!void {
+        // Don't print when testing as it floods the terminal
+        if (options.image_size < getDefaultImageSize() and !builtin.is_test) {
+            log.warn("Image size smaller than default. Got: 0x{X}, default: 0x{X}\n", .{ options.image_size, getDefaultImageSize() });
+        }
+
         // First set up the header
         const fat32_header = try Fat32.createFATHeader(options);
 
         // Initialise the stream with all zeros
         try stream.seekableStream().seekTo(0);
-        if (quick_format) {
+        if (options.quick_format) {
             // Zero just the reserved and FAT sectors
-            try clearStream(stream, (fat32_header.reserved_sectors + (fat32_header.sectors_per_fat * 2)) * fat32_header.bytes_per_sector);
+            try fs_common.clearStream(stream, (fat32_header.reserved_sectors + (fat32_header.sectors_per_fat * 2)) * fat32_header.bytes_per_sector);
         } else {
             const image_size = std.mem.alignBackward(options.image_size, fat32_header.bytes_per_sector);
-            try clearStream(stream, image_size);
+            try fs_common.clearStream(stream, image_size);
         }
 
         // Write the boot sector with the bootstrap code and header and the backup boot sector.
@@ -626,3 +507,171 @@ pub const Fat32 = struct {
         try Fat32.writeFSInfo(stream, fat32_header, usable_clusters, 2);
     }
 };
+
+pub const MBRPartition = struct {
+    /// The MBR make options
+    pub const Options = struct {
+        /// The options for the partition table as percentages. The total should not exceed 100%.
+        partition_options: [4]?u16 = .{ null, null, null, null },
+
+        /// The total image size to create.
+        image_size: u64,
+    };
+
+    /// The error set for making a new MBR partition scheme.
+    const Error = error{
+        /// The start position of the partition stream is past the end of the main stream.
+        InvalidStart,
+
+        /// The percentage of given is either to high (above 100) or the accumulative partition
+        /// percentages of all partitions exceeds 100.
+        InvalidPercentage,
+
+        /// The size of the stream is invalid, i.e. too small.
+        InvalidSize,
+    };
+
+    /// The sector size of the drive. Unfortunately MBR assumes 512 bytes.
+    const SECTOR_SIZE: u32 = 512;
+
+    /// The log function for printing errors when creating a FAT32 image.
+    const log = std.log.scoped(.mkmbr);
+
+    ///
+    /// Write the partition table to the stream from the provided options.
+    ///
+    /// Arguments:
+    ///     IN partition_num: u2  - The partition to write.
+    ///     IN stream: StreamType - The stream to write the partition to.
+    ///     IN size_percent: u16  - The size of stream to partition for this partition in a percentage.
+    ///     IN start_pos: u32     - The start position to start the partition in sectors.
+    ///     IN end_of_stream: u32 - The end of the stream in bytes.
+    ///
+    /// Return: u32
+    ///     The next sector after the end of the partition created.
+    ///
+    /// Error: Error || StreamType.WriteError || StreamType.SeekError
+    ///     Error                 - The percentage of the stream is too large (> 100) or the
+    //                              start of the partition is past the end of the stream.
+    ///     StreamType.WriteError - Error writing ot the stream.
+    ///     StreamType.SeekError  - Error seeking the stream.
+    ///
+    fn writePartition(partition_num: u2, stream: anytype, size_percent: u16, start_pos: u32, end_of_stream: u64) (Error || fs_common.GetSeekError(@TypeOf(stream)) || fs_common.GetWriteError(@TypeOf(stream)))!u32 {
+        // The offset of where the boot code finishes and partition table starts
+        const boot_code_end_offset = 446;
+
+        if (size_percent > 100) {
+            return Error.InvalidPercentage;
+        }
+
+        const seek_stream = stream.seekableStream();
+        const writer_stream = stream.writer();
+
+        if (start_pos * SECTOR_SIZE > end_of_stream) {
+            return Error.InvalidStart;
+        }
+
+        // Round up the partition size in number of sectors
+        const partition_size: u32 = @intCast(u32, ((end_of_stream - (start_pos * SECTOR_SIZE)) * (size_percent / 100) + (SECTOR_SIZE - 1)) / SECTOR_SIZE);
+
+        // Seek to the offset to write the partition table
+        const partition_offset = @as(u32, partition_num) * @sizeOf(mbr_driver.Partition) + boot_code_end_offset;
+        try seek_stream.seekTo(partition_offset);
+
+        // TODO: Add the CHS values, These seem to not be needed as can still mount in Linux
+        //       But should be set at some point
+        const partition = mbr_driver.Partition{
+            .drive_attributes = 0x80,
+            .chs_address_start1 = undefined,
+            .chs_address_start2 = undefined,
+            .chs_address_start3 = undefined,
+            .partition_type = 0x83,
+            .chs_address_end1 = undefined,
+            .chs_address_end2 = undefined,
+            .chs_address_end3 = undefined,
+            .lba_start = start_pos,
+            .number_of_sectors = partition_size,
+        };
+
+        const partition_bytes = @ptrCast([*]const u8, &partition)[0..16];
+        try writer_stream.writeAll(partition_bytes);
+        return partition_size + 1;
+    }
+
+    ///
+    /// Get the size of the reserved bytes at the beginning of the stream. This is set to 1MB
+    /// as this is reserved for the bootloader code.
+    ///
+    /// Return: u32
+    ///     The number of bytes reserved at the beginning of the stream.
+    ///
+    pub fn getReservedStartSize() u32 {
+        return 1024 * 1024;
+    }
+
+    ///
+    /// Create a new MBR partition scheme on the provided stream. Any error returned will
+    /// result in the stream being left in a undefined state. This will clear the stream
+    /// and fill with all zeros based on the image size in the options.
+    ///
+    /// Arguments:
+    ///     IN options: Options - The options for creating the MBR partition scheme.
+    ///     IN stream: anytype  - The stream to write the partition table to.
+    ///
+    /// Error: Error || StreamType.WriteError || StreamType.SeekError
+    ///     Error                 - The image size is too small or there was an error writing
+    ///                             to the stream. Or the total percentage exceeds 100%.
+    ///     StreamType.WriteError - Error writing ot the stream.
+    ///     StreamType.SeekError  - Error seeking the stream.
+    ///
+    pub fn make(options: Options, stream: anytype) (Error || fs_common.GetSeekError(@TypeOf(stream)) || fs_common.GetWriteError(@TypeOf(stream)))!void {
+        if (options.image_size < getReservedStartSize()) {
+            return Error.InvalidSize;
+        }
+
+        // Clear/make the image the size given in the options
+        try fs_common.clearStream(stream, options.image_size);
+
+        const seek_stream = stream.seekableStream();
+        const writer_stream = stream.writer();
+
+        try seek_stream.seekTo(0);
+        try writer_stream.writeAll(fs_common.filesystem_bootsector_boot_code[0..]);
+
+        // First MB is for the boot code
+        var next_start_sector_pos: u32 = getReservedStartSize() / SECTOR_SIZE;
+
+        var acc_size: u16 = 0;
+        for (options.partition_options) |null_part_option, i| {
+            if (null_part_option) |size_percent| {
+                if (size_percent > 100 or acc_size > 100 - size_percent) {
+                    return Error.InvalidPercentage;
+                }
+                acc_size += size_percent;
+                next_start_sector_pos = try writePartition(@intCast(u2, i), stream, size_percent, next_start_sector_pos, options.image_size);
+            }
+        }
+    }
+};
+
+test "MBRPartition.make - more than 100% for one partition" {
+    const allocator = std.testing.allocator;
+
+    const size = 1024 * 1024 * 10;
+    var buffer = try allocator.alloc(u8, size);
+    defer allocator.free(buffer);
+
+    const stream = &std.io.fixedBufferStream(buffer);
+    expectError(error.InvalidPercentage, MBRPartition.make(.{ .partition_options = .{ 101, null, null, null }, .image_size = size }, stream));
+}
+
+test "MBRPartition.make - more than 100% accumulative" {
+    const allocator = std.testing.allocator;
+
+    const size = 1024 * 1024 * 10;
+    var buffer = try allocator.alloc(u8, size);
+    defer allocator.free(buffer);
+
+    const stream = &std.io.fixedBufferStream(buffer);
+    expectError(error.InvalidPercentage, MBRPartition.make(.{ .partition_options = .{ 50, 25, 25, 1 }, .image_size = size }, stream));
+}

@@ -13,7 +13,12 @@ const File = fs.File;
 const Mode = builtin.Mode;
 const TestMode = rt.TestMode;
 const ArrayList = std.ArrayList;
-const Fat32 = @import("mkfat32.zig").Fat32;
+const makefs = @import("src/kernel/filesystem/makefs.zig");
+
+const fat32_driver = @import("src/kernel/filesystem/fat32.zig");
+const mbr_driver = @import("src/kernel/filesystem/mbr.zig");
+
+const FromTo = struct { from: []const u8, to: []const u8 };
 
 const x86_i686 = CrossTarget{
     .cpu_arch = .i386,
@@ -54,7 +59,6 @@ pub fn build(b: *Builder) !void {
 
     const fmt_step = b.addFmt(&[_][]const u8{
         "build.zig",
-        "mkfat32.zig",
         "src",
         "test",
     });
@@ -72,8 +76,9 @@ pub fn build(b: *Builder) !void {
     const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
     const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
     const ramdisk_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "initrd.ramdisk" });
-    const fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "fat32.img" });
     const test_fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ "test", "fat32", "test_fat32.img" });
+    const boot_drive_image_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "boot_drive.img" });
+    const kernel_map_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "kernel.map" });
 
     const build_mode = b.standardReleaseOptions();
     comptime var test_mode_desc: []const u8 = "\n                         ";
@@ -96,14 +101,12 @@ pub fn build(b: *Builder) !void {
 
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
-        .x86_64 => b.addSystemCommand(&[_][]const u8{ "./makeiso_64.sh", b.install_path, b.exe_dir, exec.getOutputPath(), output_iso, ramdisk_path }),
+        .x86_64 => b.addSystemCommand(&[_][]const u8{ "./makeiso_64.sh", kernel_map_path, exec.getOutputPath(), output_iso, ramdisk_path }),
         else => unreachable,
     };
     make_iso.step.dependOn(&exec.step);
 
-    var fat32_builder_step = Fat32BuilderStep.create(b, .{}, fat32_image_path);
-    make_iso.step.dependOn(&fat32_builder_step.step);
-
+    // Make the init ram disk
     var ramdisk_files_al = ArrayList([]const u8).init(b.allocator);
     defer ramdisk_files_al.deinit();
 
@@ -131,7 +134,47 @@ pub fn build(b: *Builder) !void {
     const ramdisk_step = RamdiskStep.create(b, target, ramdisk_files_al.toOwnedSlice(), ramdisk_path);
     make_iso.step.dependOn(&ramdisk_step.step);
 
-    b.default_step.dependOn(&make_iso.step);
+    var make_bootable = make_iso;
+
+    // Making the boot image is for the 64 bit port
+    switch (target.getCpuArch()) {
+        .i386 => b.default_step.dependOn(&make_iso.step),
+        .x86_64 => {
+            const boot_drive_image = try b.allocator.create(std.fs.File);
+            errdefer b.allocator.destroy(boot_drive_image);
+
+            try std.fs.cwd().makePath(b.install_path);
+            boot_drive_image.* = try std.fs.cwd().createFile(boot_drive_image_path, .{ .read = true });
+
+            // If there was an error, delete the image as this will be invalid
+            errdefer (std.fs.cwd().deleteFile(boot_drive_image_path) catch unreachable);
+
+            var files_path = ArrayList(FromTo).init(b.allocator);
+            defer files_path.deinit();
+            try files_path.append(.{ .from = "./limine.cfg", .to = "limine.cfg" });
+            try files_path.append(.{ .from = "./limine/limine.sys", .to = "limine.sys" });
+            try files_path.append(.{ .from = exec.getOutputPath(), .to = "pluto.elf" });
+            try files_path.append(.{ .from = ramdisk_path, .to = "initrd.ramdisk" });
+            try files_path.append(.{ .from = kernel_map_path, .to = "kernel.map" });
+
+            const mbr_builder_options = BootDriveStep(@TypeOf(boot_drive_image)).Options{
+                .mbr_options = .{
+                    .partition_options = .{ 100, null, null, null },
+                    .image_size = (makefs.Fat32.Options{}).image_size + makefs.MBRPartition.getReservedStartSize(),
+                },
+                .fs_type = BootDriveStep(@TypeOf(boot_drive_image)).FSType{ .FAT32 = .{} },
+            };
+            const make_boot_drive_step = BootDriveStep(@TypeOf(boot_drive_image)).create(b, mbr_builder_options, boot_drive_image, files_path.toOwnedSlice());
+
+            make_bootable = b.addSystemCommand(&[_][]const u8{ "./limine/limine-install", boot_drive_image_path });
+
+            make_boot_drive_step.step.dependOn(&make_iso.step);
+            make_boot_drive_step.step.dependOn(&ramdisk_step.step);
+            make_bootable.step.dependOn(&make_boot_drive_step.step);
+            b.default_step.dependOn(&make_bootable.step);
+        },
+        else => unreachable,
+    }
 
     const test_step = b.step("test", "Run tests");
     const mock_path = "../../test/mock/kernel/";
@@ -154,8 +197,19 @@ pub fn build(b: *Builder) !void {
     const mock_gen_run = mock_gen.run();
     unit_tests.step.dependOn(&mock_gen_run.step);
 
+    const test_fat32_image = try b.allocator.create(std.fs.File);
+    errdefer b.allocator.destroy(test_fat32_image);
+
+    // Open the out file
+    test_fat32_image.* = try std.fs.cwd().createFile(test_fat32_image_path, .{ .read = true });
+
+    // If there was an error, delete the image as this will be invalid
+    errdefer (std.fs.cwd().deleteFile(test_fat32_image_path) catch unreachable);
+
+    const test_files_path = &[_]FromTo{};
+
     // Create test FAT32 image
-    const test_fat32_img_step = Fat32BuilderStep.create(b, .{}, test_fat32_image_path);
+    const test_fat32_img_step = Fat32BuilderStep(@TypeOf(test_fat32_image)).create(b, .{}, test_fat32_image, test_files_path);
     const copy_test_files_step = b.addSystemCommand(&[_][]const u8{ "./fat32_cp.sh", test_fat32_image_path });
     copy_test_files_step.step.dependOn(&test_fat32_img_step.step);
     unit_tests.step.dependOn(&copy_test_files_step.step);
@@ -182,7 +236,7 @@ pub fn build(b: *Builder) !void {
         },
         .x86_64 => {
             try qemu_args_al.append("-drive");
-            try qemu_args_al.append(try std.mem.join(b.allocator, "", &[_][]const u8{ "format=raw,file=", output_iso }));
+            try qemu_args_al.append(try std.mem.join(b.allocator, "", &[_][]const u8{ "format=raw,file=", boot_drive_image_path }));
         },
         else => unreachable,
     }
@@ -196,7 +250,7 @@ pub fn build(b: *Builder) !void {
     // 64 bit build don't have full support for these tests yet
     if (target.getCpuArch() == .i386) {
         const rt_step = RuntimeStep.create(b, test_mode, qemu_args);
-        rt_step.step.dependOn(&make_iso.step);
+        rt_step.step.dependOn(&make_bootable.step);
         rt_test_step.dependOn(&rt_step.step);
     }
 
@@ -207,8 +261,8 @@ pub fn build(b: *Builder) !void {
     const qemu_debug_cmd = b.addSystemCommand(qemu_args);
     qemu_debug_cmd.addArgs(&[_][]const u8{ "-s", "-S" });
 
-    qemu_cmd.step.dependOn(&make_iso.step);
-    qemu_debug_cmd.step.dependOn(&make_iso.step);
+    qemu_cmd.step.dependOn(&make_bootable.step);
+    qemu_debug_cmd.step.dependOn(&make_bootable.step);
 
     run_step.dependOn(&qemu_cmd.step);
     run_debug_step.dependOn(&qemu_debug_cmd.step);
@@ -229,63 +283,196 @@ pub fn build(b: *Builder) !void {
     debug_step.dependOn(&debug_cmd.step);
 }
 
-/// The FAT32 step for creating a FAT32 image.
-const Fat32BuilderStep = struct {
-    /// The Step, that is all you need to know
-    step: Step,
+/// The step to create a bootable drive.
+fn BootDriveStep(comptime StreamType: type) type {
+    return struct {
+        /// The Step, that is all you need to know
+        step: Step,
 
-    /// The builder pointer, also all you need to know
-    builder: *Builder,
+        /// The builder pointer, also all you need to know
+        builder: *Builder,
 
-    /// The path to where the ramdisk will be written to.
-    out_file_path: []const u8,
+        /// The stream to write the boot drive to.
+        stream: StreamType,
 
-    /// Options for creating the FAT32 image.
-    options: Fat32.Options,
+        /// Options for creating the MBR partition scheme.
+        options: Options,
 
-    ///
-    /// The make function that is called by the builder.
-    ///
-    /// Arguments:
-    ///     IN step: *Step - The step of this step.
-    ///
-    /// Error: error{EndOfStream} || File.OpenError || File.ReadError || File.WriteError || File.SeekError || Allocator.Error || Fat32.Error || Error
-    ///     error{EndOfStream} || File.OpenError || File.ReadError || File.WriteError || File.SeekError - Error related to file operations. See std.fs.File.
-    ///     Allocator.Error - If there isn't enough memory to allocate for the make step.
-    ///     Fat32.Error     - If there was an error creating the FAT image. This will be invalid options.
-    ///
-    fn make(step: *Step) (error{EndOfStream} || File.OpenError || File.ReadError || File.WriteError || File.SeekError || Fat32.Error)!void {
-        const self = @fieldParentPtr(Fat32BuilderStep, "step", step);
-        // Open the out file
-        const image = try std.fs.cwd().createFile(self.out_file_path, .{ .read = true });
+        /// The list of file paths to copy into the partition created image.
+        files: []const FromTo,
 
-        // If there was an error, delete the image as this will be invalid
-        errdefer (std.fs.cwd().deleteFile(self.out_file_path) catch unreachable);
-        defer image.close();
-        try Fat32.make(self.options, image, false);
-    }
+        const Self = @This();
 
-    ///
-    /// Create a FAT32 builder step.
-    ///
-    /// Argument:
-    ///     IN builder: *Builder               - The build builder.
-    ///     IN options: Options                - Options for creating FAT32 image.
-    ///
-    /// Return: *Fat32BuilderStep
-    ///     The FAT32 builder step pointer to add to the build process.
-    ///
-    pub fn create(builder: *Builder, options: Fat32.Options, out_file_path: []const u8) *Fat32BuilderStep {
-        const fat32_builder_step = builder.allocator.create(Fat32BuilderStep) catch unreachable;
-        fat32_builder_step.* = .{
-            .step = Step.init(.Custom, builder.fmt("Fat32BuilderStep", .{}), builder.allocator, make),
-            .builder = builder,
-            .options = options,
-            .out_file_path = out_file_path,
+        /// The union of filesystems that the partition scheme will use to format the partition
+        /// with. TODO: Support multiple partitions with different filesystem types.
+        const FSType = union(enum) {
+            /// The FAT32 filesystem with the make FAT32 options.
+            FAT32: makefs.Fat32.Options,
         };
-        return fat32_builder_step;
-    }
-};
+
+        /// The options for creating the boot drive.
+        const Options = struct {
+            /// The MBR options for creating the boot drive.
+            mbr_options: makefs.MBRPartition.Options,
+
+            /// The filesystem type to format the boot drive with.
+            fs_type: FSType,
+        };
+
+        ///
+        /// The make function that is called by the builder.
+        ///
+        /// Arguments:
+        ///     IN step: *Step - The step of this step.
+        ///
+        /// Error: anyerror
+        ///     There are too many error to type out but errors will relate to allocation errors
+        ///     and file open, read, write and seek.
+        ///
+        fn make(step: *Step) anyerror!void {
+            const self = @fieldParentPtr(Self, "step", step);
+            // TODO: Here check the options for what FS for what partition
+            try makefs.MBRPartition.make(self.options.mbr_options, self.stream);
+            const mbr_fs = &(try mbr_driver.MBRPartition(StreamType).init(self.builder.allocator, self.stream));
+            switch (self.options.fs_type) {
+                .FAT32 => |*options| {
+                    const partition_stream = &(try mbr_fs.getPartitionStream(0));
+                    // Overwrite the image size to what we have
+                    options.image_size = @intCast(u32, try partition_stream.seekableStream().getEndPos());
+                    try Fat32BuilderStep(*mbr_driver.PartitionStream(StreamType)).make2(self.builder.allocator, options.*, partition_stream, self.files);
+                },
+            }
+        }
+
+        ///
+        /// Create a boot drive step.
+        ///
+        /// Arguments:
+        ///     IN builder: *Builder     - The builder.
+        ///     IN options: Options      - The options used to configure the boot drive.
+        ///     IN stream: StreamType    - The stream to write the boot drive to.
+        ///     IN files: []const FromTo - The files to copy to the boot drive using the filesystem type.
+        ///
+        /// Return: *Self
+        ///     Pointer to the boot drive step.
+        ///
+        pub fn create(builder: *Builder, options: Options, stream: StreamType, files: []const FromTo) *Self {
+            const boot_driver_step = builder.allocator.create(Self) catch unreachable;
+            boot_driver_step.* = .{
+                .step = Step.init(.Custom, builder.fmt("BootDriveStep", .{}), builder.allocator, make),
+                .builder = builder,
+                .stream = stream,
+                .options = options,
+                .files = files,
+            };
+            return boot_driver_step;
+        }
+    };
+}
+
+///
+/// The FAT32 step for creating a FAT32 image. This now takes a stream type.
+///
+/// Arguments:
+///     IN comptime StreamType: type - The stream type the FAT32 builder step will use.
+///
+/// Return: type
+///     The types FAT32 builder step.
+///
+fn Fat32BuilderStep(comptime StreamType: type) type {
+    return struct {
+        /// The Step, that is all you need to know
+        step: Step,
+
+        /// The builder pointer, also all you need to know
+        builder: *Builder,
+
+        /// The stream to write the FAT32 headers and files to.
+        stream: StreamType,
+
+        /// Options for creating the FAT32 image.
+        options: makefs.Fat32.Options,
+
+        /// The list of file paths to copy into the FAT32 image.
+        files: []const FromTo,
+
+        const Self = @This();
+
+        ///
+        /// The make function that is called by the builder.
+        ///
+        /// Arguments:
+        ///     IN step: *Step - The step of this step.
+        ///
+        /// Error: anyerror
+        ///     There are too many error to type out but errors will relate to allocation errors
+        ///     and file open, read, write and seek.
+        ///
+        fn make(step: *Step) anyerror!void {
+            const self = @fieldParentPtr(Self, "step", step);
+            try make2(self.builder.allocator, self.options, self.stream, self.files);
+        }
+
+        ///
+        /// A standard method for making a FAT32 filesystem on a stream already partitioned.
+        ///
+        /// Arguments:
+        ///     IN allocator: *Allocator         - An allocator for memory allocation.
+        ///     IN options: makefs.Fat32.Options - The options to make a FAT32 filesystem.
+        ///     IN stream: StreamType            - The stream to write the filesystem to. This will
+        ///                                        be from a getPartitionStream().
+        ///     IN files: []const FromTo         - The file to write to the file system.
+        ///
+        /// Error: anyerror
+        ///     There are too many error to type out but errors will relate to allocation errors
+        ///     and file open, read, write and seek.
+        ///
+        pub fn make2(allocator: *Allocator, options: makefs.Fat32.Options, stream: StreamType, files: []const FromTo) anyerror!void {
+            try makefs.Fat32.make(options, stream);
+
+            // Copy the files into the image
+            var fat32_image = try fat32_driver.initialiseFAT32(allocator, stream);
+            defer fat32_image.destroy() catch unreachable;
+            for (files) |file_path| {
+                const opened_node = try fat32_image.fs.open(fat32_image.fs, &fat32_image.root_node.node.Dir, file_path.to, .CREATE_FILE, .{});
+                const opened_file = &opened_node.File;
+                defer opened_file.close();
+
+                const orig_file = try std.fs.cwd().openFile(file_path.from, .{});
+                defer orig_file.close();
+
+                // TODO: Might need to increase max size of files get too big.
+                const orig_content = try orig_file.readToEndAlloc(allocator, 10 * 1024 * 1024);
+
+                _ = try opened_file.write(orig_content);
+            }
+        }
+
+        ///
+        /// Create a FAT32 builder step.
+        ///
+        /// Argument:
+        ///     IN builder: *Builder     - The build builder.
+        ///     IN options: Options      - Options for creating FAT32 image.
+        ///     IN stream: StreamType    - The stream to write the FAT32 image to.
+        ///     IN files: []const FromTo - The list of file paths to copy into the FAT32 image.
+        ///
+        /// Return: *Self
+        ///     The FAT32 builder step pointer to add to the build process.
+        ///
+        pub fn create(builder: *Builder, options: makefs.Fat32.Options, stream: StreamType, files: []const FromTo) *Self {
+            const fat32_builder_step = builder.allocator.create(Self) catch unreachable;
+            fat32_builder_step.* = .{
+                .step = Step.init(.Custom, builder.fmt("Fat32BuilderStep", .{}), builder.allocator, make),
+                .builder = builder,
+                .options = options,
+                .stream = stream,
+                .files = files,
+            };
+            return fat32_builder_step;
+        }
+    };
+}
 
 /// The ramdisk make step for creating the initial ramdisk.
 const RamdiskStep = struct {
@@ -305,7 +492,7 @@ const RamdiskStep = struct {
     out_file_path: []const u8,
 
     /// The possible errors for creating a ramdisk
-    const Error = (error{EndOfStream} || File.ReadError || File.SeekError || Allocator.Error || File.WriteError || File.OpenError);
+    const Error = (error{ EndOfStream, FileTooBig } || Allocator.Error || File.ReadError || File.GetSeekPosError || File.WriteError || File.OpenError);
 
     ///
     /// Create and write the files to a raw ramdisk in the format:
