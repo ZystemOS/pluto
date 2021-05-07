@@ -294,7 +294,7 @@ test "handleOpen" {
     defer testfs.deinit();
 
     testfs.instance = 1;
-    vfs.root = testfs.tree.val;
+    try vfs.setRoot(testfs.tree.val);
 
     scheduler.current_task = try task.Task.create(0, true, undefined, allocator);
     defer scheduler.current_task.destroy(allocator);
@@ -351,7 +351,7 @@ test "handleRead" {
     defer testfs.deinit();
 
     testfs.instance = 1;
-    vfs.root = testfs.tree.val;
+    try vfs.setRoot(testfs.tree.val);
 
     vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 1024, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
     defer vmm.kernel_vmm.deinit();

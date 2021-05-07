@@ -284,7 +284,7 @@ pub const MountError = error{
 pub const SEPARATOR: u8 = '/';
 
 /// The root of the system's top-level filesystem
-pub var root: *Node = undefined;
+var root: *Node = undefined;
 
 ///
 /// Traverse the specified path from the root and open the file/dir corresponding to that path. If the file/dir doesn't exist it can be created by specifying the open flags
