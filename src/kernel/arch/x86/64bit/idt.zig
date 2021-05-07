@@ -11,6 +11,8 @@ const mock_path = build_options.arch_mock_path;
 const gdt = if (is_test) @import(mock_path ++ "gdt_mock.zig") else @import("gdt.zig");
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
 
+usingnamespace @import("../common/idt.zig");
+
 /// The structure that contains all the information that each IDT entry needs.
 pub const IdtEntry = packed struct {
     /// The lower 16 bits of the base address of the interrupt handler offset.
@@ -60,47 +62,6 @@ comptime {
     std.debug.assert(@sizeOf(IdtPtr) == 10);
 }
 
-/// The function type for the interrupt handlers.
-pub const InterruptHandler = fn () callconv(.Naked) void;
-
-/// The error set for the IDT
-pub const IdtError = error{
-    /// A IDT entry already exists for the provided index.
-    IdtEntryExists,
-};
-
-// ----------
-// Task gates
-// ----------
-
-/// The base addresses aren't used, so set these to 0. When a interrupt happens, interrupts are not
-/// automatically disabled. This is used for referencing the TSS descriptor in the GDT.
-const TASK_GATE: u4 = 0x5;
-
-/// Used to specify a interrupt service routine (ISR). When a interrupt happens, interrupts are
-/// automatically disabled then enabled upon the IRET instruction which restores the saved EFLAGS.
-const INTERRUPT_GATE: u4 = 0xE;
-
-/// Used to specify a interrupt service routine (ISR). When a interrupt happens, interrupts are not
-/// automatically disabled and doesn't restores the saved EFLAGS upon the IRET instruction.
-const TRAP_GATE: u4 = 0xF;
-
-// ----------
-// Privilege levels
-// ----------
-
-/// Privilege level 0. Kernel land. The privilege level the calling descriptor minimum will have.
-const PRIVILEGE_RING_0: u2 = 0x0;
-
-/// Privilege level 1. The privilege level the calling descriptor minimum will have.
-const PRIVILEGE_RING_1: u2 = 0x1;
-
-/// Privilege level 2. The privilege level the calling descriptor minimum will have.
-const PRIVILEGE_RING_2: u2 = 0x2;
-
-/// Privilege level 3. User land. The privilege level the calling descriptor minimum will have.
-const PRIVILEGE_RING_3: u2 = 0x3;
-
 /// The total size of all the IDT entries (minus 1).
 const TABLE_SIZE: u16 = @sizeOf(IdtEntry) * NUMBER_OF_ENTRIES - 1;
 
@@ -110,9 +71,6 @@ const idt_ptr: IdtPtr = IdtPtr{
     .limit = TABLE_SIZE,
     .base = &idt_entries[0],
 };
-
-/// The total number of entries the IDT can have (2^8).
-pub const NUMBER_OF_ENTRIES: u16 = 256;
 
 /// The IDT entry table of NUMBER_OF_ENTRIES entries. Initially all zeroed.
 var idt_entries: [NUMBER_OF_ENTRIES]IdtEntry = [_]IdtEntry{IdtEntry{
@@ -201,6 +159,14 @@ pub fn init() void {
         .Initialisation => runtimeTests(),
         else => {},
     }
+}
+
+fn testHandler0() callconv(.Naked) void {}
+fn testHandler1() callconv(.Naked) void {}
+
+fn mock_lidt(ptr: *const IdtPtr) void {
+    expectEqual(ptr.limit, TABLE_SIZE);
+    expectEqual(ptr.base, &idt_entries[0]);
 }
 
 test "makeEntry alternating bit pattern" {
@@ -310,14 +276,6 @@ test "init" {
     init();
 
     expectEqual(idt_ptr.base, &idt_entries[0]);
-}
-
-fn testHandler0() callconv(.Naked) void {}
-fn testHandler1() callconv(.Naked) void {}
-
-fn mock_lidt(ptr: *const IdtPtr) void {
-    expectEqual(ptr.limit, TABLE_SIZE);
-    expectEqual(ptr.base, &idt_entries[0]);
 }
 
 ///

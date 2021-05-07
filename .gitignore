@@ -5,6 +5,7 @@
 **/*.iso
 
 # Zig ignore
+**/zig-out/
 **/zig-cache/
 **/build/
 **/build-*/

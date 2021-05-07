@@ -3,8 +3,8 @@ const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
-const vmm = @import("../../vmm.zig");
-const mem = @import("../../mem.zig");
+const vmm = @import("../../../vmm.zig");
+const mem = @import("../../../mem.zig");
 
 /// An entry within a page table. References a single page.
 /// Bit 0: Present. Set if present in physical memory.

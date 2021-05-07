@@ -16,8 +16,8 @@ const Allocator = std.mem.Allocator;
 comptime {
     if (!is_test) {
         switch (builtin.arch) {
-            .i386 => _ = @import("arch/x86/boot.zig"),
-            .x86_64 => _ = @import("arch/x86_64/boot.zig"),
+            .i386 => _ = @import("arch/x86/32bit/boot.zig"),
+            .x86_64 => _ = @import("arch/x86/64bit/boot.zig"),
             else => {},
         }
     }

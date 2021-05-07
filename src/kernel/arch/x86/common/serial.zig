@@ -1,5 +1,5 @@
 const arch = @import("arch.zig");
-const panic = @import("../../panic.zig").panic;
+const panic = @import("../../../panic.zig").panic;
 const testing = @import("std").testing;
 
 /// The I/O port numbers associated with each serial port

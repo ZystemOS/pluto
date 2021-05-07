@@ -47,8 +47,8 @@ const x86_64 = brk: {
 pub fn build(b: *Builder) !void {
     const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{ x86_i686, x86_64 }, .default_target = x86_64 });
     const arch = switch (target.getCpuArch()) {
-        .i386 => "x86",
-        .x86_64 => "x86_64",
+        .i386 => "x86/32bit",
+        .x86_64 => "x86/64bit",
         else => unreachable,
     };
 
@@ -87,7 +87,7 @@ pub fn build(b: *Builder) !void {
     const disable_display = b.option(bool, "disable-display", "Disable the qemu window") orelse false;
 
     const exec = b.addExecutable("pluto.elf", main_src);
-    exec.setOutputDir(b.cache_root);
+    exec.setOutputDir(b.install_path);
     exec.addBuildOption(TestMode, "test_mode", test_mode);
     exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath(linker_script_path);
@@ -96,7 +96,7 @@ pub fn build(b: *Builder) !void {
 
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
-        .x86_64 => b.addSystemCommand(&[_][]const u8{ "./makeiso_64.sh", b.exe_dir, exec.getOutputPath(), output_iso, ramdisk_path }),
+        .x86_64 => b.addSystemCommand(&[_][]const u8{ "./makeiso_64.sh", b.install_path, b.exe_dir, exec.getOutputPath(), output_iso, ramdisk_path }),
         else => unreachable,
     };
     make_iso.step.dependOn(&exec.step);
@@ -114,14 +114,17 @@ pub fn build(b: *Builder) !void {
     } else if (test_mode == .Scheduler) {
         // Add some test files for the user mode runtime tests
         const user_program = b.addAssemble("user_program", "test/user_program.s");
-        user_program.setOutputDir(b.cache_root);
+        user_program.setOutputDir(b.install_path);
         user_program.setTarget(target);
         user_program.setBuildMode(build_mode);
         user_program.strip = true;
 
-        const copy_user_program = b.addSystemCommand(&[_][]const u8{ "objcopy", "-O", "binary", "zig-cache/user_program.o", "zig-cache/user_program" });
+        const user_program_path = try std.mem.join(b.allocator, "/", &[_][]const u8{ b.install_path, "user_program" });
+        const user_program_obj_path = try std.mem.join(b.allocator, "/", &[_][]const u8{ b.install_path, "user_program.o" });
+        const copy_user_program = b.addSystemCommand(&[_][]const u8{ "objcopy", "-O", "binary", user_program_obj_path, user_program_path });
+
         copy_user_program.step.dependOn(&user_program.step);
-        try ramdisk_files_al.append("zig-cache/user_program");
+        try ramdisk_files_al.append(user_program_path);
         exec.step.dependOn(&copy_user_program.step);
     }
 
@@ -132,7 +135,7 @@ pub fn build(b: *Builder) !void {
 
     const test_step = b.step("test", "Run tests");
     const mock_path = "../../test/mock/kernel/";
-    const arch_mock_path = "../../../../test/mock/kernel/";
+    const arch_mock_path = "../../../../../test/mock/kernel/";
     const unit_tests = b.addTest(main_src);
     unit_tests.setBuildMode(build_mode);
     unit_tests.setMainPkgPath(".");
