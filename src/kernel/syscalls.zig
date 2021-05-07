@@ -78,12 +78,12 @@ pub fn init(alloc: *std.mem.Allocator) void {
 /// Passing an error code that does not correspond to an error results in safety-protected undefined behaviour
 ///
 /// Arguments:
-///     IN code: usize - The erorr code to convert
+///     IN code: u16 - The erorr code to convert
 ///
 /// Return: Error
 ///     The error corresponding to the error code
 ///
-pub fn fromErrorCode(code: usize) Error {
+pub fn fromErrorCode(code: u16) anyerror {
     return @intToError(code);
 }
 
@@ -93,10 +93,10 @@ pub fn fromErrorCode(code: usize) Error {
 /// Arguments:
 ///     IN err: Error - The erorr to convert
 ///
-/// Return: usize
+/// Return: u16
 ///     The error code corresponding to the error
 ///
-pub fn toErrorCode(err: Error) usize {
+pub fn toErrorCode(err: anyerror) u16 {
     return @errorToInt(err);
 }
 
