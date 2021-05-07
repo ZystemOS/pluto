@@ -46,7 +46,11 @@ pub const STACK_SIZE: u32 = arch.MEMORY_BLOCK_SIZE / @sizeOf(u32);
 
 /// The task control block for storing all the information needed to save and restore a task.
 pub const Task = struct {
-    pub const Error = error{VFSHandleNotSet};
+    pub const Error = error{
+        /// The supplied vfs handle hasn't been allocated
+        VFSHandleNotSet,
+    };
+
     const Self = @This();
 
     /// The unique task identifier
