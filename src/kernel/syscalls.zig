@@ -220,8 +220,7 @@ fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: u
 
         // TODO: A more performant method would be mapping in the user memory and using that directly. Then we wouldn't need to allocate or copy the buffer
         if (!current_task.kernel) try vmm.kernel_vmm.copyData(current_task.vmm, buff, buff_ptr, false);
-        const bytes_read = try file.read(buff);
-        return bytes_read;
+        return try file.write(buff);
     }
 
     return Error.NotOpened;
@@ -234,7 +233,6 @@ fn handleClose(node_handle: usize, ignored1: usize, ignored2: usize, ignored3: u
     const current_task = scheduler.current_task;
     const node_opt = current_task.getVFSHandle(real_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{real_handle});
     if (node_opt) |node| {
-        //try node.close();
         current_task.clearVFSHandle(real_handle) catch |e| return switch (e) {
             error.VFSHandleNotSet, error.OutOfBounds => Error.NotOpened,
         };
