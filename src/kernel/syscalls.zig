@@ -494,7 +494,8 @@ test "handleRead" {
     defer scheduler.current_task.destroy(allocator);
     var current_task = scheduler.current_task;
 
-    var test_file = @intCast(task.Handle, try handleOpen(@ptrToInt("/foo.txt"), "/foo.txt".len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined));
+    const test_file_path = "/foo.txt";
+    var test_file = @intCast(task.Handle, try handleOpen(@ptrToInt(test_file_path), test_file_path.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined));
     var f_data = &testfs.tree.children.items[0].data;
     var str = "test123";
     f_data.* = try std.mem.dupe(testing.allocator, u8, str);
@@ -525,7 +526,7 @@ test "handleRead" {
         testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
     }
     // Try reading from a symlink
-    const args = vfs.OpenArgs{ .symlink_target = "/foo.txt" };
+    const args = vfs.OpenArgs{ .symlink_target = test_file_path };
     var test_link = @intCast(task.Handle, try handleOpen(@ptrToInt("/link"), "/link".len, @enumToInt(vfs.OpenFlags.CREATE_SYMLINK), @ptrToInt(&args), undefined));
     {
         const length = try handleRead(test_link, @ptrToInt(&buffer[0]), buffer.len, undefined, undefined);
