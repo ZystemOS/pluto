@@ -329,9 +329,6 @@ fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: u
     if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
         return error.OutOfBounds;
     const real_handle = @intCast(task.Handle, node_handle);
-    if (buff_len > USER_MAX_DATA_LEN) {
-        return Error.TooBig;
-    }
 
     const current_task = scheduler.current_task;
     const node_opt = current_task.getVFSHandle(real_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{real_handle});
@@ -340,11 +337,10 @@ fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: u
             .File => |f| f,
             else => return Error.NotAFile,
         };
-        var buff = if (current_task.kernel) @intToPtr([*]u8, buff_ptr)[0..buff_len] else try allocator.alloc(u8, buff_len);
-        defer if (!current_task.kernel) allocator.free(buff);
 
         // TODO: A more performant method would be mapping in the user memory and using that directly. Then we wouldn't need to allocate or copy the buffer
-        if (!current_task.kernel) try vmm.kernel_vmm.copyData(current_task.vmm, buff, buff_ptr, false);
+        var buff = try getData(buff_ptr, buff_len);
+        defer if (!current_task.kernel) allocator.free(buff);
         return try file.write(buff);
     }
 
