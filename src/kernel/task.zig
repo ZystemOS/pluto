@@ -173,15 +173,15 @@ pub const Task = struct {
         allocator.destroy(self);
     }
 
-    pub fn getVFSHandle(self: @This(), handle: Handle) bitmap.Bitmap(usize).BitmapError!?*vfs.Node {
+    pub fn getVFSHandle(self: Self, handle: Handle) bitmap.Bitmap(usize).BitmapError!?*vfs.Node {
         return self.file_handle_mapping.get(handle);
     }
 
-    pub fn hasFreeVFSHandle(self: @This()) bool {
+    pub fn hasFreeVFSHandle(self: Self) bool {
         return self.file_handles.num_free_entries > 0;
     }
 
-    pub fn addVFSHandle(self: *@This(), node: *vfs.Node) std.mem.Allocator.Error!?Handle {
+    pub fn addVFSHandle(self: *Self, node: *vfs.Node) std.mem.Allocator.Error!?Handle {
         if (self.file_handles.setFirstFree()) |handle| {
             const real_handle = @intCast(Handle, handle);
             try self.file_handle_mapping.put(real_handle, node);
@@ -190,11 +190,11 @@ pub const Task = struct {
         return null;
     }
 
-    pub fn hasVFSHandle(self: @This(), handle: Handle) bitmap.Bitmap(usize).BitmapError!bool {
+    pub fn hasVFSHandle(self: Self, handle: Handle) bitmap.Bitmap(usize).BitmapError!bool {
         return self.file_handles.isSet(handle);
     }
 
-    pub fn clearVFSHandle(self: *@This(), handle: Handle) (bitmap.Bitmap(usize).BitmapError || Error)!void {
+    pub fn clearVFSHandle(self: *Self, handle: Handle) (bitmap.Bitmap(usize).BitmapError || Error)!void {
         if (try self.hasVFSHandle(handle)) {
             self.file_handles.clearEntry(handle) catch unreachable;
             _ = self.file_handle_mapping.remove(handle);
@@ -405,12 +405,12 @@ test "addVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
+    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
     expectEqual(handle1, 0);
     expectEqual(&node1, task.file_handle_mapping.get(handle1).?);
     expectEqual(true, try task.file_handles.isSet(handle1));
 
-    const handle2 = (try task.addVFSHandle(&node2)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
+    const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
     expectEqual(handle2, 1);
     expectEqual(&node2, task.file_handle_mapping.get(handle2).?);
     expectEqual(true, try task.file_handles.isSet(handle2));
@@ -423,7 +423,7 @@ test "hasFreeVFSHandle" {
 
     expect(task.hasFreeVFSHandle());
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
+    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
     expect(task.hasFreeVFSHandle());
 
     var i: usize = 0;
@@ -441,10 +441,10 @@ test "getVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
+    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
     expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
 
-    const handle2 = (try task.addVFSHandle(&node2)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
+    const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
     expectEqual(&node2, (try task.getVFSHandle(handle2)).?);
     expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
 
@@ -457,8 +457,8 @@ test "clearVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
-    const handle2 = (try task.addVFSHandle(&node2)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
+    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
+    const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
 
     try task.clearVFSHandle(handle1);
     expectEqual(false, try task.hasVFSHandle(handle1));
