@@ -405,12 +405,12 @@ test "addVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse unreachable;
+    const handle1 = (try task.addVFSHandle(&node1)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
     expectEqual(handle1, 0);
     expectEqual(&node1, task.file_handle_mapping.get(handle1).?);
     expectEqual(true, try task.file_handles.isSet(handle1));
 
-    const handle2 = (try task.addVFSHandle(&node2)) orelse unreachable;
+    const handle2 = (try task.addVFSHandle(&node2)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
     expectEqual(handle2, 1);
     expectEqual(&node2, task.file_handle_mapping.get(handle2).?);
     expectEqual(true, try task.file_handles.isSet(handle2));
@@ -423,7 +423,7 @@ test "hasFreeVFSHandle" {
 
     expect(task.hasFreeVFSHandle());
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse unreachable;
+    const handle1 = (try task.addVFSHandle(&node1)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
     expect(task.hasFreeVFSHandle());
 
     var i: usize = 0;
@@ -441,10 +441,10 @@ test "getVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse unreachable;
+    const handle1 = (try task.addVFSHandle(&node1)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
     expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
 
-    const handle2 = (try task.addVFSHandle(&node2)) orelse unreachable;
+    const handle2 = (try task.addVFSHandle(&node2)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
     expectEqual(&node2, (try task.getVFSHandle(handle2)).?);
     expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
 
@@ -457,8 +457,8 @@ test "clearVFSHandle" {
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse unreachable;
-    const handle2 = (try task.addVFSHandle(&node2)) orelse unreachable;
+    const handle1 = (try task.addVFSHandle(&node1)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
+    const handle2 = (try task.addVFSHandle(&node2)) orelse panic(@errorReturnTrace(), "Failed to add a vfs handle\n", .{});
 
     try task.clearVFSHandle(handle1);
     expectEqual(false, try task.hasVFSHandle(handle1));
