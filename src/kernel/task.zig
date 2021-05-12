@@ -196,7 +196,7 @@ pub const Task = struct {
 
     pub fn clearVFSHandle(self: *@This(), handle: Handle) (bitmap.Bitmap(usize).BitmapError || Error)!void {
         if (try self.hasVFSHandle(handle)) {
-            try self.file_handles.clearEntry(handle);
+            self.file_handles.clearEntry(handle) catch unreachable;
             _ = self.file_handle_mapping.remove(handle);
         } else {
             return Error.VFSHandleNotSet;
