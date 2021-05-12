@@ -20,9 +20,78 @@ pub const Error = error{ NoMoreFSHandles, TooBig, NotAFile } || std.mem.Allocato
 
 /// All implemented syscalls
 pub const Syscall = enum {
+    /// Open a new vfs node
+    ///
+    /// Arguments:
+    ///     path_ptr: usize - The user/kernel pointer to the file path to open
+    ///     path_len: usize - The length of the file path
+    ///     flags: usize    - The flag specifying what to do with the opened node. Use the integer value of vfs.OpenFlags
+    ///     args: usize     - The user/kernel pointer to the structure holding the vfs.OpenArgs
+    ///     ignored: usize  - Ignored
+    ///
+    /// Return: usize
+    ///     The handle for the opened vfs node
+    ///
+    /// Error:
+    ///     NoMoreFSHandles     - The task has reached the maximum number of allowed vfs handles
+    ///     OutOfMemory         - There wasn't enough kernel (heap or VMM) memory left to fulfill the request.
+    ///     TooBig              - The path length is greater than allowed
+    ///     InvalidAddress      - A pointer that the user task passed is invalid (not mapped, out of bounds etc.)
+    ///     InvalidFlags        - The flags provided don't correspond to a vfs.OpenFlags value
+    ///     Refer to vfs.Error for details on what causes vfs errors
+    ///
     Open,
+
+    /// Read data from an open vfs file
+    ///
+    /// Arguments:
+    ///     node_handle: usize  - The file handle returned from the open syscall
+    ///     buff_ptr: usize `   - The user/kernel address of the buffer to put the read data in
+    ///     buff_len: usize     - The size of the buffer
+    ///     ignored1: usize     - Ignored
+    ///     ignored2: usize     - Ignored
+    ///
+    /// Return: usize
+    ///     The number of bytes read and put into the buffer
+    ///
+    /// Error:
+    ///     OutOfBounds         - The node handle is outside of the maximum per process
+    ///     TooBig              - The buffer is bigger than what a user process is allowed to give the kernel
+    ///     NotAFile            - The handle does not correspond to a file
+    ///     Refer to vfs.FileNode.read and vmm.VirtualMemoryManager.copyData for details on what causes other errors
+    ///
     Read,
+    /// Write data from to open vfs file
+    ///
+    /// Arguments:
+    ///     node_handle: usize  - The file handle returned from the open syscall
+    ///     buff_ptr: usize `   - The user/kernel address of the buffer containing the data to write
+    ///     buff_len: usize     - The size of the buffer
+    ///     ignored1: usize     - Ignored
+    ///     ignored2: usize     - Ignored
+    ///
+    /// Return: usize
+    ///     The number of bytes written
+    ///
+    /// Error:
+    ///     OutOfBounds         - The node handle is outside of the maximum per process
+    ///     TooBig              - The buffer is bigger than what a user process is allowed to give the kernel
+    ///     NotAFile            - The handle does not correspond to a file
+    ///     Refer to vfs.FileNode.read and vmm.VirtualMemoryManager.copyData for details on what causes other errors
+    ///
     Write,
+    ///
+    /// Close an open vfs node. What it means to "close" depends on the underlying file system, but often it will cause the file to be committed to disk or for a network socket to be closed
+    ///
+    /// Arguments:
+    ///     node_handle: usize  - The handle to close
+    ///     ignored1..4: usize  - Ignored
+    ///
+    /// Return: void
+    ///
+    /// Error:
+    ///     OutOfBounds         - The node handle is outside of the maximum per process
+    ///     NotOpened           - The node handle hasn't been opened
     Close,
     Test1,
     Test2,
@@ -147,6 +216,26 @@ fn getData(ptr: usize, len: usize) Error![]u8 {
     }
 }
 
+/// Open a new vfs node
+///
+/// Arguments:
+///     path_ptr: usize - The user/kernel pointer to the file path to open
+///     path_len: usize - The length of the file path
+///     flags: usize    - The flag specifying what to do with the opened node. Use the integer value of vfs.OpenFlags
+///     args: usize     - The user/kernel pointer to the structure holding the vfs.OpenArgs
+///     ignored: usize  - Ignored
+///
+/// Return: usize
+///     The handle for the opened vfs node
+///
+/// Error:
+///     NoMoreFSHandles     - The task has reached the maximum number of allowed vfs handles
+///     OutOfMemory         - There wasn't enough kernel (heap or VMM) memory left to fulfill the request.
+///     TooBig              - The path length is greater than allowed
+///     InvalidAddress      - A pointer that the user task passed is invalid (not mapped, out of bounds etc.)
+///     InvalidFlags        - The flags provided don't correspond to a vfs.OpenFlags value
+///     Refer to vfs.Error for details on what causes vfs errors
+///
 fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, args: usize, ignored: usize) Error!usize {
     const current_task = scheduler.current_task;
     if (!current_task.hasFreeVFSHandle()) {
@@ -173,6 +262,24 @@ fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, args: usize, ignor
     return (try current_task.addVFSHandle(node)) orelse panic(null, "Failed to add a VFS handle to current_task\n", .{});
 }
 
+/// Read data from an open vfs file
+///
+/// Arguments:
+///     node_handle: usize  - The file handle returned from the open syscall
+///     buff_ptr: usize `   - The user/kernel address of the buffer to put the read data in
+///     buff_len: usize     - The size of the buffer
+///     ignored1: usize     - Ignored
+///     ignored2: usize     - Ignored
+///
+/// Return: usize
+///     The number of bytes read and put into the buffer
+///
+/// Error:
+///     OutOfBounds         - The node handle is outside of the maximum per process
+///     TooBig              - The buffer is bigger than what a user process is allowed to give the kernel
+///     NotAFile            - The handle does not correspond to a file
+///     Refer to vfs.FileNode.read and vmm.VirtualMemoryManager.copyData for details on what causes other errors
+///
 fn handleRead(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: usize, ignored2: usize) Error!usize {
     if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
         return error.OutOfBounds;
@@ -200,6 +307,24 @@ fn handleRead(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: us
     return Error.NotOpened;
 }
 
+/// Write data from to open vfs file
+///
+/// Arguments:
+///     node_handle: usize  - The file handle returned from the open syscall
+///     buff_ptr: usize `   - The user/kernel address of the buffer containing the data to write
+///     buff_len: usize     - The size of the buffer
+///     ignored1: usize     - Ignored
+///     ignored2: usize     - Ignored
+///
+/// Return: usize
+///     The number of bytes written
+///
+/// Error:
+///     OutOfBounds         - The node handle is outside of the maximum per process
+///     TooBig              - The buffer is bigger than what a user process is allowed to give the kernel
+///     NotAFile            - The handle does not correspond to a file
+///     Refer to vfs.FileNode.read and vmm.VirtualMemoryManager.copyData for details on what causes other errors
+///
 fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: usize, ignored2: usize) Error!usize {
     if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
         return error.OutOfBounds;
@@ -226,6 +351,18 @@ fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: u
     return Error.NotOpened;
 }
 
+///
+/// Close an open vfs node. What it means to "close" depends on the underlying file system, but often it will cause the file to be committed to disk or for a network socket to be closed
+///
+/// Arguments:
+///     node_handle: usize  - The handle to close
+///     ignored1..4: usize  - Ignored
+///
+/// Return: void
+///
+/// Error:
+///     OutOfBounds         - The node handle is outside of the maximum per process
+///     NotOpened           - The node handle hasn't been opened
 fn handleClose(node_handle: usize, ignored1: usize, ignored2: usize, ignored3: usize, ignored4: usize) Error!usize {
     if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
         return error.OutOfBounds;
@@ -236,6 +373,11 @@ fn handleClose(node_handle: usize, ignored1: usize, ignored2: usize, ignored3: u
         current_task.clearVFSHandle(real_handle) catch |e| return switch (e) {
             error.VFSHandleNotSet, error.OutOfBounds => Error.NotOpened,
         };
+        switch (node.*) {
+            .File => |f| f.close(),
+            .Dir => |d| d.close(),
+            .Symlink => |s| s.close(),
+        }
     }
     return Error.NotOpened;
 }
