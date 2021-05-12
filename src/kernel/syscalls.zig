@@ -416,7 +416,7 @@ test "getHandler" {
     try std.testing.expectEqual(Syscall.Write.getHandler(), handleWrite);
 }
 
-test "handle" {
+test "handle basic functionality" {
     try std.testing.expectEqual(@as(usize, 0), try handle(.Test1, 0, 0, 0, 0, 0));
     try std.testing.expectEqual(@as(usize, 1 + 2 + 3 + 4 + 5), try handle(.Test2, 1, 2, 3, 4, 5));
     try std.testing.expectError(Error.OutOfMemory, handle(.Test3, 0, 0, 0, 0, 0));
