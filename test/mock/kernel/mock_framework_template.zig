@@ -188,13 +188,13 @@ fn Mock() type {
         /// Return: RetType
         ///     The return value of the called function. This can be void.
         ///
-        fn performGenericFunction(comptime RetType: type, test_element: DataElement, params: anytype) RetType {
+        fn performGenericFunction(comptime RetType: type, test_element: DataElement, params: anytype) !RetType {
             // Get the expected function type
             const expected_function = getFunctionType(RetType, @TypeOf(params));
 
             // Test that the types match
             const expect_type = comptime getDataElementType(expected_function);
-            expectEqual(expect_type, @as(DataElementType, test_element));
+            try expectEqual(expect_type, @as(DataElementType, test_element));
 
             // Types match, so can use the expected type to get the actual data
             const actual_function = getDataValue(expected_function, test_element);
@@ -211,7 +211,7 @@ fn Mock() type {
         ///     IN elem: DataElement            - The wrapped data element to test against the
         ///                                       expected value.
         ///
-        fn expectTest(comptime ExpectedType: type, expected_value: ExpectedType, elem: DataElement) void {
+        fn expectTest(comptime ExpectedType: type, expected_value: ExpectedType, elem: DataElement) !void {
             if (ExpectedType == void) {
                 // Can't test void as it has no value
                 std.debug.panic("Can not test a value for void\n", .{});
@@ -219,13 +219,13 @@ fn Mock() type {
 
             // Test that the types match
             const expect_type = comptime getDataElementType(ExpectedType);
-            expectEqual(expect_type, @as(DataElementType, elem));
+            try expectEqual(expect_type, @as(DataElementType, elem));
 
             // Types match, so can use the expected type to get the actual data
             const actual_value = getDataValue(ExpectedType, elem);
 
             // Test the values
-            expectEqual(expected_value, actual_value);
+            try expectEqual(expected_value, actual_value);
         }
 
         ///
@@ -241,7 +241,7 @@ fn Mock() type {
         /// Return: RetType
         ///     The return value of the expected value.
         ///
-        fn expectGetValue(comptime fun_name: []const u8, action_list: *ActionList, comptime DataType: type) DataType {
+        fn expectGetValue(comptime fun_name: []const u8, action_list: *ActionList, comptime DataType: type) !DataType {
             if (DataType == void) {
                 return;
             }
@@ -254,7 +254,7 @@ fn Mock() type {
 
                 // Test that the data match
                 const expect_data = comptime getDataElementType(DataType);
-                expectEqual(expect_data, @as(DataElementType, action.data));
+                try expectEqual(expect_data, @as(DataElementType, action.data));
                 return getDataValue(DataType, action.data);
             } else {
                 std.debug.panic("No more test values for the return of function: " ++ fun_name ++ "\n", .{});
@@ -309,7 +309,7 @@ fn Mock() type {
         /// Return: RetType
         ///     The return value of the mocked function. This can be void.
         ///
-        pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: anytype) RetType {
+        pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: anytype) !RetType {
             if (self.named_actions.getEntry(fun_name)) |kv_actions_list| {
                 // Take a reference of the value so the underlying action list will update
                 var action_list = &kv_actions_list.value;
@@ -329,7 +329,7 @@ fn Mock() type {
                                 const param = params[i];
                                 const param_type = @TypeOf(params[i]);
 
-                                expectTest(param_type, param, test_action.data);
+                                try expectTest(param_type, param, test_action.data);
                             }
                             break :ret expectGetValue(fun_name, action_list, RetType);
                         },
@@ -501,6 +501,6 @@ pub fn addRepeatFunction(comptime fun_name: []const u8, function: anytype) void 
 /// Return: RetType
 ///     The return value of the mocked function. This can be void.
 ///
-pub fn performAction(comptime fun_name: []const u8, comptime RetType: type, params: anytype) RetType {
-    return getMockObject().performAction(fun_name, RetType, params);
+pub fn performAction(comptime fun_name: []const u8, comptime RetType: type, params: anytype) !RetType {
+    return try getMockObject().performAction(fun_name, RetType, params);
 }

@@ -71,11 +71,11 @@ pub const IRQ_AUXILIARY_DEVICE: u8 = 0x0C;
 pub const IRQ_FLOATING_POINT_UNIT: u8 = 0x0D;
 pub const IRQ_HARD_DISK_CONTROLLER: u8 = 0x0E;
 
-pub fn sendEndOfInterrupt(irq_num: u8) void {
-    return mock_framework.performAction("sendEndOfInterrupt", void, .{irq_num});
+pub fn sendEndOfInterrupt(irq_num: u8) !void {
+    return try mock_framework.performAction("sendEndOfInterrupt", void, .{irq_num});
 }
 
-pub fn spuriousIrq(irq_num: u8) bool {
+pub fn spuriousIrq(irq_num: u8) !bool {
     return mock_framework.performAction("spuriousIrq", bool, .{irq_num});
 }
 
