@@ -412,7 +412,7 @@ test "readBackCommand" {
 
     const actual = readBackCommand(CounterSelect.Counter0);
 
-    expectEqual(@as(u8, 0x20), actual);
+    try expectEqual(@as(u8, 0x20), actual);
 }
 
 test "sendDataToCounter" {
@@ -446,7 +446,7 @@ test "setupCounter lowest frequency" {
 
     while (freq <= 18) : (freq += 1) {
         // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
-        expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
+        try expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
 
         // expectEqual(u32(0), ticks);
         // expectEqual(expected_freq, current_freq_0);
@@ -484,7 +484,7 @@ test "setupCounter highest frequency" {
 
     // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
 
-    expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
+    try expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
 
     // expectEqual(u32(0), ticks);
     // expectEqual(expected_freq, current_freq_0);
@@ -519,13 +519,13 @@ test "setupCounter normal frequency" {
 
     setupCounter(counter, freq, mode) catch unreachable;
 
-    expectEqual(@as(u32, 0), ticks);
-    expectEqual(expected_freq, current_freq_0);
-    expectEqual(expected_freq, getFrequency());
+    try expectEqual(@as(u32, 0), ticks);
+    try expectEqual(expected_freq, current_freq_0);
+    try expectEqual(expected_freq, getFrequency());
 
     // These are the hard coded expected values. Calculated externally to check the internal calculation
-    expectEqual(@as(u32, 99730), time_ns);
-    expectEqual(@as(u32, 727), time_under_1_ns);
+    try expectEqual(@as(u32, 99730), time_ns);
+    try expectEqual(@as(u32, 727), time_under_1_ns);
 
     // Reset globals
     time_ns = 0;

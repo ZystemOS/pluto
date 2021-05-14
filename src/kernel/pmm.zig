@@ -146,10 +146,10 @@ test "alloc" {
         i += 1;
         addr += BLOCK_SIZE;
     }) {
-        testing.expect(!(try isSet(addr)));
-        testing.expect(alloc().? == addr);
-        testing.expect(try isSet(addr));
-        testing.expectEqual(blocksFree(), 31 - i);
+        try testing.expect(!(try isSet(addr)));
+        try testing.expect(alloc().? == addr);
+        try testing.expect(try isSet(addr));
+        try testing.expectEqual(blocksFree(), 31 - i);
     }
     // Allocation should now fail
     testing.expect(alloc() == null);
@@ -162,13 +162,13 @@ test "free" {
     // Allocate and free all entries
     inline while (i < 32) : (i += 1) {
         const addr = alloc().?;
-        testing.expect(try isSet(addr));
-        testing.expectEqual(blocksFree(), 31);
+        try testing.expect(try isSet(addr));
+        try testing.expectEqual(blocksFree(), 31);
         try free(addr);
-        testing.expectEqual(blocksFree(), 32);
-        testing.expect(!(try isSet(addr)));
+        try testing.expectEqual(blocksFree(), 32);
+        try testing.expect(!(try isSet(addr)));
         // Double frees should be caught
-        testing.expectError(PmmError.NotAllocated, free(addr));
+        try testing.expectError(PmmError.NotAllocated, free(addr));
     }
 }
 

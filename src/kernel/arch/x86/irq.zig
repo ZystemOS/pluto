@@ -41,7 +41,7 @@ var irq_handlers: [NUMBER_OF_ENTRIES]?IrqHandler = [_]?IrqHandler{null} ** NUMBE
 ///     IN ctx: *arch.CpuState - Pointer to the interrupt context containing the contents
 ///                                      of the register at the time of the interrupt.
 ///
-export fn irqHandler(ctx: *arch.CpuState) usize {
+export fn irqHandler(ctx: *arch.CpuState) !usize {
     // Get the IRQ index, by getting the interrupt number and subtracting the offset.
     if (ctx.int_num < IRQ_OFFSET) {
         panic(@errorReturnTrace(), "Not an IRQ number: {}\n", .{ctx.int_num});
@@ -55,7 +55,7 @@ export fn irqHandler(ctx: *arch.CpuState) usize {
         const irq_num = @truncate(u8, irq_offset);
         if (irq_handlers[irq_num]) |handler| {
             // Make sure it isn't a spurious irq
-            if (!pic.spuriousIrq(irq_num)) {
+            if (!try pic.spuriousIrq(irq_num)) {
                 ret_esp = handler(ctx);
                 // Send the end of interrupt command
                 pic.sendEndOfInterrupt(irq_num);
@@ -169,10 +169,10 @@ test "openIrq" {
 test "isValidIrq" {
     comptime var i = 0;
     inline while (i < NUMBER_OF_ENTRIES) : (i += 1) {
-        expect(isValidIrq(i));
+        try expect(isValidIrq(i));
     }
 
-    expect(!isValidIrq(200));
+    try expect(!isValidIrq(200));
 }
 
 test "registerIrq re-register irq handler" {
@@ -184,19 +184,19 @@ test "registerIrq re-register irq handler" {
 
     // Pre testing
     for (irq_handlers) |h| {
-        expect(null == h);
+        try expect(null == h);
     }
 
     // Call function
     try registerIrq(0, testFunction1);
-    expectError(IrqError.IrqExists, registerIrq(0, testFunction2));
+    try expectError(IrqError.IrqExists, registerIrq(0, testFunction2));
 
     // Post testing
     for (irq_handlers) |h, i| {
         if (i != 0) {
-            expect(null == h);
+            try expect(null == h);
         } else {
-            expectEqual(testFunction1, h.?);
+            try expectEqual(testFunction1, h.?);
         }
     }
 
@@ -213,7 +213,7 @@ test "registerIrq register irq handler" {
 
     // Pre testing
     for (irq_handlers) |h| {
-        expect(null == h);
+        try expect(null == h);
     }
 
     // Call function
@@ -222,9 +222,9 @@ test "registerIrq register irq handler" {
     // Post testing
     for (irq_handlers) |h, i| {
         if (i != 0) {
-            expect(null == h);
+            try expect(null == h);
         } else {
-            expectEqual(testFunction1, h.?);
+            try expectEqual(testFunction1, h.?);
         }
     }
 
@@ -233,7 +233,7 @@ test "registerIrq register irq handler" {
 }
 
 test "registerIrq invalid irq index" {
-    expectError(IrqError.InvalidIrq, registerIrq(200, testFunction1));
+    try expectError(IrqError.InvalidIrq, registerIrq(200, testFunction1));
 }
 
 ///

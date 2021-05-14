@@ -284,24 +284,24 @@ test "openIsr" {
 test "isValidIsr" {
     comptime var i = 0;
     inline while (i < NUMBER_OF_ENTRIES) : (i += 1) {
-        expectEqual(true, isValidIsr(i));
+        try expectEqual(true, isValidIsr(i));
     }
 
-    expect(isValidIsr(syscalls.INTERRUPT));
+    try expect(isValidIsr(syscalls.INTERRUPT));
 
-    expect(!isValidIsr(200));
+    try expect(!isValidIsr(200));
 }
 
 test "registerIsr re-register syscall handler" {
     // Pre testing
-    expect(null == syscall_handler);
+    try expect(null == syscall_handler);
 
     // Call function
     try registerIsr(syscalls.INTERRUPT, testFunction3);
-    expectError(IsrError.IsrExists, registerIsr(syscalls.INTERRUPT, testFunction4));
+    try expectError(IsrError.IsrExists, registerIsr(syscalls.INTERRUPT, testFunction4));
 
     // Post testing
-    expectEqual(testFunction3, syscall_handler.?);
+    try expectEqual(testFunction3, syscall_handler.?);
 
     // Clean up
     syscall_handler = null;
@@ -309,13 +309,13 @@ test "registerIsr re-register syscall handler" {
 
 test "registerIsr register syscall handler" {
     // Pre testing
-    expect(null == syscall_handler);
+    try expect(null == syscall_handler);
 
     // Call function
     try registerIsr(syscalls.INTERRUPT, testFunction3);
 
     // Post testing
-    expectEqual(testFunction3, syscall_handler.?);
+    try expectEqual(testFunction3, syscall_handler.?);
 
     // Clean up
     syscall_handler = null;
@@ -324,19 +324,19 @@ test "registerIsr register syscall handler" {
 test "registerIsr re-register isr handler" {
     // Pre testing
     for (isr_handlers) |h| {
-        expect(null == h);
+        try expect(null == h);
     }
 
     // Call function
     try registerIsr(0, testFunction1);
-    expectError(IsrError.IsrExists, registerIsr(0, testFunction2));
+    try expectError(IsrError.IsrExists, registerIsr(0, testFunction2));
 
     // Post testing
     for (isr_handlers) |h, i| {
         if (i != 0) {
-            expect(null == h);
+            try expect(null == h);
         } else {
-            expectEqual(testFunction1, h.?);
+            try expectEqual(testFunction1, h.?);
         }
     }
 
@@ -347,7 +347,7 @@ test "registerIsr re-register isr handler" {
 test "registerIsr register isr handler" {
     // Pre testing
     for (isr_handlers) |h| {
-        expect(null == h);
+        try expect(null == h);
     }
 
     // Call function
@@ -356,9 +356,9 @@ test "registerIsr register isr handler" {
     // Post testing
     for (isr_handlers) |h, i| {
         if (i != 0) {
-            expect(null == h);
+            try expect(null == h);
         } else {
-            expectEqual(testFunction1, h.?);
+            try expectEqual(testFunction1, h.?);
         }
     }
 
@@ -367,7 +367,7 @@ test "registerIsr register isr handler" {
 }
 
 test "registerIsr invalid isr index" {
-    expectError(IsrError.InvalidIsr, registerIsr(200, testFunction1));
+    try expectError(IsrError.InvalidIsr, registerIsr(200, testFunction1));
 }
 
 ///

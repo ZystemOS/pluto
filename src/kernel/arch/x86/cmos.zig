@@ -278,7 +278,7 @@ test "readRegister" {
     const expected = @as(u8, 0x55);
     const actual = readRegister();
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "selectAndReadRegister NMI" {
@@ -294,7 +294,7 @@ test "selectAndReadRegister NMI" {
     const expected = @as(u8, 0x44);
     const actual = selectAndReadRegister(reg, false);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "selectAndReadRegister no NMI" {
@@ -310,7 +310,7 @@ test "selectAndReadRegister no NMI" {
     const expected = @as(u8, 0x44);
     const actual = selectAndReadRegister(reg, true);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "selectAndWriteRegister NMI" {
@@ -364,7 +364,7 @@ test "readRtcRegister" {
         const expected = @as(u8, 0x44);
         const actual = readRtcRegister(reg);
 
-        expectEqual(expected, actual);
+        try expectEqual(expected, actual);
     }
 }
 
@@ -389,7 +389,7 @@ test "readStatusRegister NMI" {
         const expected = @as(u8, 0x78);
         const actual = readStatusRegister(reg, false);
 
-        expectEqual(expected, actual);
+        try expectEqual(expected, actual);
     }
 }
 
@@ -414,7 +414,7 @@ test "readStatusRegister no NMI" {
         const expected = @as(u8, 0x78);
         const actual = readStatusRegister(reg, true);
 
-        expectEqual(expected, actual);
+        try expectEqual(expected, actual);
     }
 }
 

@@ -375,7 +375,7 @@ pub fn writeString(str: []const u8) TtyError!void {
 /// Move up a page. This will copy the page above to the video buffer. Will keep trace of which
 /// page is being displayed.
 ///
-pub fn pageUp() void {
+pub fn pageUp() !void {
     if (page_index < TOTAL_NUM_PAGES - 1) {
         // Copy page to display
         page_index += 1;
@@ -383,7 +383,7 @@ pub fn pageUp() void {
         videoCopy(START_OF_DISPLAYABLE_REGION, pages[page_index][0..TOTAL_CHAR_ON_PAGE], TOTAL_CHAR_ON_PAGE) catch |e| {
             log.crit("Error moving page up. Error: {}\n", .{e});
         };
-        vga.disableCursor();
+        try vga.disableCursor();
     }
 }
 
@@ -391,7 +391,7 @@ pub fn pageUp() void {
 /// Move down a page. This will copy the page bellow to the video buffer. Will keep trace of which
 /// page is being displayed.
 ///
-pub fn pageDown() void {
+pub fn pageDown() !void {
     if (page_index > 0) {
         // Copy page to display
         page_index -= 1;
@@ -404,7 +404,7 @@ pub fn pageDown() void {
             vga.enableCursor();
             updateCursor();
         } else {
-            vga.disableCursor();
+            try vga.disableCursor();
         }
     }
 }
@@ -435,7 +435,7 @@ pub fn clearScreen() void {
 ///
 /// This moves the software and hardware cursor to the left by one.
 ///
-pub fn moveCursorLeft() void {
+pub fn moveCursorLeft() !void {
     if (column == 0) {
         if (row != 0) {
             column = vga.WIDTH - 1;
@@ -580,18 +580,18 @@ fn resetGlobals() void {
     };
 }
 
-fn setUpVideoBuffer() void {
+fn setUpVideoBuffer() !void {
     // Change to a stack location
     video_buffer = test_video_buffer[0..VIDEO_BUFFER_SIZE];
 
-    expectEqual(@ptrToInt(video_buffer.ptr), @ptrToInt(&test_video_buffer[0]));
+    try expectEqual(@ptrToInt(video_buffer.ptr), @ptrToInt(&test_video_buffer[0]));
 
     colour = test_colour;
     blank = vga.orig_entry(0, test_colour);
 }
 
-fn setVideoBufferBlankPages() void {
-    setUpVideoBuffer();
+fn setVideoBufferBlankPages() !void {
+    try setUpVideoBuffer();
     for (video_buffer) |*b| {
         b.* = blank;
     }
@@ -599,8 +599,8 @@ fn setVideoBufferBlankPages() void {
     setPagesBlank();
 }
 
-fn setVideoBufferIncrementingBlankPages() void {
-    setUpVideoBuffer();
+fn setVideoBufferIncrementingBlankPages() !void {
+    try setUpVideoBuffer();
     for (video_buffer) |*b, i| {
         b.* = @intCast(u16, i);
     }
@@ -624,55 +624,55 @@ fn setPagesIncrementing() void {
     }
 }
 
-fn defaultVariablesTesting(p_i: u8, r: u8, c: u8) void {
-    expectEqual(test_colour, colour);
-    expectEqual(@as(u16, test_colour) << 8, blank);
-    expectEqual(p_i, page_index);
-    expectEqual(r, row);
-    expectEqual(c, column);
+fn defaultVariablesTesting(p_i: u8, r: u8, c: u8) !void {
+    try expectEqual(test_colour, colour);
+    try expectEqual(@as(u16, test_colour) << 8, blank);
+    try expectEqual(p_i, page_index);
+    try expectEqual(r, row);
+    try expectEqual(c, column);
 }
 
-fn incrementingPagesTesting() void {
+fn incrementingPagesTesting() !void {
     for (pages) |p_i, i| {
         for (p_i) |p_j, j| {
-            expectEqual(i * TOTAL_CHAR_ON_PAGE + j, p_j);
+            try expectEqual(i * TOTAL_CHAR_ON_PAGE + j, p_j);
         }
     }
 }
 
-fn blankPagesTesting() void {
+fn blankPagesTesting() !void {
     for (pages) |p_i| {
         for (p_i) |p_j| {
-            expectEqual(blank, p_j);
+            try expectEqual(blank, p_j);
         }
     }
 }
 
-fn incrementingVideoBufferTesting() void {
+fn incrementingVideoBufferTesting() !void {
     var i: u32 = 0;
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const b = video_buffer[i];
-        expectEqual(i, b);
+        try expectEqual(i, b);
     }
 }
 
-fn defaultVideoBufferTesting() void {
+fn defaultVideoBufferTesting() !void {
     var i: u32 = 0;
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const b = video_buffer[i];
-        expectEqual(vga.orig_entry(0, test_colour), b);
+        try expectEqual(vga.orig_entry(0, test_colour), b);
     }
 }
 
-fn defaultAllTesting(p_i: u8, r: u8, c: u8) void {
-    defaultVariablesTesting(p_i, r, c);
-    blankPagesTesting();
-    defaultVideoBufferTesting();
+fn defaultAllTesting(p_i: u8, r: u8, c: u8) !void {
+    try defaultVariablesTesting(p_i, r, c);
+    try blankPagesTesting();
+    try defaultVideoBufferTesting();
 }
 
 test "updateCursor" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga.updateCursor call for updating the hardware cursor
     vga.initTest();
@@ -681,13 +681,13 @@ test "updateCursor" {
     vga.addTestParams("updateCursor", .{ @as(u16, 0), @as(u16, 0) });
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     updateCursor();
 
     // Post test
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Tear down
     resetGlobals();
@@ -695,7 +695,7 @@ test "updateCursor" {
 
 test "getCursor zero" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga.getCursor call for getting the hardware cursor
     vga.initTest();
@@ -704,13 +704,13 @@ test "getCursor zero" {
     vga.addTestParams("getCursor", .{@as(u16, 0)});
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     getCursor();
 
     // Post test
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Tear down
     resetGlobals();
@@ -718,7 +718,7 @@ test "getCursor zero" {
 
 test "getCursor EEF" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga.getCursor call for getting the hardware cursor
     vga.initTest();
@@ -727,13 +727,13 @@ test "getCursor EEF" {
     vga.addTestParams("getCursor", .{@as(u16, 0x0EEF)});
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     getCursor();
 
     // Post test
-    defaultAllTesting(0, 47, 63);
+    try defaultAllTesting(0, 47, 63);
 
     // Tear down
     resetGlobals();
@@ -741,16 +741,16 @@ test "getCursor EEF" {
 
 test "putEntryAt out of bounds" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
-    expectError(TtyError.OutOfBounds, putEntryAt('A', 100, 100));
+    try expectError(TtyError.OutOfBounds, putEntryAt('A', 100, 100));
 
     // Post test
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Tear down
     resetGlobals();
@@ -758,7 +758,7 @@ test "putEntryAt out of bounds" {
 
 test "putEntryAt not in displayable region" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -771,7 +771,7 @@ test "putEntryAt not in displayable region" {
     //vga.addConsumeFunction("enableCursor", vga.mock_enableCursor);
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     const x = 0;
@@ -780,16 +780,16 @@ test "putEntryAt not in displayable region" {
     try putEntryAt(char, x, y);
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
-    blankPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try blankPagesTesting();
 
     var i: u32 = 0;
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const b = video_buffer[i];
         if (i == y * vga.WIDTH + x) {
-            expectEqual(vga.orig_entry(char, test_colour), b);
+            try expectEqual(vga.orig_entry(char, test_colour), b);
         } else {
-            expectEqual(vga.orig_entry(0, test_colour), b);
+            try expectEqual(vga.orig_entry(0, test_colour), b);
         }
     }
 
@@ -799,7 +799,7 @@ test "putEntryAt not in displayable region" {
 
 test "putEntryAt in displayable region page_index is 0" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -809,7 +809,7 @@ test "putEntryAt in displayable region page_index is 0" {
     vga.addRepeatFunction("updateCursor", vga.mock_updateCursor);
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     const x = 0;
@@ -818,13 +818,13 @@ test "putEntryAt in displayable region page_index is 0" {
     try putEntryAt(char, x, y);
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
+    try defaultVariablesTesting(0, 0, 0);
     for (pages) |page, i| {
         for (page) |c, j| {
             if (i == page_index and (j == (y * vga.WIDTH + x) - START_OF_DISPLAYABLE_REGION)) {
-                expectEqual(vga.orig_entry(char, test_colour), c);
+                try expectEqual(vga.orig_entry(char, test_colour), c);
             } else {
-                expectEqual(blank, c);
+                try expectEqual(blank, c);
             }
         }
     }
@@ -833,9 +833,9 @@ test "putEntryAt in displayable region page_index is 0" {
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const b = video_buffer[i];
         if (i == y * vga.WIDTH + x) {
-            expectEqual(vga.orig_entry(char, test_colour), b);
+            try expectEqual(vga.orig_entry(char, test_colour), b);
         } else {
-            expectEqual(vga.orig_entry(0, test_colour), b);
+            try expectEqual(vga.orig_entry(0, test_colour), b);
         }
     }
 
@@ -855,7 +855,7 @@ test "putEntryAt in displayable region page_index is not 0" {
     // Enable and update cursor is only called once, can can use the consume function call
     vga.addConsumeFunction("enableCursor", vga.mock_enableCursor);
 
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Fill the 1'nd page (index 1) will all 1's
     const ones = vga.orig_entry('1', test_colour);
@@ -872,15 +872,15 @@ test "putEntryAt in displayable region page_index is not 0" {
     page_index = 1;
 
     // Pre testing
-    defaultVariablesTesting(1, 0, 0);
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(1, 0, 0);
+    try defaultVideoBufferTesting();
 
     for (pages) |page, i| {
         for (page) |char| {
             if (i == 0) {
-                expectEqual(ones, char);
+                try expectEqual(ones, char);
             } else {
-                expectEqual(@as(u16, 0), char);
+                try expectEqual(@as(u16, 0), char);
             }
         }
     }
@@ -892,7 +892,7 @@ test "putEntryAt in displayable region page_index is not 0" {
     try putEntryAt(char, x, y);
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
+    try defaultVariablesTesting(0, 0, 0);
 
     // Print page number
     const text = "Page 0 of 4";
@@ -909,11 +909,11 @@ test "putEntryAt in displayable region page_index is not 0" {
     for (pages) |page, i| {
         for (page) |c, j| {
             if (i == 0 and j == 0) {
-                expectEqual(vga.orig_entry(char, test_colour), c);
+                try expectEqual(vga.orig_entry(char, test_colour), c);
             } else if (i == 0) {
-                expectEqual(ones, c);
+                try expectEqual(ones, c);
             } else {
-                expectEqual(@as(u16, 0), c);
+                try expectEqual(@as(u16, 0), c);
             }
         }
     }
@@ -923,13 +923,13 @@ test "putEntryAt in displayable region page_index is not 0" {
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const b = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION - 11) {
-            expectEqual(blank, b);
+            try expectEqual(blank, b);
         } else if (i < START_OF_DISPLAYABLE_REGION) {
-            expectEqual(vga.orig_entry(text[i + 11 - START_OF_DISPLAYABLE_REGION], colour), b);
+            try expectEqual(vga.orig_entry(text[i + 11 - START_OF_DISPLAYABLE_REGION], colour), b);
         } else if (i == y * vga.WIDTH + x) {
-            expectEqual(vga.orig_entry(char, test_colour), b);
+            try expectEqual(vga.orig_entry(char, test_colour), b);
         } else {
-            expectEqual(ones, b);
+            try expectEqual(ones, b);
         }
     }
 
@@ -939,22 +939,22 @@ test "putEntryAt in displayable region page_index is not 0" {
 
 test "pagesMoveRowsUp out of bounds" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Call function
     const rows_to_move = ROW_TOTAL + 1;
-    expectError(TtyError.OutOfBounds, pagesMoveRowsUp(rows_to_move));
+    try expectError(TtyError.OutOfBounds, pagesMoveRowsUp(rows_to_move));
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Tear down
     resetGlobals();
@@ -962,22 +962,22 @@ test "pagesMoveRowsUp out of bounds" {
 
 test "pagesMoveRowsUp 0 rows" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Call function
     const rows_to_move = 0;
     try pagesMoveRowsUp(rows_to_move);
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Tear down
     resetGlobals();
@@ -985,21 +985,21 @@ test "pagesMoveRowsUp 0 rows" {
 
 test "pagesMoveRowsUp 1 rows" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Call function
     const rows_to_move = 1;
     try pagesMoveRowsUp(rows_to_move);
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
 
     const to_add = rows_to_move * vga.WIDTH;
     for (pages) |page, i| {
@@ -1007,13 +1007,13 @@ test "pagesMoveRowsUp 1 rows" {
             if (j >= TOTAL_CHAR_ON_PAGE - to_add) {
                 if (i == 0) {
                     // The last rows will be blanks
-                    expectEqual(blank, c);
+                    try expectEqual(blank, c);
                 } else {
-                    expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + (j + to_add - TOTAL_CHAR_ON_PAGE), c);
+                    try expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + (j + to_add - TOTAL_CHAR_ON_PAGE), c);
                 }
             } else {
                 // All rows moved up one, so add vga.WIDTH
-                expectEqual(i * TOTAL_CHAR_ON_PAGE + j + to_add, c);
+                try expectEqual(i * TOTAL_CHAR_ON_PAGE + j + to_add, c);
             }
         }
     }
@@ -1024,21 +1024,21 @@ test "pagesMoveRowsUp 1 rows" {
 
 test "pagesMoveRowsUp ROW_TOTAL - 1 rows" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Call function
     const rows_to_move = ROW_TOTAL - 1;
     try pagesMoveRowsUp(rows_to_move);
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
 
     const to_add = rows_to_move * vga.WIDTH;
     for (pages) |page, i| {
@@ -1046,13 +1046,13 @@ test "pagesMoveRowsUp ROW_TOTAL - 1 rows" {
             if (j >= TOTAL_CHAR_ON_PAGE - to_add) {
                 if (i == 0) {
                     // The last rows will be blanks
-                    expectEqual(blank, c);
+                    try expectEqual(blank, c);
                 } else {
-                    expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + (j + to_add - TOTAL_CHAR_ON_PAGE), c);
+                    try expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + (j + to_add - TOTAL_CHAR_ON_PAGE), c);
                 }
             } else {
                 // All rows moved up one, so add vga.WIDTH
-                expectEqual(i * TOTAL_CHAR_ON_PAGE + j + to_add, c);
+                try expectEqual(i * TOTAL_CHAR_ON_PAGE + j + to_add, c);
             }
         }
     }
@@ -1063,29 +1063,29 @@ test "pagesMoveRowsUp ROW_TOTAL - 1 rows" {
 
 test "pagesMoveRowsUp ROW_TOTAL rows" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Call function
     const rows_to_move = ROW_TOTAL;
     try pagesMoveRowsUp(rows_to_move);
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
 
     for (pages) |page, i| {
         for (page) |c, j| {
             if (i == 0) {
                 // The last rows will be blanks
-                expectEqual(blank, c);
+                try expectEqual(blank, c);
             } else {
-                expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + j, c);
+                try expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + j, c);
             }
         }
     }
@@ -1096,21 +1096,21 @@ test "pagesMoveRowsUp ROW_TOTAL rows" {
 
 test "scroll row is less then max height" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Call function
     scroll();
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
-    defaultVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try defaultVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Tear down
     resetGlobals();
@@ -1118,23 +1118,23 @@ test "scroll row is less then max height" {
 
 test "scroll row is equal to height" {
     // Set up
-    setVideoBufferIncrementingBlankPages();
+    try setVideoBufferIncrementingBlankPages();
     setPagesIncrementing();
 
     const row_test = vga.HEIGHT;
     row = row_test;
 
     // Pre testing
-    defaultVariablesTesting(0, row_test, 0);
-    incrementingPagesTesting();
-    incrementingVideoBufferTesting();
+    try defaultVariablesTesting(0, row_test, 0);
+    try incrementingPagesTesting();
+    try incrementingVideoBufferTesting();
 
     // Call function
     // Rows move up one
     scroll();
 
     // Post test
-    defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
+    try defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
 
     const to_add = (row_test - vga.HEIGHT + 1) * vga.WIDTH;
     for (pages) |page, i| {
@@ -1142,13 +1142,13 @@ test "scroll row is equal to height" {
             if (j >= TOTAL_CHAR_ON_PAGE - to_add) {
                 if (i == 0) {
                     // The last rows will be blanks
-                    expectEqual(blank, c);
+                    try expectEqual(blank, c);
                 } else {
-                    expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + (j + to_add - TOTAL_CHAR_ON_PAGE), c);
+                    try expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + (j + to_add - TOTAL_CHAR_ON_PAGE), c);
                 }
             } else {
                 // All rows moved up one, so add vga.WIDTH
-                expectEqual(i * TOTAL_CHAR_ON_PAGE + j + to_add, c);
+                try expectEqual(i * TOTAL_CHAR_ON_PAGE + j + to_add, c);
             }
         }
     }
@@ -1157,11 +1157,11 @@ test "scroll row is equal to height" {
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
-            expectEqual(i, buf);
+            try expectEqual(i, buf);
         } else if (i >= VIDEO_BUFFER_SIZE - to_add) {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         } else {
-            expectEqual(i + to_add, buf);
+            try expectEqual(i + to_add, buf);
         }
     }
 
@@ -1171,23 +1171,23 @@ test "scroll row is equal to height" {
 
 test "scroll row is more than height" {
     // Set up
-    setVideoBufferIncrementingBlankPages();
+    try setVideoBufferIncrementingBlankPages();
     setPagesIncrementing();
 
     const row_test = vga.HEIGHT + 5;
     row = row_test;
 
     // Pre testing
-    defaultVariablesTesting(0, row_test, 0);
-    incrementingPagesTesting();
-    incrementingVideoBufferTesting();
+    try defaultVariablesTesting(0, row_test, 0);
+    try incrementingPagesTesting();
+    try incrementingVideoBufferTesting();
 
     // Call function
     // Rows move up 5
     scroll();
 
     // Post test
-    defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
+    try defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
 
     const to_add = (row_test - vga.HEIGHT + 1) * vga.WIDTH;
     for (pages) |page, i| {
@@ -1195,13 +1195,13 @@ test "scroll row is more than height" {
             if (j >= TOTAL_CHAR_ON_PAGE - to_add) {
                 if (i == 0) {
                     // The last rows will be blanks
-                    expectEqual(blank, c);
+                    try expectEqual(blank, c);
                 } else {
-                    expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + (j + to_add - TOTAL_CHAR_ON_PAGE), c);
+                    try expectEqual((i - 1) * TOTAL_CHAR_ON_PAGE + (j + to_add - TOTAL_CHAR_ON_PAGE), c);
                 }
             } else {
                 // All rows moved up one, so add vga.WIDTH
-                expectEqual(i * TOTAL_CHAR_ON_PAGE + j + to_add, c);
+                try expectEqual(i * TOTAL_CHAR_ON_PAGE + j + to_add, c);
             }
         }
     }
@@ -1210,11 +1210,11 @@ test "scroll row is more than height" {
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
-            expectEqual(i, buf);
+            try expectEqual(i, buf);
         } else if (i >= VIDEO_BUFFER_SIZE - to_add) {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         } else {
-            expectEqual(i + to_add, buf);
+            try expectEqual(i + to_add, buf);
         }
     }
 
@@ -1224,18 +1224,18 @@ test "scroll row is more than height" {
 
 test "putChar new line within screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
     column = 5;
     row = 5;
-    defaultAllTesting(0, 5, 5);
+    try defaultAllTesting(0, 5, 5);
 
     // Call function
     try putChar('\n');
 
     // Post test
-    defaultAllTesting(0, 6, 0);
+    try defaultAllTesting(0, 6, 0);
 
     // Tear down
     resetGlobals();
@@ -1243,18 +1243,18 @@ test "putChar new line within screen" {
 
 test "putChar new line outside screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
     column = 5;
     row = vga.HEIGHT - 1;
-    defaultAllTesting(0, vga.HEIGHT - 1, 5);
+    try defaultAllTesting(0, vga.HEIGHT - 1, 5);
 
     // Call function
     try putChar('\n');
 
     // Post test
-    defaultAllTesting(0, vga.HEIGHT - 1, 0);
+    try defaultAllTesting(0, vga.HEIGHT - 1, 0);
 
     // Tear down
     resetGlobals();
@@ -1262,18 +1262,18 @@ test "putChar new line outside screen" {
 
 test "putChar tab within line" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
     column = 5;
     row = 6;
-    defaultAllTesting(0, 6, 5);
+    try defaultAllTesting(0, 6, 5);
 
     // Call function
     try putChar('\t');
 
     // Post test
-    defaultAllTesting(0, 6, 9);
+    try defaultAllTesting(0, 6, 9);
 
     // Tear down
     resetGlobals();
@@ -1281,18 +1281,18 @@ test "putChar tab within line" {
 
 test "putChar tab end of line" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
     column = vga.WIDTH - 1;
     row = 6;
-    defaultAllTesting(0, 6, vga.WIDTH - 1);
+    try defaultAllTesting(0, 6, vga.WIDTH - 1);
 
     // Call function
     try putChar('\t');
 
     // Post test
-    defaultAllTesting(0, 7, 3);
+    try defaultAllTesting(0, 7, 3);
 
     // Tear down
     resetGlobals();
@@ -1300,18 +1300,18 @@ test "putChar tab end of line" {
 
 test "putChar tab end of screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
     column = vga.WIDTH - 1;
     row = vga.HEIGHT - 1;
-    defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
+    try defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
 
     // Call function
     try putChar('\t');
 
     // Post test
-    defaultAllTesting(0, vga.HEIGHT - 1, 3);
+    try defaultAllTesting(0, vga.HEIGHT - 1, 3);
 
     // Tear down
     resetGlobals();
@@ -1319,18 +1319,18 @@ test "putChar tab end of screen" {
 
 test "putChar line feed" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
     column = vga.WIDTH - 1;
     row = vga.HEIGHT - 1;
-    defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
+    try defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
 
     // Call function
     try putChar('\r');
 
     // Post test
-    defaultAllTesting(0, vga.HEIGHT - 1, 0);
+    try defaultAllTesting(0, vga.HEIGHT - 1, 0);
 
     // Tear down
     resetGlobals();
@@ -1338,16 +1338,16 @@ test "putChar line feed" {
 
 test "putChar back char top left of screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     try putChar('\x08');
 
     // Post test
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Tear down
     resetGlobals();
@@ -1355,17 +1355,17 @@ test "putChar back char top left of screen" {
 
 test "putChar back char top row" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
     column = 8;
-    defaultAllTesting(0, 0, 8);
+    try defaultAllTesting(0, 0, 8);
 
     // Call function
     try putChar('\x08');
 
     // Post test
-    defaultAllTesting(0, 0, 7);
+    try defaultAllTesting(0, 0, 7);
 
     // Tear down
     resetGlobals();
@@ -1373,17 +1373,17 @@ test "putChar back char top row" {
 
 test "putChar back char beginning of row" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Pre testing
     row = 1;
-    defaultAllTesting(0, 1, 0);
+    try defaultAllTesting(0, 1, 0);
 
     // Call function
     try putChar('\x08');
 
     // Post test
-    defaultAllTesting(0, 0, vga.WIDTH - 1);
+    try defaultAllTesting(0, 0, vga.WIDTH - 1);
 
     // Tear down
     resetGlobals();
@@ -1391,7 +1391,7 @@ test "putChar back char beginning of row" {
 
 test "putChar any char in row" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1400,22 +1400,22 @@ test "putChar any char in row" {
     vga.addRepeatFunction("entry", vga.orig_entry);
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     try putChar('A');
 
     // Post test
-    defaultVariablesTesting(0, 0, 1);
-    blankPagesTesting();
+    try defaultVariablesTesting(0, 0, 1);
+    try blankPagesTesting();
 
     var i: u32 = 0;
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const buf = video_buffer[i];
         if (i == 0) {
-            expectEqual(vga.orig_entry('A', colour), buf);
+            try expectEqual(vga.orig_entry('A', colour), buf);
         } else {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         }
     }
 
@@ -1425,7 +1425,7 @@ test "putChar any char in row" {
 
 test "putChar any char end of row" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1435,22 +1435,22 @@ test "putChar any char end of row" {
 
     // Pre testing
     column = vga.WIDTH - 1;
-    defaultAllTesting(0, 0, vga.WIDTH - 1);
+    try defaultAllTesting(0, 0, vga.WIDTH - 1);
 
     // Call function
     try putChar('A');
 
     // Post test
-    defaultVariablesTesting(0, 1, 0);
-    blankPagesTesting();
+    try defaultVariablesTesting(0, 1, 0);
+    try blankPagesTesting();
 
     var i: u32 = 0;
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const buf = video_buffer[i];
         if (i == vga.WIDTH - 1) {
-            expectEqual(vga.orig_entry('A', colour), buf);
+            try expectEqual(vga.orig_entry('A', colour), buf);
         } else {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         }
     }
 
@@ -1460,7 +1460,7 @@ test "putChar any char end of row" {
 
 test "putChar any char end of screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1471,19 +1471,19 @@ test "putChar any char end of screen" {
     // Pre testing
     row = vga.HEIGHT - 1;
     column = vga.WIDTH - 1;
-    defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
+    try defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
 
     // Call function
     try putChar('A');
 
     // Post test
-    defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
+    try defaultVariablesTesting(0, vga.HEIGHT - 1, 0);
     for (pages) |page, i| {
         for (page) |c, j| {
             if ((i == 0) and (j == TOTAL_CHAR_ON_PAGE - vga.WIDTH - 1)) {
-                expectEqual(vga.orig_entry('A', colour), c);
+                try expectEqual(vga.orig_entry('A', colour), c);
             } else {
-                expectEqual(blank, c);
+                try expectEqual(blank, c);
             }
         }
     }
@@ -1492,9 +1492,9 @@ test "putChar any char end of screen" {
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const buf = video_buffer[i];
         if (i == VIDEO_BUFFER_SIZE - vga.WIDTH - 1) {
-            expectEqual(vga.orig_entry('A', colour), buf);
+            try expectEqual(vga.orig_entry('A', colour), buf);
         } else {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         }
     }
 
@@ -1504,23 +1504,23 @@ test "putChar any char end of screen" {
 
 test "pageUp top page" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Pre testing
     page_index = TOTAL_NUM_PAGES - 1;
 
-    defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
-    incrementingPagesTesting();
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
+    try incrementingPagesTesting();
+    try defaultVideoBufferTesting();
 
     // Call function
-    pageUp();
+    try pageUp();
 
     // Post test
-    defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
-    incrementingPagesTesting();
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
+    try incrementingPagesTesting();
+    try defaultVideoBufferTesting();
 
     // Tear down
     resetGlobals();
@@ -1528,7 +1528,7 @@ test "pageUp top page" {
 
 test "pageUp bottom page" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Mocking out the vga calls
@@ -1541,16 +1541,16 @@ test "pageUp bottom page" {
     vga.addConsumeFunction("disableCursor", vga.mock_disableCursor);
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    incrementingPagesTesting();
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try incrementingPagesTesting();
+    try defaultVideoBufferTesting();
 
     // Call function
-    pageUp();
+    try pageUp();
 
     // Post test
-    defaultVariablesTesting(1, 0, 0);
-    incrementingPagesTesting();
+    try defaultVariablesTesting(1, 0, 0);
+    try incrementingPagesTesting();
 
     // Print page number
     const text = "Page 1 of 4";
@@ -1570,11 +1570,11 @@ test "pageUp bottom page" {
         // Ignore the ROW_MIN row as this is where the page number is printed and is already
         // tested, page number is printed 11 from the end
         if (i < START_OF_DISPLAYABLE_REGION - 11) {
-            expectEqual(blank, b);
+            try expectEqual(blank, b);
         } else if (i < START_OF_DISPLAYABLE_REGION) {
-            expectEqual(vga.orig_entry(text[i + 11 - START_OF_DISPLAYABLE_REGION], colour), b);
+            try expectEqual(vga.orig_entry(text[i + 11 - START_OF_DISPLAYABLE_REGION], colour), b);
         } else {
-            expectEqual(i - START_OF_DISPLAYABLE_REGION + TOTAL_CHAR_ON_PAGE, b);
+            try expectEqual(i - START_OF_DISPLAYABLE_REGION + TOTAL_CHAR_ON_PAGE, b);
         }
     }
 
@@ -1584,21 +1584,21 @@ test "pageUp bottom page" {
 
 test "pageDown bottom page" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    incrementingPagesTesting();
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try incrementingPagesTesting();
+    try defaultVideoBufferTesting();
 
     // Call function
-    pageDown();
+    try pageDown();
 
     // Post test
-    defaultVariablesTesting(0, 0, 0);
-    incrementingPagesTesting();
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try incrementingPagesTesting();
+    try defaultVideoBufferTesting();
 
     // Tear down
     resetGlobals();
@@ -1606,7 +1606,7 @@ test "pageDown bottom page" {
 
 test "pageDown top page" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
     setPagesIncrementing();
 
     // Mocking out the vga calls
@@ -1621,16 +1621,16 @@ test "pageDown top page" {
     // Pre testing
     page_index = TOTAL_NUM_PAGES - 1;
 
-    defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
-    incrementingPagesTesting();
-    defaultVideoBufferTesting();
+    try defaultVariablesTesting(TOTAL_NUM_PAGES - 1, 0, 0);
+    try incrementingPagesTesting();
+    try defaultVideoBufferTesting();
 
     // Call function
-    pageDown();
+    try pageDown();
 
     // Post test
-    defaultVariablesTesting(TOTAL_NUM_PAGES - 2, 0, 0);
-    incrementingPagesTesting();
+    try defaultVariablesTesting(TOTAL_NUM_PAGES - 2, 0, 0);
+    try incrementingPagesTesting();
 
     // Print page number
     const text = "Page 3 of 4";
@@ -1650,11 +1650,11 @@ test "pageDown top page" {
         // Ignore the ROW_MIN row as this is where the page number is printed and is already
         // tested, page number is printed 11 from the end
         if (i < START_OF_DISPLAYABLE_REGION - 11) {
-            expectEqual(blank, b);
+            try expectEqual(blank, b);
         } else if (i < START_OF_DISPLAYABLE_REGION) {
-            expectEqual(vga.orig_entry(text[i + 11 - START_OF_DISPLAYABLE_REGION], colour), b);
+            try expectEqual(vga.orig_entry(text[i + 11 - START_OF_DISPLAYABLE_REGION], colour), b);
         } else {
-            expectEqual((i - START_OF_DISPLAYABLE_REGION) + (TOTAL_CHAR_ON_PAGE * page_index), b);
+            try expectEqual((i - START_OF_DISPLAYABLE_REGION) + (TOTAL_CHAR_ON_PAGE * page_index), b);
         }
     }
 
@@ -1664,7 +1664,7 @@ test "pageDown top page" {
 
 test "clearScreen" {
     // Set up
-    setVideoBufferIncrementingBlankPages();
+    try setVideoBufferIncrementingBlankPages();
     setPagesIncrementing();
 
     // Mocking out the vga calls
@@ -1674,22 +1674,22 @@ test "clearScreen" {
     vga.addRepeatFunction("updateCursor", vga.mock_updateCursor);
 
     // Pre testing
-    defaultVariablesTesting(0, 0, 0);
-    incrementingVideoBufferTesting();
-    incrementingPagesTesting();
+    try defaultVariablesTesting(0, 0, 0);
+    try incrementingVideoBufferTesting();
+    try incrementingPagesTesting();
 
     // Call function
     clearScreen();
 
     // Post test
-    defaultVariablesTesting(0, ROW_MIN, 0);
+    try defaultVariablesTesting(0, ROW_MIN, 0);
     var i: u32 = 0;
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const buf = video_buffer[i];
         if (i < START_OF_DISPLAYABLE_REGION) {
-            expectEqual(i, buf);
+            try expectEqual(i, buf);
         } else {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         }
     }
 
@@ -1697,9 +1697,9 @@ test "clearScreen" {
         for (page) |c, k| {
             if (j == 0) {
                 // The last rows will be blanks
-                expectEqual(blank, c);
+                try expectEqual(blank, c);
             } else {
-                expectEqual((j - 1) * TOTAL_CHAR_ON_PAGE + k, c);
+                try expectEqual((j - 1) * TOTAL_CHAR_ON_PAGE + k, c);
             }
         }
     }
@@ -1710,7 +1710,7 @@ test "clearScreen" {
 
 test "moveCursorLeft top left of screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1719,13 +1719,13 @@ test "moveCursorLeft top left of screen" {
     vga.addRepeatFunction("updateCursor", vga.mock_updateCursor);
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
-    moveCursorLeft();
+    try moveCursorLeft();
 
     // Post test
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Tear down
     resetGlobals();
@@ -1733,7 +1733,7 @@ test "moveCursorLeft top left of screen" {
 
 test "moveCursorLeft top screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1743,13 +1743,13 @@ test "moveCursorLeft top screen" {
 
     // Pre testing
     column = 5;
-    defaultAllTesting(0, 0, 5);
+    try defaultAllTesting(0, 0, 5);
 
     // Call function
-    moveCursorLeft();
+    try moveCursorLeft();
 
     // Post test
-    defaultAllTesting(0, 0, 4);
+    try defaultAllTesting(0, 0, 4);
 
     // Tear down
     resetGlobals();
@@ -1757,7 +1757,7 @@ test "moveCursorLeft top screen" {
 
 test "moveCursorLeft start of row" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1767,13 +1767,13 @@ test "moveCursorLeft start of row" {
 
     // Pre testing
     row = 5;
-    defaultAllTesting(0, 5, 0);
+    try defaultAllTesting(0, 5, 0);
 
     // Call function
-    moveCursorLeft();
+    try moveCursorLeft();
 
     // Post test
-    defaultAllTesting(0, 4, vga.WIDTH - 1);
+    try defaultAllTesting(0, 4, vga.WIDTH - 1);
 
     // Tear down
     resetGlobals();
@@ -1781,7 +1781,7 @@ test "moveCursorLeft start of row" {
 
 test "moveCursorRight bottom right of screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1792,13 +1792,13 @@ test "moveCursorRight bottom right of screen" {
     // Pre testing
     row = vga.HEIGHT - 1;
     column = vga.WIDTH - 1;
-    defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
+    try defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
 
     // Call function
     moveCursorRight();
 
     // Post test
-    defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
+    try defaultAllTesting(0, vga.HEIGHT - 1, vga.WIDTH - 1);
 
     // Tear down
     resetGlobals();
@@ -1806,7 +1806,7 @@ test "moveCursorRight bottom right of screen" {
 
 test "moveCursorRight top screen" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1816,13 +1816,13 @@ test "moveCursorRight top screen" {
 
     // Pre testing
     column = 5;
-    defaultAllTesting(0, 0, 5);
+    try defaultAllTesting(0, 0, 5);
 
     // Call function
     moveCursorRight();
 
     // Post test
-    defaultAllTesting(0, 0, 6);
+    try defaultAllTesting(0, 0, 6);
 
     // Tear down
     resetGlobals();
@@ -1830,7 +1830,7 @@ test "moveCursorRight top screen" {
 
 test "moveCursorRight end of row" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1841,13 +1841,13 @@ test "moveCursorRight end of row" {
     // Pre testing
     row = 5;
     column = vga.WIDTH - 1;
-    defaultAllTesting(0, 5, vga.WIDTH - 1);
+    try defaultAllTesting(0, 5, vga.WIDTH - 1);
 
     // Call function
     moveCursorRight();
 
     // Post test
-    defaultAllTesting(0, 6, 0);
+    try defaultAllTesting(0, 6, 0);
 
     // Tear down
     resetGlobals();
@@ -1868,8 +1868,8 @@ test "setColour" {
     setColour(new_colour);
 
     // Post test
-    expectEqual(new_colour, colour);
-    expectEqual(vga.orig_entry(0, new_colour), blank);
+    try expectEqual(new_colour, colour);
+    try expectEqual(vga.orig_entry(0, new_colour), blank);
 
     // Tear down
     resetGlobals();
@@ -1877,7 +1877,7 @@ test "setColour" {
 
 test "writeString" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga calls
     vga.initTest();
@@ -1889,23 +1889,23 @@ test "writeString" {
 
     // Pre testing
     row = ROW_MIN;
-    defaultAllTesting(0, ROW_MIN, 0);
+    try defaultAllTesting(0, ROW_MIN, 0);
 
     // Call function
     try writeString("ABC");
 
     // Post test
-    defaultVariablesTesting(0, ROW_MIN, 3);
+    try defaultVariablesTesting(0, ROW_MIN, 3);
     for (pages) |page, i| {
         for (page) |c, j| {
             if ((i == 0) and (j == 0)) {
-                expectEqual(vga.orig_entry('A', colour), c);
+                try expectEqual(vga.orig_entry('A', colour), c);
             } else if ((i == 0) and (j == 1)) {
-                expectEqual(vga.orig_entry('B', colour), c);
+                try expectEqual(vga.orig_entry('B', colour), c);
             } else if ((i == 0) and (j == 2)) {
-                expectEqual(vga.orig_entry('C', colour), c);
+                try expectEqual(vga.orig_entry('C', colour), c);
             } else {
-                expectEqual(blank, c);
+                try expectEqual(blank, c);
             }
         }
     }
@@ -1914,13 +1914,13 @@ test "writeString" {
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
         const buf = video_buffer[i];
         if (i == START_OF_DISPLAYABLE_REGION) {
-            expectEqual(vga.orig_entry('A', colour), buf);
+            try expectEqual(vga.orig_entry('A', colour), buf);
         } else if (i == START_OF_DISPLAYABLE_REGION + 1) {
-            expectEqual(vga.orig_entry('B', colour), buf);
+            try expectEqual(vga.orig_entry('B', colour), buf);
         } else if (i == START_OF_DISPLAYABLE_REGION + 2) {
-            expectEqual(vga.orig_entry('C', colour), buf);
+            try expectEqual(vga.orig_entry('C', colour), buf);
         } else {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         }
     }
 
@@ -1930,7 +1930,7 @@ test "writeString" {
 
 test "init 0,0" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga.updateCursor call for updating the hardware cursor
     vga.initTest();
@@ -1945,14 +1945,14 @@ test "init 0,0" {
     vga.addConsumeFunction("enableCursor", vga.mock_enableCursor);
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     init();
 
     // Post test
-    defaultVariablesTesting(0, ROW_MIN, 0);
-    blankPagesTesting();
+    try defaultVariablesTesting(0, ROW_MIN, 0);
+    try blankPagesTesting();
 
     var i: u32 = 0;
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
@@ -1961,7 +1961,7 @@ test "init 0,0" {
             // This is where the logo will be, but is a complex string so no testing
             // Just take my word it works :P
         } else {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         }
     }
 
@@ -1971,7 +1971,7 @@ test "init 0,0" {
 
 test "init not 0,0" {
     // Set up
-    setVideoBufferBlankPages();
+    try setVideoBufferBlankPages();
 
     // Mocking out the vga.updateCursor call for updating the hardware cursor
     vga.initTest();
@@ -1986,14 +1986,14 @@ test "init not 0,0" {
     vga.addConsumeFunction("enableCursor", vga.mock_enableCursor);
 
     // Pre testing
-    defaultAllTesting(0, 0, 0);
+    try defaultAllTesting(0, 0, 0);
 
     // Call function
     init();
 
     // Post test
-    defaultVariablesTesting(0, ROW_MIN + 1, 0);
-    blankPagesTesting();
+    try defaultVariablesTesting(0, ROW_MIN + 1, 0);
+    try blankPagesTesting();
 
     var i: u32 = 0;
     while (i < VIDEO_BUFFER_SIZE) : (i += 1) {
@@ -2002,7 +2002,7 @@ test "init not 0,0" {
             // This is where the logo will be, but is a complex string so no testing
             // Just take my word it works :P
         } else {
-            expectEqual(blank, buf);
+            try expectEqual(blank, buf);
         }
     }
 

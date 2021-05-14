@@ -261,13 +261,13 @@ pub const Keyboard = struct {
 
         comptime var i = 0;
         inline while (i < QUEUE_SIZE - 1) : (i += 1) {
-            testing.expectEqual(keyboard.writeKey(.{
+            try testing.expectEqual(keyboard.writeKey(.{
                 .position = @intToEnum(KeyPosition, i),
                 .released = false,
             }), true);
-            testing.expectEqual(keyboard.queue[i].position, @intToEnum(KeyPosition, i));
-            testing.expectEqual(keyboard.queue_end, i + 1);
-            testing.expectEqual(keyboard.queue_front, 0);
+            try testing.expectEqual(keyboard.queue[i].position, @intToEnum(KeyPosition, i));
+            try testing.expectEqual(keyboard.queue_end, i + 1);
+            try testing.expectEqual(keyboard.queue_front, 0);
         }
 
         testing.expectEqual(keyboard.writeKey(.{
@@ -282,7 +282,7 @@ pub const Keyboard = struct {
 
         comptime var i = 0;
         inline while (i < QUEUE_SIZE - 1) : (i += 1) {
-            testing.expectEqual(keyboard.writeKey(.{
+            try testing.expectEqual(keyboard.writeKey(.{
                 .position = @intToEnum(KeyPosition, i),
                 .released = false,
             }), true);
@@ -290,9 +290,9 @@ pub const Keyboard = struct {
 
         i = 0;
         inline while (i < QUEUE_SIZE - 1) : (i += 1) {
-            testing.expectEqual(keyboard.readKey().?.position, @intToEnum(KeyPosition, i));
-            testing.expectEqual(keyboard.queue_end, QUEUE_SIZE - 1);
-            testing.expectEqual(keyboard.queue_front, i + 1);
+            try testing.expectEqual(keyboard.readKey().?.position, @intToEnum(KeyPosition, i));
+            try testing.expectEqual(keyboard.queue_end, QUEUE_SIZE - 1);
+            try testing.expectEqual(keyboard.queue_front, i + 1);
         }
 
         testing.expect(keyboard.isEmpty());
