@@ -529,7 +529,7 @@ test "readDataMaster" {
 
     arch.addTestParams("in", .{ MASTER_DATA_REG, @as(u8, 10) });
 
-    expectEqual(@as(u8, 10), readDataMaster());
+    try expectEqual(@as(u8, 10), readDataMaster());
 }
 
 test "readDataSlave" {
@@ -539,7 +539,7 @@ test "readDataSlave" {
 
     arch.addTestParams("in", .{ SLAVE_DATA_REG, @as(u8, 10) });
 
-    expectEqual(@as(u8, 10), readDataSlave());
+    try expectEqual(@as(u8, 10), readDataSlave());
 }
 
 test "readMasterIrr" {
@@ -550,7 +550,7 @@ test "readMasterIrr" {
     arch.addTestParams("out", .{ MASTER_COMMAND_REG, @as(u8, 0x0A) });
     arch.addTestParams("in", .{ MASTER_STATUS_REG, @as(u8, 10) });
 
-    expectEqual(@as(u8, 10), readMasterIrr());
+    try expectEqual(@as(u8, 10), readMasterIrr());
 }
 
 test "readSlaveIrr" {
@@ -561,7 +561,7 @@ test "readSlaveIrr" {
     arch.addTestParams("out", .{ SLAVE_COMMAND_REG, @as(u8, 0x0A) });
     arch.addTestParams("in", .{ SLAVE_STATUS_REG, @as(u8, 10) });
 
-    expectEqual(@as(u8, 10), readSlaveIrr());
+    try expectEqual(@as(u8, 10), readSlaveIrr());
 }
 
 test "readMasterIsr" {
@@ -572,7 +572,7 @@ test "readMasterIsr" {
     arch.addTestParams("out", .{ MASTER_COMMAND_REG, @as(u8, 0x0B) });
     arch.addTestParams("in", .{ MASTER_STATUS_REG, @as(u8, 10) });
 
-    expectEqual(@as(u8, 10), readMasterIsr());
+    try expectEqual(@as(u8, 10), readMasterIsr());
 }
 
 test "readSlaveIsr" {
@@ -583,7 +583,7 @@ test "readSlaveIsr" {
     arch.addTestParams("out", .{ SLAVE_COMMAND_REG, @as(u8, 0x0B) });
     arch.addTestParams("in", .{ SLAVE_STATUS_REG, @as(u8, 10) });
 
-    expectEqual(@as(u8, 10), readSlaveIsr());
+    try expectEqual(@as(u8, 10), readSlaveIsr());
 }
 
 test "sendEndOfInterrupt master only" {
@@ -615,17 +615,17 @@ test "sendEndOfInterrupt master and slave" {
 
 test "spuriousIrq not spurious IRQ number" {
     // Pre testing
-    expectEqual(@as(u32, 0), spurious_irq_counter);
+    try expectEqual(@as(u32, 0), spurious_irq_counter);
 
     var i: u8 = 0;
     while (i < 16) : (i += 1) {
         if (i != 7 and i != 15) {
-            expectEqual(false, spuriousIrq(i));
+            try expectEqual(false, spuriousIrq(i));
         }
     }
 
     // Post testing
-    expectEqual(@as(u32, 0), spurious_irq_counter);
+    try expectEqual(@as(u32, 0), spurious_irq_counter);
 
     // Clean up
     spurious_irq_counter = 0;
@@ -641,13 +641,13 @@ test "spuriousIrq spurious master IRQ number not spurious" {
     arch.addTestParams("in", .{ MASTER_STATUS_REG, @as(u8, 0x80) });
 
     // Pre testing
-    expectEqual(@as(u32, 0), spurious_irq_counter);
+    try expectEqual(@as(u32, 0), spurious_irq_counter);
 
     // Call function
-    expectEqual(false, spuriousIrq(7));
+    try expectEqual(false, spuriousIrq(7));
 
     // Post testing
-    expectEqual(@as(u32, 0), spurious_irq_counter);
+    try expectEqual(@as(u32, 0), spurious_irq_counter);
 
     // Clean up
     spurious_irq_counter = 0;
@@ -663,13 +663,13 @@ test "spuriousIrq spurious master IRQ number spurious" {
     arch.addTestParams("in", .{ MASTER_STATUS_REG, @as(u8, 0x0) });
 
     // Pre testing
-    expectEqual(@as(u32, 0), spurious_irq_counter);
+    try expectEqual(@as(u32, 0), spurious_irq_counter);
 
     // Call function
-    expectEqual(true, spuriousIrq(7));
+    try expectEqual(true, spuriousIrq(7));
 
     // Post testing
-    expectEqual(@as(u32, 1), spurious_irq_counter);
+    try expectEqual(@as(u32, 1), spurious_irq_counter);
 
     // Clean up
     spurious_irq_counter = 0;
@@ -685,13 +685,13 @@ test "spuriousIrq spurious slave IRQ number not spurious" {
     arch.addTestParams("in", .{ SLAVE_STATUS_REG, @as(u8, 0x80) });
 
     // Pre testing
-    expectEqual(@as(u32, 0), spurious_irq_counter);
+    try expectEqual(@as(u32, 0), spurious_irq_counter);
 
     // Call function
-    expectEqual(false, spuriousIrq(15));
+    try expectEqual(false, spuriousIrq(15));
 
     // Post testing
-    expectEqual(@as(u32, 0), spurious_irq_counter);
+    try expectEqual(@as(u32, 0), spurious_irq_counter);
 
     // Clean up
     spurious_irq_counter = 0;
@@ -709,13 +709,13 @@ test "spuriousIrq spurious slave IRQ number spurious" {
     arch.addTestParams("out", .{ MASTER_COMMAND_REG, OCW2_END_OF_INTERRUPT });
 
     // Pre testing
-    expectEqual(@as(u32, 0), spurious_irq_counter);
+    try expectEqual(@as(u32, 0), spurious_irq_counter);
 
     // Call function
-    expectEqual(true, spuriousIrq(15));
+    try expectEqual(true, spuriousIrq(15));
 
     // Post testing
-    expectEqual(@as(u32, 1), spurious_irq_counter);
+   try  expectEqual(@as(u32, 1), spurious_irq_counter);
 
     // Clean up
     spurious_irq_counter = 0;

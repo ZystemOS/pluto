@@ -297,23 +297,23 @@ test "parseScanCode" {
         var res = parseScanCode(scan_code);
         if (key) |k| {
             const r = res orelse unreachable;
-            testing.expectEqual(k, r.position);
-            testing.expectEqual(false, r.released);
-            testing.expectEqual(pressed_keys, 1);
+            try testing.expectEqual(k, r.position);
+            try testing.expectEqual(false, r.released);
+            try testing.expectEqual(pressed_keys, 1);
         }
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, false);
-        testing.expectEqual(expected_releases, 0);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, false);
+        try testing.expectEqual(expected_releases, 0);
         // Test release scan code for key
         if (key) |k| {
             res = parseScanCode(scan_code | 128);
             const r = res orelse unreachable;
-            testing.expectEqual(k, r.position);
-            testing.expectEqual(true, r.released);
-            testing.expectEqual(pressed_keys, 0);
-            testing.expectEqual(on_print_screen, false);
-            testing.expectEqual(special_sequence, false);
-            testing.expectEqual(expected_releases, 0);
+            try testing.expectEqual(k, r.position);
+            try testing.expectEqual(true, r.released);
+            try testing.expectEqual(pressed_keys, 0);
+            try testing.expectEqual(on_print_screen, false);
+            try testing.expectEqual(special_sequence, false);
+            try testing.expectEqual(expected_releases, 0);
         }
         scan_code += 1;
     }
@@ -338,32 +338,32 @@ test "parseScanCode" {
     };
     const simple_special_codes = &[_]u8{ 72, 75, 77, 80, 82, 71, 73, 83, 79, 81, 53, 28, 56, 91 };
     for (simple_special_keys) |key, i| {
-        testing.expectEqual(parseScanCode(128), null);
-        testing.expectEqual(pressed_keys, 0);
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, true);
-        testing.expectEqual(expected_releases, 0);
+        try testing.expectEqual(parseScanCode(128), null);
+        try testing.expectEqual(pressed_keys, 0);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, true);
+        try testing.expectEqual(expected_releases, 0);
 
         var res = parseScanCode(simple_special_codes[i]) orelse unreachable;
-        testing.expectEqual(false, res.released);
-        testing.expectEqual(key, res.position);
-        testing.expectEqual(pressed_keys, 1);
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, true);
-        testing.expectEqual(expected_releases, 1);
+        try testing.expectEqual(false, res.released);
+        try testing.expectEqual(key, res.position);
+        try testing.expectEqual(pressed_keys, 1);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, true);
+        try testing.expectEqual(expected_releases, 1);
 
-        testing.expectEqual(parseScanCode(128), null);
-        testing.expectEqual(pressed_keys, 1);
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, true);
-        testing.expectEqual(expected_releases, 0);
+        try testing.expectEqual(parseScanCode(128), null);
+        try testing.expectEqual(pressed_keys, 1);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, true);
+        try testing.expectEqual(expected_releases, 0);
 
         res = parseScanCode(simple_special_codes[i] | 128) orelse unreachable;
-        testing.expectEqual(true, res.released);
-        testing.expectEqual(key, res.position);
-        testing.expectEqual(pressed_keys, 0);
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, false);
-        testing.expectEqual(expected_releases, 0);
+        try testing.expectEqual(true, res.released);
+        try testing.expectEqual(key, res.position);
+        try testing.expectEqual(pressed_keys, 0);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, false);
+        try testing.expectEqual(expected_releases, 0);
     }
 }

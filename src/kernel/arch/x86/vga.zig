@@ -303,34 +303,34 @@ test "entryColour" {
     var fg = COLOUR_BLACK;
     var bg = COLOUR_BLACK;
     var res = entryColour(fg, bg);
-    expectEqual(@as(u8, 0x00), res);
+    try expectEqual(@as(u8, 0x00), res);
 
     fg = COLOUR_LIGHT_GREEN;
     bg = COLOUR_BLACK;
     res = entryColour(fg, bg);
-    expectEqual(@as(u8, 0x0A), res);
+    try expectEqual(@as(u8, 0x0A), res);
 
     fg = COLOUR_BLACK;
     bg = COLOUR_LIGHT_GREEN;
     res = entryColour(fg, bg);
-    expectEqual(@as(u8, 0xA0), res);
+    try expectEqual(@as(u8, 0xA0), res);
 
     fg = COLOUR_BROWN;
     bg = COLOUR_LIGHT_GREEN;
     res = entryColour(fg, bg);
-    expectEqual(@as(u8, 0xA6), res);
+    try expectEqual(@as(u8, 0xA6), res);
 }
 
 test "entry" {
     const colour = entryColour(COLOUR_BROWN, COLOUR_LIGHT_GREEN);
-    expectEqual(@as(u8, 0xA6), colour);
+    try expectEqual(@as(u8, 0xA6), colour);
 
     // Character '0' is 0x30
     var video_entry = entry('0', colour);
-    expectEqual(@as(u16, 0xA630), video_entry);
+    try expectEqual(@as(u16, 0xA630), video_entry);
 
     video_entry = entry(0x55, colour);
-    expectEqual(@as(u16, 0xA655), video_entry);
+    try expectEqual(@as(u16, 0xA655), video_entry);
 }
 
 test "updateCursor width out of bounds" {
@@ -447,7 +447,7 @@ test "getCursor 1: 10" {
     arch.addTestParams("in", .{ PORT_DATA, @as(u8, 0) });
 
     const actual = getCursor();
-    expectEqual(expect, actual);
+    try expectEqual(expect, actual);
 }
 
 test "getCursor 2: 0xBEEF" {
@@ -463,7 +463,7 @@ test "getCursor 2: 0xBEEF" {
     arch.addTestParams("in", .{ PORT_DATA, @as(u8, 0xBE) });
 
     const actual = getCursor();
-    expectEqual(expect, actual);
+    try expectEqual(expect, actual);
 }
 
 test "enableCursor" {

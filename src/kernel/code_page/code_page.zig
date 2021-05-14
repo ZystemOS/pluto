@@ -78,7 +78,7 @@ test "ASCII toCodePage" {
     var ascii: u8 = 0x20;
     while (ascii < 0x7F) : (ascii += 1) {
         const char = try CodePage.toCodePage(.CP437, ascii);
-        std.testing.expectEqual(char, ascii);
+        try std.testing.expectEqual(char, ascii);
     }
 }
 
@@ -87,11 +87,11 @@ test "ASCII toWideChar" {
     var ascii: u8 = 0x20;
     while (ascii < 0x7F) : (ascii += 1) {
         const char = CodePage.toWideChar(.CP437, ascii);
-        std.testing.expectEqual(char, ascii);
+        try std.testing.expectEqual(char, ascii);
     }
 }
 
 test "Invalid characters" {
     const char = '€';
-    std.testing.expectError(CodePage.Error.InvalidChar, CodePage.toCodePage(.CP437, char));
+    try std.testing.expectError(CodePage.Error.InvalidChar, CodePage.toCodePage(.CP437, char));
 }

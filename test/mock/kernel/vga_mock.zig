@@ -55,7 +55,7 @@ pub fn enableCursor() void {
     return mock_framework.performAction("enableCursor", void, .{});
 }
 
-pub fn disableCursor() void {
+pub fn disableCursor() !void {
     return mock_framework.performAction("disableCursor", void, .{});
 }
 
@@ -77,10 +77,10 @@ pub fn orig_entry(uc: u8, c: u8) u16 {
     return uc | @as(u16, c) << 8;
 }
 
-pub fn mock_updateCursor(x: u16, y: u16) void {
+pub fn mock_updateCursor(x: u16, y: u16) !void {
     // Here we can do any testing we like with the parameters. e.g. test out of bounds
-    expect(x < WIDTH);
-    expect(y < HEIGHT);
+    try expect(x < WIDTH);
+    try expect(y < HEIGHT);
 }
 
 pub fn mock_enableCursor() void {}
