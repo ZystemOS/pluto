@@ -13,6 +13,7 @@ const task = @import("task.zig");
 const vmm = @import("vmm.zig");
 const mem = @import("mem.zig");
 const fs = @import("filesystem/vfs.zig");
+const bitmap = @import("bitmap.zig");
 const Task = task.Task;
 const EntryPoint = task.EntryPoint;
 const Allocator = std.mem.Allocator;
@@ -26,7 +27,7 @@ extern var KERNEL_STACK_START: []u32;
 extern var KERNEL_STACK_END: []u32;
 
 /// The current task running
-var current_task: *Task = undefined;
+pub var current_task: *Task = undefined;
 
 /// Array list of all runnable tasks
 var tasks: TailQueue(*Task) = undefined;
@@ -136,14 +137,12 @@ pub fn init(allocator: *Allocator, mem_profile: *const mem.MemProfile) Allocator
     tasks = TailQueue(*Task){};
 
     // Set up the init task to continue execution
-    current_task = try allocator.create(Task);
+    current_task = try Task.create(0, true, &vmm.kernel_vmm, allocator);
     errdefer allocator.destroy(current_task);
-    // PID 0
-    current_task.pid = 0;
+
+    allocator.free(current_task.kernel_stack);
     const kernel_stack_size = @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START);
     current_task.kernel_stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..kernel_stack_size];
-    current_task.user_stack = &[_]usize{};
-    current_task.kernel = true;
     // ESP will be saved on next schedule
 
     // Run the runtime tests here
@@ -193,9 +192,9 @@ test "pickNextTask" {
     tasks = TailQueue(*Task){};
 
     // Set up a current task
-    current_task = try allocator.create(Task);
-    defer allocator.destroy(current_task);
-    current_task.pid = 0;
+    current_task = try Task.create(0, true, &vmm.kernel_vmm, allocator);
+    defer current_task.destroy(allocator);
+    allocator.free(current_task.kernel_stack);
     current_task.kernel_stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..4096];
     current_task.stack_pointer = @ptrToInt(&KERNEL_STACK_START);
 

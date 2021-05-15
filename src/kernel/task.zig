@@ -1,19 +1,28 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const expect = std.testing.expect;
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const panic = @import("panic.zig").panic;
+const bitmap = @import("bitmap.zig");
 const ComptimeBitmap = @import("bitmap.zig").ComptimeBitmap;
 const vmm = @import("vmm.zig");
+const vfs = @import("filesystem/vfs.zig");
 const Allocator = std.mem.Allocator;
 
 /// The kernels main stack start as this is used to check for if the task being destroyed is this stack
 /// as we cannot deallocate this.
 extern var KERNEL_STACK_START: *u32;
+
+/// The number of vfs handles that a process can have
+pub const VFS_HANDLES_PER_PROCESS = std.math.maxInt(Handle);
+
+/// A vfs handle. 65k is probably a good limit for the number of files a task can have open at once so we use u16 as the type
+pub const Handle = u16;
 
 /// The function type for the entry point.
 pub const EntryPoint = usize;
@@ -22,18 +31,18 @@ pub const EntryPoint = usize;
 const PidBitmap = if (is_test) ComptimeBitmap(u128) else ComptimeBitmap(u1024);
 
 /// The list of PIDs that have been allocated.
-var all_pids: PidBitmap = brk: {
-    var pids = PidBitmap.init();
-    // Set the first PID as this is for the current task running, init 0
-    _ = pids.setFirstFree() orelse unreachable;
-    break :brk pids;
-};
+var all_pids = PidBitmap.init();
 
 /// The default stack size of a task. Currently this is set to a page size.
 pub const STACK_SIZE: u32 = arch.MEMORY_BLOCK_SIZE / @sizeOf(u32);
 
 /// The task control block for storing all the information needed to save and restore a task.
 pub const Task = struct {
+    pub const Error = error{
+        /// The supplied vfs handle hasn't been allocated
+        VFSHandleNotSet,
+    };
+
     const Self = @This();
 
     /// The unique task identifier
@@ -53,6 +62,12 @@ pub const Task = struct {
 
     /// The virtual memory manager belonging to the task
     vmm: *vmm.VirtualMemoryManager(arch.VmmPayload),
+
+    /// The list of file handles for this process
+    file_handles: bitmap.Bitmap(usize),
+
+    /// The mapping between file handles and file nodes
+    file_handle_mapping: std.hash_map.AutoHashMap(Handle, *vfs.Node),
 
     ///
     /// Create a task. This will allocate a PID and the stack. The stack will be set up as a
@@ -92,6 +107,8 @@ pub const Task = struct {
             .stack_pointer = @ptrToInt(&k_stack[STACK_SIZE - 1]),
             .kernel = kernel,
             .vmm = task_vmm,
+            .file_handles = try bitmap.Bitmap(usize).init(VFS_HANDLES_PER_PROCESS, allocator),
+            .file_handle_mapping = std.hash_map.AutoHashMap(Handle, *vfs.Node).init(allocator),
         };
 
         try arch.initTask(task, entry_point, allocator);
@@ -115,7 +132,39 @@ pub const Task = struct {
         if (!self.kernel) {
             allocator.free(self.user_stack);
         }
+        self.file_handles.deinit();
+        self.file_handle_mapping.deinit();
         allocator.destroy(self);
+    }
+
+    pub fn getVFSHandle(self: Self, handle: Handle) bitmap.Bitmap(usize).BitmapError!?*vfs.Node {
+        return self.file_handle_mapping.get(handle);
+    }
+
+    pub fn hasFreeVFSHandle(self: Self) bool {
+        return self.file_handles.num_free_entries > 0;
+    }
+
+    pub fn addVFSHandle(self: *Self, node: *vfs.Node) std.mem.Allocator.Error!?Handle {
+        if (self.file_handles.setFirstFree()) |handle| {
+            const real_handle = @intCast(Handle, handle);
+            try self.file_handle_mapping.put(real_handle, node);
+            return real_handle;
+        }
+        return null;
+    }
+
+    pub fn hasVFSHandle(self: Self, handle: Handle) bitmap.Bitmap(usize).BitmapError!bool {
+        return self.file_handles.isSet(handle);
+    }
+
+    pub fn clearVFSHandle(self: *Self, handle: Handle) (bitmap.Bitmap(usize).BitmapError || Error)!void {
+        if (try self.hasVFSHandle(handle)) {
+            self.file_handles.clearEntry(handle) catch unreachable;
+            _ = self.file_handle_mapping.remove(handle);
+        } else {
+            return Error.VFSHandleNotSet;
+        }
     }
 };
 
@@ -253,4 +302,76 @@ test "allocatePid and freePid" {
     }
 
     expectEqual(all_pids.bitmap, 0);
+}
+
+test "addVFSHandle" {
+    var task = try Task.create(0, true, undefined, std.testing.allocator);
+    defer task.destroy(std.testing.allocator);
+    var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
+    var node2 = vfs.Node{ .File = .{ .fs = undefined } };
+
+    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
+    expectEqual(handle1, 0);
+    expectEqual(&node1, task.file_handle_mapping.get(handle1).?);
+    expectEqual(true, try task.file_handles.isSet(handle1));
+
+    const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
+    expectEqual(handle2, 1);
+    expectEqual(&node2, task.file_handle_mapping.get(handle2).?);
+    expectEqual(true, try task.file_handles.isSet(handle2));
+}
+
+test "hasFreeVFSHandle" {
+    var task = try Task.create(0, true, undefined, std.testing.allocator);
+    defer task.destroy(std.testing.allocator);
+    var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
+
+    expect(task.hasFreeVFSHandle());
+
+    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
+    expect(task.hasFreeVFSHandle());
+
+    var i: usize = 0;
+    const free_entries = task.file_handles.num_free_entries;
+    while (i < free_entries) : (i += 1) {
+        expect(task.hasFreeVFSHandle());
+        _ = task.file_handles.setFirstFree();
+    }
+    expect(!task.hasFreeVFSHandle());
+}
+
+test "getVFSHandle" {
+    var task = try Task.create(0, true, undefined, std.testing.allocator);
+    defer task.destroy(std.testing.allocator);
+    var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
+    var node2 = vfs.Node{ .File = .{ .fs = undefined } };
+
+    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
+    expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
+
+    const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
+    expectEqual(&node2, (try task.getVFSHandle(handle2)).?);
+    expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
+
+    expectEqual(task.getVFSHandle(handle2 + 1), null);
+}
+
+test "clearVFSHandle" {
+    var task = try Task.create(0, true, undefined, std.testing.allocator);
+    defer task.destroy(std.testing.allocator);
+    var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
+    var node2 = vfs.Node{ .File = .{ .fs = undefined } };
+
+    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
+    const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
+
+    try task.clearVFSHandle(handle1);
+    expectEqual(false, try task.hasVFSHandle(handle1));
+
+    try task.clearVFSHandle(handle2);
+    expectEqual(false, try task.hasVFSHandle(handle2));
+
+    expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle2 + 1));
+    expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle2));
+    expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle1));
 }
