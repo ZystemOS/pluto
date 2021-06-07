@@ -98,6 +98,12 @@ pub fn handle(syscall: Syscall, arg1: usize, arg2: usize, arg3: usize, arg4: usi
 }
 
 pub fn handleTest1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    // Suppress unused variable warnings
+    _ = arg1;
+    _ = arg2;
+    _ = arg3;
+    _ = arg4;
+    _ = arg5;
     return 0;
 }
 
@@ -106,17 +112,23 @@ pub fn handleTest2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usi
 }
 
 pub fn handleTest3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    // Suppress unused variable warnings
+    _ = arg1;
+    _ = arg2;
+    _ = arg3;
+    _ = arg4;
+    _ = arg5;
     return std.mem.Allocator.Error.OutOfMemory;
 }
 
 test "getHandler" {
-    std.testing.expectEqual(Syscall.Test1.getHandler(), handleTest1);
-    std.testing.expectEqual(Syscall.Test2.getHandler(), handleTest2);
-    std.testing.expectEqual(Syscall.Test3.getHandler(), handleTest3);
+    try std.testing.expectEqual(Syscall.Test1.getHandler(), handleTest1);
+    try std.testing.expectEqual(Syscall.Test2.getHandler(), handleTest2);
+    try std.testing.expectEqual(Syscall.Test3.getHandler(), handleTest3);
 }
 
 test "handle" {
-    std.testing.expectEqual(@as(usize, 0), try handle(.Test1, 0, 0, 0, 0, 0));
-    std.testing.expectEqual(@as(usize, 1 + 2 + 3 + 4 + 5), try handle(.Test2, 1, 2, 3, 4, 5));
-    std.testing.expectError(Error.OutOfMemory, handle(.Test3, 0, 0, 0, 0, 0));
+    try std.testing.expectEqual(@as(usize, 0), try handle(.Test1, 0, 0, 0, 0, 0));
+    try std.testing.expectEqual(@as(usize, 1 + 2 + 3 + 4 + 5), try handle(.Test2, 1, 2, 3, 4, 5));
+    try std.testing.expectError(Error.OutOfMemory, handle(.Test3, 0, 0, 0, 0, 0));
 }

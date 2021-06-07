@@ -6,7 +6,6 @@ const log = std.log.scoped(.scheduler);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const panic = @import("panic.zig").panic;
 const task = @import("task.zig");
@@ -105,12 +104,13 @@ pub fn pickNextTask(ctx: *arch.CpuState) usize {
 ///
 /// Arguments:
 ///     IN entry_point: EntryPoint - The entry point into the task. This must be a function.
+///     IN allocator: Allocator - The allocator to use
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - If there isn't enough memory for the a task/stack. Any memory allocated will
 ///                   be freed on return.
 ///
-pub fn scheduleTask(new_task: *Task, allocator: *Allocator) Allocator.Error!void {
+pub fn scheduleTask(new_task: *Task, allocator: Allocator) Allocator.Error!void {
     var task_node = try allocator.create(TailQueue(*Task).Node);
     task_node.* = .{ .data = new_task };
     tasks.prepend(task_node);
@@ -123,13 +123,13 @@ pub fn scheduleTask(new_task: *Task, allocator: *Allocator) Allocator.Error!void
 /// idle task for when there is no more tasks to run.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to use when needing to allocate memory.
+///     IN allocator: Allocator - The allocator to use when needing to allocate memory.
 ///     IN mem_profile: *const mem.MemProfile - The system's memory profile used for runtime testing.
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - There is no more memory. Any memory allocated will be freed on return.
 ///
-pub fn init(allocator: *Allocator, mem_profile: *const mem.MemProfile) Allocator.Error!void {
+pub fn init(allocator: Allocator, mem_profile: *const mem.MemProfile) Allocator.Error!void {
     // TODO: Maybe move the task init here?
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
@@ -170,7 +170,7 @@ fn test_fn2() void {}
 
 var test_pid_counter: u7 = 1;
 
-fn createTestTask(entry_point: EntryPoint, allocator: *Allocator, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(u8)) Allocator.Error!*Task {
+fn createTestTask(allocator: Allocator) Allocator.Error!*Task {
     var t = try allocator.create(Task);
     errdefer allocator.destroy(t);
     t.pid = test_pid_counter;
@@ -181,7 +181,7 @@ fn createTestTask(entry_point: EntryPoint, allocator: *Allocator, kernel: bool, 
     return t;
 }
 
-fn destroyTestTask(self: *Task, allocator: *Allocator) void {
+fn destroyTestTask(self: *Task, allocator: Allocator) void {
     if (@ptrToInt(self.kernel_stack.ptr) != @ptrToInt(&KERNEL_STACK_START)) {
         allocator.free(self.kernel_stack);
     }
@@ -214,26 +214,26 @@ test "pickNextTask" {
     const fn1_stack_pointer = test_fn1_task.stack_pointer;
     const fn2_stack_pointer = test_fn2_task.stack_pointer;
 
-    expectEqual(pickNextTask(&ctx), fn1_stack_pointer);
+    try expectEqual(pickNextTask(&ctx), fn1_stack_pointer);
     // The stack pointer of the re-added task should point to the context
-    expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
+    try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
     // Should be the PID of the next task
-    expectEqual(current_task.pid, 1);
+    try expectEqual(current_task.pid, 1);
 
-    expectEqual(pickNextTask(&ctx), fn2_stack_pointer);
+    try expectEqual(pickNextTask(&ctx), fn2_stack_pointer);
     // The stack pointer of the re-added task should point to the context
-    expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
+    try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
     // Should be the PID of the next task
-    expectEqual(current_task.pid, 2);
+    try expectEqual(current_task.pid, 2);
 
-    expectEqual(pickNextTask(&ctx), @ptrToInt(&ctx));
+    try expectEqual(pickNextTask(&ctx), @ptrToInt(&ctx));
     // The stack pointer of the re-added task should point to the context
-    expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
+    try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
     // Should be back tot he beginning
-    expectEqual(current_task.pid, 0);
+    try expectEqual(current_task.pid, 0);
 
     // Reset the test pid
     test_pid_counter = 1;
@@ -255,7 +255,7 @@ test "createNewTask add new task" {
     defer test_fn1_task.destroy(allocator);
     try scheduleTask(test_fn1_task, allocator);
 
-    expectEqual(tasks.len, 1);
+    try expectEqual(tasks.len, 1);
 
     // Free the memory
     allocator.destroy(tasks.first.?);
@@ -266,11 +266,11 @@ test "init" {
 
     try init(allocator, undefined);
 
-    expectEqual(current_task.pid, 0);
-    expectEqual(@ptrToInt(current_task.kernel_stack.ptr), @ptrToInt(&KERNEL_STACK_START));
-    expectEqual(current_task.kernel_stack.len, @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START));
+    try expectEqual(current_task.pid, 0);
+    try expectEqual(@ptrToInt(current_task.kernel_stack.ptr), @ptrToInt(&KERNEL_STACK_START));
+    try expectEqual(current_task.kernel_stack.len, @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START));
 
-    expectEqual(tasks.len, 1);
+    try expectEqual(tasks.len, 1);
 
     // Free the tasks created
     current_task.destroy(allocator);
@@ -298,9 +298,9 @@ fn task_function() noreturn {
 /// occurs. Also tests that a global volatile can be test in one task and be reacted to in another.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to use when needing to allocate memory.
+///     IN allocator: Allocator - The allocator to use when needing to allocate memory.
 ///
-fn rt_variable_preserved(allocator: *Allocator) void {
+fn rt_variable_preserved(allocator: Allocator) void {
     // Create the memory for the boolean
     is_set = allocator.create(bool) catch unreachable;
     defer allocator.destroy(is_set);
@@ -353,7 +353,7 @@ fn rt_variable_preserved(allocator: *Allocator) void {
 ///     IN allocator: *std.mem.Allocator - The allocator to use when intialising the task
 ///     IN mem_profile: mem.MemProfile - The system's memory profile. Determines the end address of the user task's VMM.
 ///
-fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void {
+fn rt_user_task(allocator: Allocator, mem_profile: *const mem.MemProfile) void {
     for (&[_][]const u8{ "/user_program_data.elf", "/user_program.elf" }) |user_program| {
         // 1. Create user VMM
         var task_vmm = allocator.create(vmm.VirtualMemoryManager(arch.VmmPayload)) catch |e| {
@@ -369,10 +369,8 @@ fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void 
         const code_len = user_program_file.read(code[0..code.len]) catch |e| {
             panic(@errorReturnTrace(), "Failed to read {s}: {}\n", .{ user_program, e });
         };
-        const program_elf = elf.Elf.init(code[0..code_len], builtin.arch, allocator) catch |e| panic(@errorReturnTrace(), "Failed to load {s}: {}\n", .{ user_program, e });
+        const program_elf = elf.Elf.init(code[0..code_len], builtin.cpu.arch, allocator) catch |e| panic(@errorReturnTrace(), "Failed to load {s}: {}\n", .{ user_program, e });
         defer program_elf.deinit();
-
-        const current_physical_blocks = pmm.blocksFree();
 
         var user_task = task.Task.createFromElf(program_elf, false, task_vmm, allocator) catch |e| {
             panic(@errorReturnTrace(), "Failed to create task for {s}: {}\n", .{ user_program, e });
@@ -407,10 +405,10 @@ fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void 
 /// The scheduler runtime tests that will test the scheduling functionality.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to use when needing to allocate memory.
+///     IN allocator: Allocator - The allocator to use when needing to allocate memory.
 ///     IN mem_profile: *const mem.MemProfile - The system's memory profile. Used to set up user task VMMs.
 ///
-fn runtimeTests(allocator: *Allocator, mem_profile: *const mem.MemProfile) void {
+fn runtimeTests(allocator: Allocator, mem_profile: *const mem.MemProfile) void {
     arch.enableInterrupts();
     rt_user_task(allocator, mem_profile);
     rt_variable_preserved(allocator);

@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const testing = std.testing;
 const Allocator = std.mem.Allocator;
 
@@ -50,7 +50,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         ///
         pub fn setEntry(self: *Self, idx: IndexType) void {
             if (!self.isSet(idx)) {
-                self.bitmap |= self.indexToBit(idx);
+                self.bitmap |= indexToBit(idx);
                 self.num_free_entries -= 1;
             }
         }
@@ -64,7 +64,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         ///
         pub fn clearEntry(self: *Self, idx: IndexType) void {
             if (self.isSet(idx)) {
-                self.bitmap &= ~self.indexToBit(idx);
+                self.bitmap &= ~indexToBit(idx);
                 self.num_free_entries += 1;
             }
         }
@@ -79,7 +79,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         /// Return: BitmapType.
         ///     The bit corresponding to that index but within a single BitmapType.
         ///
-        fn indexToBit(self: *const Self, idx: IndexType) BitmapType {
+        fn indexToBit(idx: IndexType) BitmapType {
             return @as(BitmapType, 1) << idx;
         }
 
@@ -178,7 +178,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         ///     True if the entry is set, else false.
         ///
         pub fn isSet(self: *const Self, idx: IndexType) bool {
-            return (self.bitmap & self.indexToBit(idx)) != 0;
+            return (self.bitmap & indexToBit(idx)) != 0;
         }
     };
 }
@@ -215,7 +215,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         num_entries: usize,
         bitmaps: []BitmapType,
         num_free_entries: usize,
-        allocator: *std.mem.Allocator,
+        allocator: Allocator,
 
         ///
         /// Create an instance of this bitmap type.
@@ -223,15 +223,15 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Arguments:
         ///     IN num_entries: usize - The number of entries that the bitmap created will have.
         ///         The number of BitmapType required to store this many entries will be allocated and each will be zeroed.
-        ///     IN allocator: *std.mem.Allocator - The allocator to use when allocating the BitmapTypes required.
+        ///     IN allocator: Allocator - The allocator to use when allocating the BitmapTypes required.
         ///
         /// Return: Self.
         ///     The bitmap instance.
         ///
-        /// Error: std.mem.Allocator.Error
+        /// Error: Allocator.Error
         ///     OutOfMemory: There isn't enough memory available to allocate the required number of BitmapType.
         ///
-        pub fn init(num_entries: usize, allocator: *std.mem.Allocator) !Self {
+        pub fn init(num_entries: usize, allocator: Allocator) !Self {
             const num = std.mem.alignForward(num_entries, ENTRIES_PER_BITMAP) / ENTRIES_PER_BITMAP;
             const self = Self{
                 .num_bitmaps = num,
@@ -255,10 +255,10 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Return: Self
         ///     The cloned bitmap
         ///
-        /// Error: std.mem.Allocator.Error
+        /// Error: Allocator.Error
         ///     OutOfMemory: There isn't enough memory available to allocate the required number of BitmapType.
         ///
-        pub fn clone(self: *const Self) std.mem.Allocator.Error!Self {
+        pub fn clone(self: *const Self) Allocator.Error!Self {
             var copy = try init(self.num_entries, self.allocator);
             var i: usize = 0;
             while (i < copy.num_entries) : (i += 1) {
@@ -294,7 +294,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
                 return BitmapError.OutOfBounds;
             }
             if (!try self.isSet(idx)) {
-                const bit = self.indexToBit(idx);
+                const bit = indexToBit(idx);
                 self.bitmaps[idx / ENTRIES_PER_BITMAP] |= bit;
                 self.num_free_entries -= 1;
             }
@@ -315,7 +315,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
                 return BitmapError.OutOfBounds;
             }
             if (try self.isSet(idx)) {
-                const bit = self.indexToBit(idx);
+                const bit = indexToBit(idx);
                 self.bitmaps[idx / ENTRIES_PER_BITMAP] &= ~bit;
                 self.num_free_entries += 1;
             }
@@ -331,7 +331,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Return: BitmapType.
         ///     The bit corresponding to that index but within a single BitmapType.
         ///
-        fn indexToBit(self: *const Self, idx: usize) BitmapType {
+        fn indexToBit(idx: usize) BitmapType {
             return @as(BitmapType, 1) << @intCast(IndexType, idx % ENTRIES_PER_BITMAP);
         }
 
@@ -454,73 +454,73 @@ pub fn Bitmap(comptime BitmapType: type) type {
             if (idx >= self.num_entries) {
                 return BitmapError.OutOfBounds;
             }
-            return (self.bitmaps[idx / ENTRIES_PER_BITMAP] & self.indexToBit(idx)) != 0;
+            return (self.bitmaps[idx / ENTRIES_PER_BITMAP] & indexToBit(idx)) != 0;
         }
     };
 }
 
 test "Comptime setEntry" {
     var bmp = ComptimeBitmap(u32).init();
-    testing.expectEqual(@as(u32, 32), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 32), bmp.num_free_entries);
 
     bmp.setEntry(0);
-    testing.expectEqual(@as(u32, 1), bmp.bitmap);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 1), bmp.bitmap);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
 
     bmp.setEntry(1);
-    testing.expectEqual(@as(u32, 3), bmp.bitmap);
-    testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 3), bmp.bitmap);
+    try testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
 
     // Repeat setting entry 1 to make sure state doesn't change
     bmp.setEntry(1);
-    testing.expectEqual(@as(u32, 3), bmp.bitmap);
-    testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 3), bmp.bitmap);
+    try testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
 }
 
 test "Comptime clearEntry" {
     var bmp = ComptimeBitmap(u32).init();
-    testing.expectEqual(@as(u32, 32), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 32), bmp.num_free_entries);
 
     bmp.setEntry(0);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
     bmp.setEntry(1);
-    testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
-    testing.expectEqual(@as(u32, 3), bmp.bitmap);
+    try testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 3), bmp.bitmap);
     bmp.clearEntry(0);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
-    testing.expectEqual(@as(u32, 2), bmp.bitmap);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 2), bmp.bitmap);
 
     // Repeat to make sure state doesn't change
     bmp.clearEntry(0);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
-    testing.expectEqual(@as(u32, 2), bmp.bitmap);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 2), bmp.bitmap);
 
     // Try clearing an unset entry to make sure state doesn't change
     bmp.clearEntry(2);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
-    testing.expectEqual(@as(u32, 2), bmp.bitmap);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 2), bmp.bitmap);
 }
 
 test "Comptime setFirstFree" {
     var bmp = ComptimeBitmap(u32).init();
 
     // Allocate the first entry
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
-    testing.expectEqual(bmp.bitmap, 1);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
+    try testing.expectEqual(bmp.bitmap, 1);
 
     // Allocate the second entry
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, 1);
-    testing.expectEqual(bmp.bitmap, 3);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, 1);
+    try testing.expectEqual(bmp.bitmap, 3);
 
     // Make all but the MSB occupied and try to allocate it
     bmp.bitmap = ComptimeBitmap(u32).BITMAP_FULL & ~@as(u32, 1 << (ComptimeBitmap(u32).NUM_ENTRIES - 1));
     bmp.num_free_entries = 1;
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, ComptimeBitmap(u32).NUM_ENTRIES - 1);
-    testing.expectEqual(bmp.bitmap, ComptimeBitmap(u32).BITMAP_FULL);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, ComptimeBitmap(u32).NUM_ENTRIES - 1);
+    try testing.expectEqual(bmp.bitmap, ComptimeBitmap(u32).BITMAP_FULL);
 
     // We should no longer be able to allocate any entries
-    testing.expectEqual(bmp.setFirstFree(), null);
-    testing.expectEqual(bmp.bitmap, ComptimeBitmap(u32).BITMAP_FULL);
+    try testing.expectEqual(bmp.setFirstFree(), null);
+    try testing.expectEqual(bmp.bitmap, ComptimeBitmap(u32).BITMAP_FULL);
 }
 
 test "Comptime isSet" {
@@ -528,127 +528,127 @@ test "Comptime isSet" {
 
     bmp.bitmap = 1;
     // Make sure that only the set entry is considered set
-    testing.expect(bmp.isSet(0));
+    try testing.expect(bmp.isSet(0));
     var i: usize = 1;
     while (i < ComptimeBitmap(u32).NUM_ENTRIES) : (i += 1) {
-        testing.expect(!bmp.isSet(@truncate(ComptimeBitmap(u32).IndexType, i)));
+        try testing.expect(!bmp.isSet(@truncate(ComptimeBitmap(u32).IndexType, i)));
     }
 
     bmp.bitmap = 3;
-    testing.expect(bmp.isSet(0));
-    testing.expect(bmp.isSet(1));
+    try testing.expect(bmp.isSet(0));
+    try testing.expect(bmp.isSet(1));
     i = 2;
     while (i < ComptimeBitmap(u32).NUM_ENTRIES) : (i += 1) {
-        testing.expect(!bmp.isSet(@truncate(ComptimeBitmap(u32).IndexType, i)));
+        try testing.expect(!bmp.isSet(@truncate(ComptimeBitmap(u32).IndexType, i)));
     }
 
     bmp.bitmap = 11;
-    testing.expect(bmp.isSet(0));
-    testing.expect(bmp.isSet(1));
-    testing.expect(!bmp.isSet(2));
-    testing.expect(bmp.isSet(3));
+    try testing.expect(bmp.isSet(0));
+    try testing.expect(bmp.isSet(1));
+    try testing.expect(!bmp.isSet(2));
+    try testing.expect(bmp.isSet(3));
     i = 4;
     while (i < ComptimeBitmap(u32).NUM_ENTRIES) : (i += 1) {
-        testing.expect(!bmp.isSet(@truncate(ComptimeBitmap(u32).IndexType, i)));
+        try testing.expect(!bmp.isSet(@truncate(ComptimeBitmap(u32).IndexType, i)));
     }
 }
 
 test "Comptime indexToBit" {
-    var bmp = ComptimeBitmap(u8).init();
-    testing.expectEqual(bmp.indexToBit(0), 1);
-    testing.expectEqual(bmp.indexToBit(1), 2);
-    testing.expectEqual(bmp.indexToBit(2), 4);
-    testing.expectEqual(bmp.indexToBit(3), 8);
-    testing.expectEqual(bmp.indexToBit(4), 16);
-    testing.expectEqual(bmp.indexToBit(5), 32);
-    testing.expectEqual(bmp.indexToBit(6), 64);
-    testing.expectEqual(bmp.indexToBit(7), 128);
+    const Type = ComptimeBitmap(u8);
+    try testing.expectEqual(Type.indexToBit(0), 1);
+    try testing.expectEqual(Type.indexToBit(1), 2);
+    try testing.expectEqual(Type.indexToBit(2), 4);
+    try testing.expectEqual(Type.indexToBit(3), 8);
+    try testing.expectEqual(Type.indexToBit(4), 16);
+    try testing.expectEqual(Type.indexToBit(5), 32);
+    try testing.expectEqual(Type.indexToBit(6), 64);
+    try testing.expectEqual(Type.indexToBit(7), 128);
 }
 
 test "Comptime setContiguous" {
     var bmp = ComptimeBitmap(u16).init();
     // Test trying to set more entries than the bitmap has
-    testing.expectEqual(bmp.setContiguous(bmp.num_free_entries + 1, null), null);
-    testing.expectEqual(bmp.setContiguous(bmp.num_free_entries + 1, 1), null);
+    try testing.expectEqual(bmp.setContiguous(bmp.num_free_entries + 1, null), null);
+    try testing.expectEqual(bmp.setContiguous(bmp.num_free_entries + 1, 1), null);
     // All entries should still be free
-    testing.expectEqual(bmp.num_free_entries, 16);
-    testing.expectEqual(bmp.bitmap, 0b0000000000000000);
+    try testing.expectEqual(bmp.num_free_entries, 16);
+    try testing.expectEqual(bmp.bitmap, 0b0000000000000000);
 
-    testing.expectEqual(bmp.setContiguous(3, 0) orelse unreachable, 0);
-    testing.expectEqual(bmp.bitmap, 0b0000000000000111);
+    try testing.expectEqual(bmp.setContiguous(3, 0) orelse unreachable, 0);
+    try testing.expectEqual(bmp.bitmap, 0b0000000000000111);
 
     // Test setting from top
-    testing.expectEqual(bmp.setContiguous(2, 14) orelse unreachable, 14);
-    testing.expectEqual(bmp.bitmap, 0b1100000000000111);
+    try testing.expectEqual(bmp.setContiguous(2, 14) orelse unreachable, 14);
+    try testing.expectEqual(bmp.bitmap, 0b1100000000000111);
 
-    testing.expectEqual(bmp.setContiguous(3, 12), null);
-    testing.expectEqual(bmp.bitmap, 0b1100000000000111);
+    try testing.expectEqual(bmp.setContiguous(3, 12), null);
+    try testing.expectEqual(bmp.bitmap, 0b1100000000000111);
 
-    testing.expectEqual(bmp.setContiguous(3, null) orelse unreachable, 3);
-    testing.expectEqual(bmp.bitmap, 0b1100000000111111);
+    try testing.expectEqual(bmp.setContiguous(3, null) orelse unreachable, 3);
+    try testing.expectEqual(bmp.bitmap, 0b1100000000111111);
 
     // Test setting beyond the what is available
-    testing.expectEqual(bmp.setContiguous(9, null), null);
-    testing.expectEqual(bmp.bitmap, 0b1100000000111111);
+    try testing.expectEqual(bmp.setContiguous(9, null), null);
+    try testing.expectEqual(bmp.bitmap, 0b1100000000111111);
 
-    testing.expectEqual(bmp.setContiguous(8, null) orelse unreachable, 6);
-    testing.expectEqual(bmp.bitmap, 0b1111111111111111);
+    try testing.expectEqual(bmp.setContiguous(8, null) orelse unreachable, 6);
+    try testing.expectEqual(bmp.bitmap, 0b1111111111111111);
 
     // No more are possible
-    testing.expectEqual(bmp.setContiguous(1, null), null);
-    testing.expectEqual(bmp.bitmap, 0b1111111111111111);
+    try testing.expectEqual(bmp.setContiguous(1, null), null);
+    try testing.expectEqual(bmp.bitmap, 0b1111111111111111);
 
-    testing.expectEqual(bmp.setContiguous(1, 0), null);
-    testing.expectEqual(bmp.bitmap, 0b1111111111111111);
+    try testing.expectEqual(bmp.setContiguous(1, 0), null);
+    try testing.expectEqual(bmp.bitmap, 0b1111111111111111);
 }
 
 test "setEntry" {
     var bmp = try Bitmap(u32).init(31, std.testing.allocator);
     defer bmp.deinit();
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
 
     try bmp.setEntry(0);
-    testing.expectEqual(@as(u32, 1), bmp.bitmaps[0]);
-    testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 1), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
 
     try bmp.setEntry(1);
-    testing.expectEqual(@as(u32, 3), bmp.bitmaps[0]);
-    testing.expectEqual(@as(u32, 29), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 3), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u32, 29), bmp.num_free_entries);
 
     // Repeat setting entry 1 to make sure state doesn't change
     try bmp.setEntry(1);
-    testing.expectEqual(@as(u32, 3), bmp.bitmaps[0]);
-    testing.expectEqual(@as(u32, 29), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 3), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u32, 29), bmp.num_free_entries);
 
-    testing.expectError(Bitmap(u32).BitmapError.OutOfBounds, bmp.setEntry(31));
-    testing.expectEqual(@as(u32, 29), bmp.num_free_entries);
+    try testing.expectError(Bitmap(u32).BitmapError.OutOfBounds, bmp.setEntry(31));
+    try testing.expectEqual(@as(u32, 29), bmp.num_free_entries);
 }
 
 test "clearEntry" {
     var bmp = try Bitmap(u32).init(32, std.testing.allocator);
     defer bmp.deinit();
-    testing.expectEqual(@as(u32, 32), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 32), bmp.num_free_entries);
 
     try bmp.setEntry(0);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
     try bmp.setEntry(1);
-    testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
-    testing.expectEqual(@as(u32, 3), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u32, 30), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 3), bmp.bitmaps[0]);
     try bmp.clearEntry(0);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
-    testing.expectEqual(@as(u32, 2), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 2), bmp.bitmaps[0]);
 
     // Repeat to make sure state doesn't change
     try bmp.clearEntry(0);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
-    testing.expectEqual(@as(u32, 2), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 2), bmp.bitmaps[0]);
 
     // Try clearing an unset entry to make sure state doesn't change
     try bmp.clearEntry(2);
-    testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
-    testing.expectEqual(@as(u32, 2), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u32, 31), bmp.num_free_entries);
+    try testing.expectEqual(@as(u32, 2), bmp.bitmaps[0]);
 
-    testing.expectError(Bitmap(u32).BitmapError.OutOfBounds, bmp.clearEntry(32));
+    try testing.expectError(Bitmap(u32).BitmapError.OutOfBounds, bmp.clearEntry(32));
 }
 
 test "setFirstFree multiple bitmaps" {
@@ -656,19 +656,19 @@ test "setFirstFree multiple bitmaps" {
     defer bmp.deinit();
 
     // Allocate the first entry
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
-    testing.expectEqual(bmp.bitmaps[0], 1);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
+    try testing.expectEqual(bmp.bitmaps[0], 1);
 
     // Allocate the second entry
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, 1);
-    testing.expectEqual(bmp.bitmaps[0], 3);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, 1);
+    try testing.expectEqual(bmp.bitmaps[0], 3);
 
     // Allocate the entirety of the first bitmap
     var entry: u32 = 2;
     var expected: u8 = 7;
     while (entry < Bitmap(u8).ENTRIES_PER_BITMAP) {
-        testing.expectEqual(bmp.setFirstFree() orelse unreachable, entry);
-        testing.expectEqual(bmp.bitmaps[0], expected);
+        try testing.expectEqual(bmp.setFirstFree() orelse unreachable, entry);
+        try testing.expectEqual(bmp.bitmaps[0], expected);
         if (entry + 1 < Bitmap(u8).ENTRIES_PER_BITMAP) {
             entry += 1;
             expected = expected * 2 + 1;
@@ -678,14 +678,14 @@ test "setFirstFree multiple bitmaps" {
     }
 
     // Try allocating an entry in the next bitmap
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, Bitmap(u8).ENTRIES_PER_BITMAP);
-    testing.expectEqual(bmp.bitmaps[0], Bitmap(u8).BITMAP_FULL);
-    testing.expectEqual(bmp.bitmaps[1], 1);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, Bitmap(u8).ENTRIES_PER_BITMAP);
+    try testing.expectEqual(bmp.bitmaps[0], Bitmap(u8).BITMAP_FULL);
+    try testing.expectEqual(bmp.bitmaps[1], 1);
 
     // We should no longer be able to allocate any entries
-    testing.expectEqual(bmp.setFirstFree(), null);
-    testing.expectEqual(bmp.bitmaps[0], Bitmap(u8).BITMAP_FULL);
-    testing.expectEqual(bmp.bitmaps[1], 1);
+    try testing.expectEqual(bmp.setFirstFree(), null);
+    try testing.expectEqual(bmp.bitmaps[0], Bitmap(u8).BITMAP_FULL);
+    try testing.expectEqual(bmp.bitmaps[1], 1);
 }
 
 test "setFirstFree" {
@@ -693,21 +693,21 @@ test "setFirstFree" {
     defer bmp.deinit();
 
     // Allocate the first entry
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
-    testing.expectEqual(bmp.bitmaps[0], 1);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, 0);
+    try testing.expectEqual(bmp.bitmaps[0], 1);
 
     // Allocate the second entry
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, 1);
-    testing.expectEqual(bmp.bitmaps[0], 3);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, 1);
+    try testing.expectEqual(bmp.bitmaps[0], 3);
 
     // Make all but the MSB occupied and try to allocate it
     bmp.bitmaps[0] = Bitmap(u32).BITMAP_FULL & ~@as(u32, 1 << (Bitmap(u32).ENTRIES_PER_BITMAP - 1));
-    testing.expectEqual(bmp.setFirstFree() orelse unreachable, Bitmap(u32).ENTRIES_PER_BITMAP - 1);
-    testing.expectEqual(bmp.bitmaps[0], Bitmap(u32).BITMAP_FULL);
+    try testing.expectEqual(bmp.setFirstFree() orelse unreachable, Bitmap(u32).ENTRIES_PER_BITMAP - 1);
+    try testing.expectEqual(bmp.bitmaps[0], Bitmap(u32).BITMAP_FULL);
 
     // We should no longer be able to allocate any entries
-    testing.expectEqual(bmp.setFirstFree(), null);
-    testing.expectEqual(bmp.bitmaps[0], Bitmap(u32).BITMAP_FULL);
+    try testing.expectEqual(bmp.setFirstFree(), null);
+    try testing.expectEqual(bmp.bitmaps[0], Bitmap(u32).BITMAP_FULL);
 }
 
 test "isSet" {
@@ -716,89 +716,90 @@ test "isSet" {
 
     bmp.bitmaps[0] = 1;
     // Make sure that only the set entry is considered set
-    testing.expect(try bmp.isSet(0));
+    try testing.expect(try bmp.isSet(0));
     var i: u32 = 1;
     while (i < bmp.num_entries) : (i += 1) {
-        testing.expect(!try bmp.isSet(i));
+        try testing.expect(!try bmp.isSet(i));
     }
 
     bmp.bitmaps[0] = 3;
-    testing.expect(try bmp.isSet(0));
-    testing.expect(try bmp.isSet(1));
+    try testing.expect(try bmp.isSet(0));
+    try testing.expect(try bmp.isSet(1));
     i = 2;
     while (i < bmp.num_entries) : (i += 1) {
-        testing.expect(!try bmp.isSet(i));
+        try testing.expect(!try bmp.isSet(i));
     }
 
     bmp.bitmaps[0] = 11;
-    testing.expect(try bmp.isSet(0));
-    testing.expect(try bmp.isSet(1));
-    testing.expect(!try bmp.isSet(2));
-    testing.expect(try bmp.isSet(3));
+    try testing.expect(try bmp.isSet(0));
+    try testing.expect(try bmp.isSet(1));
+    try testing.expect(!try bmp.isSet(2));
+    try testing.expect(try bmp.isSet(3));
     i = 4;
     while (i < bmp.num_entries) : (i += 1) {
-        testing.expect(!try bmp.isSet(i));
+        try testing.expect(!try bmp.isSet(i));
     }
 
-    testing.expectError(Bitmap(u32).BitmapError.OutOfBounds, bmp.isSet(33));
+    try testing.expectError(Bitmap(u32).BitmapError.OutOfBounds, bmp.isSet(33));
 }
 
 test "indexToBit" {
-    var bmp = try Bitmap(u8).init(10, std.testing.allocator);
+    const Type = Bitmap(u8);
+    var bmp = try Type.init(10, std.testing.allocator);
     defer bmp.deinit();
-    testing.expectEqual(bmp.indexToBit(0), 1);
-    testing.expectEqual(bmp.indexToBit(1), 2);
-    testing.expectEqual(bmp.indexToBit(2), 4);
-    testing.expectEqual(bmp.indexToBit(3), 8);
-    testing.expectEqual(bmp.indexToBit(4), 16);
-    testing.expectEqual(bmp.indexToBit(5), 32);
-    testing.expectEqual(bmp.indexToBit(6), 64);
-    testing.expectEqual(bmp.indexToBit(7), 128);
-    testing.expectEqual(bmp.indexToBit(8), 1);
-    testing.expectEqual(bmp.indexToBit(9), 2);
+    try testing.expectEqual(Type.indexToBit(0), 1);
+    try testing.expectEqual(Type.indexToBit(1), 2);
+    try testing.expectEqual(Type.indexToBit(2), 4);
+    try testing.expectEqual(Type.indexToBit(3), 8);
+    try testing.expectEqual(Type.indexToBit(4), 16);
+    try testing.expectEqual(Type.indexToBit(5), 32);
+    try testing.expectEqual(Type.indexToBit(6), 64);
+    try testing.expectEqual(Type.indexToBit(7), 128);
+    try testing.expectEqual(Type.indexToBit(8), 1);
+    try testing.expectEqual(Type.indexToBit(9), 2);
 }
 
-fn testCheckBitmaps(bmp: Bitmap(u4), b1: u4, b2: u4, b3: u4, b4: u4) void {
-    testing.expectEqual(@as(u4, b1), bmp.bitmaps[0]);
-    testing.expectEqual(@as(u4, b2), bmp.bitmaps[1]);
-    testing.expectEqual(@as(u4, b3), bmp.bitmaps[2]);
-    testing.expectEqual(@as(u4, b4), bmp.bitmaps[3]);
+fn testCheckBitmaps(bmp: Bitmap(u4), b1: u4, b2: u4, b3: u4, b4: u4) !void {
+    try testing.expectEqual(@as(u4, b1), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u4, b2), bmp.bitmaps[1]);
+    try testing.expectEqual(@as(u4, b3), bmp.bitmaps[2]);
+    try testing.expectEqual(@as(u4, b4), bmp.bitmaps[3]);
 }
 
 test "setContiguous" {
     var bmp = try Bitmap(u4).init(16, std.testing.allocator);
     defer bmp.deinit();
     // Test trying to set more entries than the bitmap has
-    testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1, null), null);
-    testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1, 1), null);
+    try testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1, null), null);
+    try testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1, 1), null);
     // All entries should still be free
-    testing.expectEqual(bmp.num_free_entries, bmp.num_entries);
-    testCheckBitmaps(bmp, 0, 0, 0, 0);
+    try testing.expectEqual(bmp.num_free_entries, bmp.num_entries);
+    try testCheckBitmaps(bmp, 0, 0, 0, 0);
 
-    testing.expectEqual(bmp.setContiguous(3, 0) orelse unreachable, 0);
-    testCheckBitmaps(bmp, 0b0111, 0, 0, 0);
+    try testing.expectEqual(bmp.setContiguous(3, 0) orelse unreachable, 0);
+    try testCheckBitmaps(bmp, 0b0111, 0, 0, 0);
 
     // Test setting from top
-    testing.expectEqual(bmp.setContiguous(2, 14) orelse unreachable, 14);
-    testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
+    try testing.expectEqual(bmp.setContiguous(2, 14) orelse unreachable, 14);
+    try testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
 
-    testing.expectEqual(bmp.setContiguous(3, 12), null);
-    testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
+    try testing.expectEqual(bmp.setContiguous(3, 12), null);
+    try testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
 
-    testing.expectEqual(bmp.setContiguous(3, null) orelse unreachable, 3);
-    testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
+    try testing.expectEqual(bmp.setContiguous(3, null) orelse unreachable, 3);
+    try testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
 
     // Test setting beyond the what is available
-    testing.expectEqual(bmp.setContiguous(9, null), null);
-    testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
+    try testing.expectEqual(bmp.setContiguous(9, null), null);
+    try testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
 
-    testing.expectEqual(bmp.setContiguous(8, null) orelse unreachable, 6);
-    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
+    try testing.expectEqual(bmp.setContiguous(8, null) orelse unreachable, 6);
+    try testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
 
     // No more are possible
-    testing.expectEqual(bmp.setContiguous(1, null), null);
-    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
+    try testing.expectEqual(bmp.setContiguous(1, null), null);
+    try testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
 
-    testing.expectEqual(bmp.setContiguous(1, 0), null);
-    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
+    try testing.expectEqual(bmp.setContiguous(1, 0), null);
+    try testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
 }

@@ -120,16 +120,16 @@ pub const MEMORY_BLOCK_SIZE: usize = paging.PAGE_SIZE_4KB;
 pub fn in(comptime Type: type, port: u16) Type {
     return switch (Type) {
         u8 => asm volatile ("inb %[port], %[result]"
-            : [result] "={al}" (-> Type)
-            : [port] "N{dx}" (port)
+            : [result] "={al}" (-> Type),
+            : [port] "N{dx}" (port),
         ),
         u16 => asm volatile ("inw %[port], %[result]"
-            : [result] "={ax}" (-> Type)
-            : [port] "N{dx}" (port)
+            : [result] "={ax}" (-> Type),
+            : [port] "N{dx}" (port),
         ),
         u32 => asm volatile ("inl %[port], %[result]"
-            : [result] "={eax}" (-> Type)
-            : [port] "N{dx}" (port)
+            : [result] "={eax}" (-> Type),
+            : [port] "N{dx}" (port),
         ),
         else => @compileError("Invalid data type. Only u8, u16 or u32, found: " ++ @typeName(Type)),
     };
@@ -147,17 +147,17 @@ pub fn out(port: u16, data: anytype) void {
         u8 => asm volatile ("outb %[data], %[port]"
             :
             : [port] "{dx}" (port),
-              [data] "{al}" (data)
+              [data] "{al}" (data),
         ),
         u16 => asm volatile ("outw %[data], %[port]"
             :
             : [port] "{dx}" (port),
-              [data] "{ax}" (data)
+              [data] "{ax}" (data),
         ),
         u32 => asm volatile ("outl %[data], %[port]"
             :
             : [port] "{dx}" (port),
-              [data] "{eax}" (data)
+              [data] "{eax}" (data),
         ),
         else => @compileError("Invalid data type. Only u8, u16 or u32, found: " ++ @typeName(@TypeOf(data))),
     }
@@ -182,13 +182,13 @@ pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
     // Load the GDT into the CPU
     asm volatile ("lgdt (%%eax)"
         :
-        : [gdt_ptr] "{eax}" (gdt_ptr)
+        : [gdt_ptr] "{eax}" (gdt_ptr),
     );
 
     // Load the kernel data segment, index into the GDT
     asm volatile ("mov %%bx, %%ds"
         :
-        : [KERNEL_DATA_OFFSET] "{bx}" (gdt.KERNEL_DATA_OFFSET)
+        : [KERNEL_DATA_OFFSET] "{bx}" (gdt.KERNEL_DATA_OFFSET),
     );
 
     asm volatile ("mov %%bx, %%es");
@@ -212,7 +212,7 @@ pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
 pub fn sgdt() gdt.GdtPtr {
     var gdt_ptr = gdt.GdtPtr{ .limit = 0, .base = 0 };
     asm volatile ("sgdt %[tab]"
-        : [tab] "=m" (gdt_ptr)
+        : [tab] "=m" (gdt_ptr),
     );
     return gdt_ptr;
 }
@@ -226,7 +226,7 @@ pub fn sgdt() gdt.GdtPtr {
 pub fn ltr(offset: u16) void {
     asm volatile ("ltr %%ax"
         :
-        : [offset] "{ax}" (offset)
+        : [offset] "{ax}" (offset),
     );
 }
 
@@ -239,7 +239,7 @@ pub fn ltr(offset: u16) void {
 pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
     asm volatile ("lidt (%%eax)"
         :
-        : [idt_ptr] "{eax}" (idt_ptr)
+        : [idt_ptr] "{eax}" (idt_ptr),
     );
 }
 
@@ -252,7 +252,7 @@ pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
 pub fn sidt() idt.IdtPtr {
     var idt_ptr = idt.IdtPtr{ .limit = 0, .base = 0 };
     asm volatile ("sidt %[tab]"
-        : [tab] "=m" (idt_ptr)
+        : [tab] "=m" (idt_ptr),
     );
     return idt_ptr;
 }
@@ -318,6 +318,8 @@ fn writeSerialCom1(byte: u8) void {
 ///     The Serial instance constructed with the function used to write bytes
 ///
 pub fn initSerial(boot_payload: BootPayload) Serial {
+    // Suppress unused var warning
+    _ = boot_payload;
     serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
         panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
     };
@@ -336,6 +338,8 @@ pub fn initSerial(boot_payload: BootPayload) Serial {
 ///     The TTY instance constructed with the information required by the rest of the kernel
 ///
 pub fn initTTY(boot_payload: BootPayload) TTY {
+    // Suppress unused var warning
+    _ = boot_payload;
     return .{
         .print = tty.writeString,
         .setCursor = tty.setCursor,
@@ -374,7 +378,7 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
     const mmap_addr = mb_info.mmap_addr;
     const num_mmap_entries = mb_info.mmap_length / @sizeOf(multiboot.multiboot_memory_map_t);
 
-    const allocator = &mem.fixed_buffer_allocator.allocator;
+    const allocator = mem.fixed_buffer_allocator.allocator();
     var reserved_physical_mem = std.ArrayList(mem.Range).init(allocator);
     var reserved_virtual_mem = std.ArrayList(mem.Map).init(allocator);
     const mem_map = @intToPtr([*]multiboot.multiboot_memory_map_t, mmap_addr)[0..num_mmap_entries];
@@ -488,7 +492,7 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
 /// x86 initialises the keyboard connected to the PS/2 port
 ///
 /// Arguments:
-///     IN allocator: *std.mem.Allocator - The allocator to use if necessary
+///     IN allocator: std.mem.Allocator - The allocator to use if necessary
 ///
 /// Return: *Keyboard
 ///     The initialised PS/2 keyboard
@@ -496,7 +500,7 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
 /// Error: std.mem.Allocator.Error
 ///     OutOfMemory - There wasn't enough memory to allocate what was needed
 ///
-pub fn initKeyboard(allocator: *Allocator) Allocator.Error!*Keyboard {
+pub fn initKeyboard(allocator: Allocator) Allocator.Error!*Keyboard {
     return keyboard.init(allocator);
 }
 
@@ -510,12 +514,12 @@ pub fn initKeyboard(allocator: *Allocator) Allocator.Error!*Keyboard {
 ///                                the initial CpuState on the kernel stack.
 ///     IN entry_point: usize    - The pointer to the entry point of the function. Functions only
 ///                                supported is fn () noreturn
-///     IN allocator: *Allocator - The allocator use for allocating a stack.
+///     IN allocator: Allocator - The allocator use for allocating a stack.
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - Unable to allocate space for the stack.
 ///
-pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocator.Error!void {
+pub fn initTask(task: *Task, entry_point: usize, allocator: Allocator) Allocator.Error!void {
     const data_offset = if (task.kernel) gdt.KERNEL_DATA_OFFSET else gdt.USER_DATA_OFFSET | 0b11;
     // Setting the bottom two bits of the code offset designates that this is a ring 3 task
     const code_offset = if (task.kernel) gdt.KERNEL_CODE_OFFSET else gdt.USER_CODE_OFFSET | 0b11;
@@ -573,7 +577,7 @@ pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocato
 /// Get a list of hardware devices attached to the system.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - An allocator for getting the devices
+///     IN allocator: Allocator - An allocator for getting the devices
 ///
 /// Return: []Device
 ///     A list of hardware devices.
@@ -581,7 +585,7 @@ pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocato
 /// Error: Allocator.Error
 ///     OutOfMemory - Unable to allocate space the operation.
 ///
-pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
+pub fn getDevices(allocator: Allocator) Allocator.Error![]Device {
     return pci.getDevices(allocator);
 }
 

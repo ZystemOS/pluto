@@ -4,7 +4,7 @@ const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const log = std.log.scoped(.x86_vga);
 const build_options = @import("build_options");
-const arch = if (is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 const panic = @import("../../panic.zig").panic;
 
 /// The port address for the VGA register selection.
@@ -121,7 +121,7 @@ var cursor_scanline_end: u8 = undefined;
 ///     IN index: u8 - The index to send to the port address to select the register to write data
 ///                    to.
 ///
-fn sendPort(index: u8) callconv(.Inline) void {
+inline fn sendPort(index: u8) void {
     arch.out(PORT_ADDRESS, index);
 }
 
@@ -131,7 +131,7 @@ fn sendPort(index: u8) callconv(.Inline) void {
 /// Arguments:
 ///     IN data: u8 - The data to send to the selected register.
 ///
-fn sendData(data: u8) callconv(.Inline) void {
+inline fn sendData(data: u8) void {
     arch.out(PORT_DATA, data);
 }
 
@@ -141,7 +141,7 @@ fn sendData(data: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The data in the selected register.
 ///
-fn getData() callconv(.Inline) u8 {
+inline fn getData() u8 {
     return arch.in(u8, PORT_DATA);
 }
 ///
@@ -152,7 +152,7 @@ fn getData() callconv(.Inline) u8 {
 //                     data to.
 ///     IN data: u8 - The data to send to the selected register.
 ///
-fn sendPortData(index: u8, data: u8) callconv(.Inline) void {
+inline fn sendPortData(index: u8, data: u8) void {
     sendPort(index);
     sendData(data);
 }
@@ -167,7 +167,7 @@ fn sendPortData(index: u8, data: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The data in the selected register.
 ///
-fn getPortData(index: u8) callconv(.Inline) u8 {
+inline fn getPortData(index: u8) u8 {
     sendPort(index);
     return getData();
 }
@@ -303,34 +303,34 @@ test "entryColour" {
     var fg = COLOUR_BLACK;
     var bg = COLOUR_BLACK;
     var res = entryColour(fg, bg);
-    expectEqual(@as(u8, 0x00), res);
+    try expectEqual(@as(u8, 0x00), res);
 
     fg = COLOUR_LIGHT_GREEN;
     bg = COLOUR_BLACK;
     res = entryColour(fg, bg);
-    expectEqual(@as(u8, 0x0A), res);
+    try expectEqual(@as(u8, 0x0A), res);
 
     fg = COLOUR_BLACK;
     bg = COLOUR_LIGHT_GREEN;
     res = entryColour(fg, bg);
-    expectEqual(@as(u8, 0xA0), res);
+    try expectEqual(@as(u8, 0xA0), res);
 
     fg = COLOUR_BROWN;
     bg = COLOUR_LIGHT_GREEN;
     res = entryColour(fg, bg);
-    expectEqual(@as(u8, 0xA6), res);
+    try expectEqual(@as(u8, 0xA6), res);
 }
 
 test "entry" {
     const colour = entryColour(COLOUR_BROWN, COLOUR_LIGHT_GREEN);
-    expectEqual(@as(u8, 0xA6), colour);
+    try expectEqual(@as(u8, 0xA6), colour);
 
     // Character '0' is 0x30
     var video_entry = entry('0', colour);
-    expectEqual(@as(u16, 0xA630), video_entry);
+    try expectEqual(@as(u16, 0xA630), video_entry);
 
     video_entry = entry(0x55, colour);
-    expectEqual(@as(u16, 0xA655), video_entry);
+    try expectEqual(@as(u16, 0xA655), video_entry);
 }
 
 test "updateCursor width out of bounds" {
@@ -447,7 +447,7 @@ test "getCursor 1: 10" {
     arch.addTestParams("in", .{ PORT_DATA, @as(u8, 0) });
 
     const actual = getCursor();
-    expectEqual(expect, actual);
+    try expectEqual(expect, actual);
 }
 
 test "getCursor 2: 0xBEEF" {
@@ -463,7 +463,7 @@ test "getCursor 2: 0xBEEF" {
     arch.addTestParams("in", .{ PORT_DATA, @as(u8, 0xBE) });
 
     const actual = getCursor();
-    expectEqual(expect, actual);
+    try expectEqual(expect, actual);
 }
 
 test "enableCursor" {

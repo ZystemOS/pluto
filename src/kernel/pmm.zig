@@ -2,8 +2,7 @@ const is_test = @import("builtin").is_test;
 const std = @import("std");
 const log = std.log.scoped(.pmm);
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig").internals;
+const arch = @import("arch.zig").internals;
 const MemProfile = @import("mem.zig").MemProfile;
 const testing = std.testing;
 const panic = @import("panic.zig").panic;
@@ -96,9 +95,9 @@ pub fn blocksFree() usize {
 ///
 /// Arguments:
 ///     IN mem: *const MemProfile - The system's memory profile.
-///     IN allocator: *Allocator - The allocator to use to allocate the bitmaps.
+///     IN allocator: Allocator - The allocator to use to allocate the bitmaps.
 ///
-pub fn init(mem_profile: *const MemProfile, allocator: *Allocator) void {
+pub fn init(mem_profile: *const MemProfile, allocator: Allocator) void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 
@@ -146,13 +145,13 @@ test "alloc" {
         i += 1;
         addr += BLOCK_SIZE;
     }) {
-        testing.expect(!(try isSet(addr)));
-        testing.expect(alloc().? == addr);
-        testing.expect(try isSet(addr));
-        testing.expectEqual(blocksFree(), 31 - i);
+        try testing.expect(!(try isSet(addr)));
+        try testing.expect(alloc().? == addr);
+        try testing.expect(try isSet(addr));
+        try testing.expectEqual(blocksFree(), 31 - i);
     }
     // Allocation should now fail
-    testing.expect(alloc() == null);
+    try testing.expect(alloc() == null);
 }
 
 test "free" {
@@ -162,13 +161,13 @@ test "free" {
     // Allocate and free all entries
     inline while (i < 32) : (i += 1) {
         const addr = alloc().?;
-        testing.expect(try isSet(addr));
-        testing.expectEqual(blocksFree(), 31);
+        try testing.expect(try isSet(addr));
+        try testing.expectEqual(blocksFree(), 31);
         try free(addr);
-        testing.expectEqual(blocksFree(), 32);
-        testing.expect(!(try isSet(addr)));
+        try testing.expectEqual(blocksFree(), 32);
+        try testing.expect(!(try isSet(addr)));
         // Double frees should be caught
-        testing.expectError(PmmError.NotAllocated, free(addr));
+        try testing.expectError(PmmError.NotAllocated, free(addr));
     }
 }
 
@@ -189,14 +188,14 @@ test "setAddr and isSet" {
             h += 1;
             addr2 += BLOCK_SIZE;
         }) {
-            testing.expect(try isSet(addr2));
+            try testing.expect(try isSet(addr2));
         }
 
-        testing.expectEqual(blocksFree(), num_entries - i);
+        try testing.expectEqual(blocksFree(), num_entries - i);
         // Set the current block
         try setAddr(addr);
-        testing.expect(try isSet(addr));
-        testing.expectEqual(blocksFree(), num_entries - i - 1);
+        try testing.expect(try isSet(addr));
+        try testing.expectEqual(blocksFree(), num_entries - i - 1);
 
         // Ensure all successive entries are not set
         var j: u32 = i + 1;
@@ -205,7 +204,7 @@ test "setAddr and isSet" {
             j += 1;
             addr3 += BLOCK_SIZE;
         }) {
-            testing.expect(!try isSet(addr3));
+            try testing.expect(!try isSet(addr3));
         }
     }
 }
@@ -215,9 +214,9 @@ test "setAddr and isSet" {
 ///
 /// Arguments:
 ///     IN mem_profile: *const MemProfile - The memory profile to check for reserved memory regions.
-///     IN/OUT allocator: *Allocator - The allocator to use when needing to create intermediate structures used for testing
+///     IN/OUT allocator: Allocator - The allocator to use when needing to create intermediate structures used for testing
 ///
-fn runtimeTests(mem_profile: *const MemProfile, allocator: *Allocator) void {
+fn runtimeTests(mem_profile: *const MemProfile, allocator: Allocator) void {
     // Make sure that occupied memory can't be allocated
     var prev_alloc: usize = std.math.maxInt(usize);
     var alloc_list = std.ArrayList(usize).init(allocator);

@@ -67,6 +67,8 @@ const types = .{
     .{ "fn (usize) bool", "FN_IUSIZE_OBOOL", "", "", "" },
     .{ "fn (RtcRegister) u8", "FN_IRTCREGISTER_OU8", "", "", "" },
     .{ "fn (IdtEntry) bool", "FN_IIDTENTRY_OBOOL", "idt_mock", "", "IdtEntry" },
+    .{ "fn (*const GdtPtr) anyerror!void", "FN_IPTRCONSTGDTPTR_EERROR_OVOID", "", "", "" },
+    .{ "fn (*const IdtPtr) anyerror!void", "FN_IPTRCONSTIDTPTR_EERROR_OVOID", "", "", "" },
     .{ "fn (*const GdtPtr) void", "FN_IPTRCONSTGDTPTR_OVOID", "", "", "" },
     .{ "fn (*const IdtPtr) void", "FN_IPTRCONSTIDTPTR_OVOID", "", "", "" },
 
@@ -74,6 +76,7 @@ const types = .{
     .{ "fn (u8, u8) u16", "FN_IU8_IU8_OU16", "", "", "" },
     .{ "fn (u8, fn () callconv(.Naked) void) IdtError!void", "FN_IU8_IFNCCNAKEDOVOID_EIDTERROR_OVOID", "", "", "" },
     .{ "fn (u16, u8) void", "FN_IU16_IU8_OVOID", "", "", "" },
+    .{ "fn (u16, u16) anyerror!void", "FN_IU16_IU16_EERROR_OVOID", "", "", "" },
     .{ "fn (u16, u16) void", "FN_IU16_IU16_OVOID", "", "", "" },
     .{ "fn (u16, u32) void", "FN_IU16_IU32_OVOID", "", "", "" },
     .{ "fn (StatusRegister, bool) u8", "FN_ISTATUSREGISTER_IBOOL_OU8", "", "", "" },
@@ -179,7 +182,7 @@ pub fn main() (Allocator.Error || File.OpenError || File.WriteError || File.Read
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    const allocator = &gpa.allocator;
+    const allocator = gpa.allocator();
 
     // All the string
     const imports_str = comptime genImports();

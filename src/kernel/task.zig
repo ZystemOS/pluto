@@ -4,7 +4,6 @@ const expectError = std.testing.expectError;
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const panic = @import("panic.zig").panic;
 const vmm = @import("vmm.zig");
@@ -68,7 +67,7 @@ pub const Task = struct {
     ///     IN entry_point: EntryPoint - The entry point into the task. This must be a function.
     ///     IN kernel: bool              - Whether the task has kernel or user privileges.
     ///     IN task_vmm: *VirtualMemoryManager - The virtual memory manager associated with the task.
-    ///     IN allocator: *Allocator     - The allocator for allocating memory for a task.
+    ///     IN allocator: Allocator     - The allocator for allocating memory for a task.
     ///
     /// Return: *Task
     ///     Pointer to an allocated task. This will then need to be added to the task queue.
@@ -77,7 +76,7 @@ pub const Task = struct {
     ///     OutOfMemory - If there is no more memory to allocate. Any memory or PID allocated will
     ///                   be freed on return.
     ///
-    pub fn create(entry_point: EntryPoint, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: *Allocator) Allocator.Error!*Task {
+    pub fn create(entry_point: EntryPoint, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) Allocator.Error!*Task {
         var task = try allocator.create(Task);
         errdefer allocator.destroy(task);
 
@@ -104,7 +103,7 @@ pub const Task = struct {
         return task;
     }
 
-    pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: *Allocator) (bitmap.Bitmap(usize).BitmapError || vmm.VmmError || Allocator.Error)!*Task {
+    pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) (bitmap.Bitmap(usize).BitmapError || vmm.VmmError || Allocator.Error)!*Task {
         const task = try create(program_elf.header.entry_address, kernel, task_vmm, allocator);
         errdefer task.destroy(allocator);
 
@@ -141,8 +140,9 @@ pub const Task = struct {
     ///
     /// Arguments:
     ///     IN/OUT self: *Self - The pointer to self.
+    ///     IN allocator: Allocator - The allocator used to create the task.
     ///
-    pub fn destroy(self: *Self, allocator: *Allocator) void {
+    pub fn destroy(self: *Self, allocator: Allocator) void {
         freePid(self.pid);
         // We need to check that the the stack has been allocated as task 0 (init) won't have a
         // stack allocated as this in the linker script
@@ -182,7 +182,7 @@ fn freePid(pid: PidBitmap.IndexType) void {
 
 // For testing the errdefer
 const FailingAllocator = std.testing.FailingAllocator;
-const testing_allocator = &std.testing.base_allocator_instance.allocator;
+const testing_allocator = std.testing.base_allocator_instance.allocator();
 
 fn test_fn1() void {}
 
@@ -190,28 +190,28 @@ test "create out of memory for task" {
     // Set the global allocator
     var fa = FailingAllocator.init(testing_allocator, 0);
 
-    expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, &fa.allocator));
-    expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, &fa.allocator));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, fa.allocator()));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, fa.allocator()));
 
     // Make sure any memory allocated is freed
-    expectEqual(fa.allocated_bytes, fa.freed_bytes);
+    try expectEqual(fa.allocated_bytes, fa.freed_bytes);
 
     // Make sure no PIDs were allocated
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "create out of memory for stack" {
     // Set the global allocator
     var fa = FailingAllocator.init(testing_allocator, 1);
 
-    expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, &fa.allocator));
-    expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, &fa.allocator));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, fa.allocator()));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, fa.allocator()));
 
     // Make sure any memory allocated is freed
-    expectEqual(fa.allocated_bytes, fa.freed_bytes);
+    try expectEqual(fa.allocated_bytes, fa.freed_bytes);
 
     // Make sure no PIDs were allocated
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "create expected setup" {
@@ -219,15 +219,15 @@ test "create expected setup" {
     defer task.destroy(std.testing.allocator);
 
     // Will allocate the first PID 0
-    expectEqual(task.pid, 0);
-    expectEqual(task.kernel_stack.len, STACK_SIZE);
-    expectEqual(task.user_stack.len, 0);
+    try expectEqual(task.pid, 0);
+    try expectEqual(task.kernel_stack.len, STACK_SIZE);
+    try expectEqual(task.user_stack.len, 0);
 
     var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
     defer user_task.destroy(std.testing.allocator);
-    expectEqual(user_task.pid, 1);
-    expectEqual(user_task.user_stack.len, STACK_SIZE);
-    expectEqual(user_task.kernel_stack.len, STACK_SIZE);
+    try expectEqual(user_task.pid, 1);
+    try expectEqual(user_task.user_stack.len, STACK_SIZE);
+    try expectEqual(user_task.kernel_stack.len, STACK_SIZE);
 }
 
 test "destroy cleans up" {
@@ -242,54 +242,54 @@ test "destroy cleans up" {
     user_task.destroy(allocator);
 
     // All PIDs were freed
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "Multiple create" {
     var task1 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
     var task2 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
 
-    expectEqual(task1.pid, 0);
-    expectEqual(task2.pid, 1);
-    expectEqual(all_pids.bitmap, 3);
+    try expectEqual(task1.pid, 0);
+    try expectEqual(task2.pid, 1);
+    try expectEqual(all_pids.bitmap, 3);
 
     task1.destroy(std.testing.allocator);
 
-    expectEqual(all_pids.bitmap, 2);
+    try expectEqual(all_pids.bitmap, 2);
 
     var task3 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
 
-    expectEqual(task3.pid, 0);
-    expectEqual(all_pids.bitmap, 3);
+    try expectEqual(task3.pid, 0);
+    try expectEqual(all_pids.bitmap, 3);
 
     task2.destroy(std.testing.allocator);
     task3.destroy(std.testing.allocator);
 
     var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
 
-    expectEqual(user_task.pid, 0);
-    expectEqual(all_pids.bitmap, 1);
+    try expectEqual(user_task.pid, 0);
+    try expectEqual(all_pids.bitmap, 1);
 
     user_task.destroy(std.testing.allocator);
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "allocatePid and freePid" {
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 
     var i: usize = 0;
     while (i < PidBitmap.NUM_ENTRIES) : (i += 1) {
-        expectEqual(i, allocatePid());
+        try expectEqual(i, allocatePid());
     }
 
-    expectEqual(all_pids.bitmap, PidBitmap.BITMAP_FULL);
+    try expectEqual(all_pids.bitmap, PidBitmap.BITMAP_FULL);
 
     i = 0;
     while (i < PidBitmap.NUM_ENTRIES) : (i += 1) {
         freePid(@truncate(PidBitmap.IndexType, i));
     }
 
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "createFromElf" {
@@ -300,7 +300,7 @@ test "createFromElf" {
     const code_address = 0;
     const elf_data = try elf.testInitData(allocator, "abc123", "strings", .Executable, code_address, 0, elf.SECTION_ALLOCATABLE, 0, code_address, 0);
     defer allocator.free(elf_data);
-    var the_elf = try elf.Elf.init(elf_data, builtin.arch, std.testing.allocator);
+    var the_elf = try elf.Elf.init(elf_data, builtin.cpu.arch, std.testing.allocator);
     defer the_elf.deinit();
 
     var the_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 10000, std.testing.allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
@@ -308,9 +308,9 @@ test "createFromElf" {
     const task = try Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator);
     defer task.destroy(allocator);
 
-    std.testing.expectEqual(task.pid, 0);
-    std.testing.expectEqual(task.user_stack.len, 0);
-    std.testing.expectEqual(task.kernel_stack.len, STACK_SIZE);
+    try std.testing.expectEqual(task.pid, 0);
+    try std.testing.expectEqual(task.user_stack.len, 0);
+    try std.testing.expectEqual(task.kernel_stack.len, STACK_SIZE);
 }
 
 test "createFromElf clean-up" {
@@ -321,7 +321,7 @@ test "createFromElf clean-up" {
     const code_address = 0;
     const elf_data = try elf.testInitData(allocator, "abc123", "strings", .Executable, code_address, 0, elf.SECTION_ALLOCATABLE, 0, code_address, 0);
     defer allocator.free(elf_data);
-    var the_elf = try elf.Elf.init(elf_data, builtin.arch, std.testing.allocator);
+    var the_elf = try elf.Elf.init(elf_data, builtin.cpu.arch, std.testing.allocator);
     defer the_elf.deinit();
 
     var the_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 10000, std.testing.allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
@@ -331,14 +331,14 @@ test "createFromElf clean-up" {
 
     // Test clean-up
     // Test OutOfMemory
-    var allocator2 = &std.testing.FailingAllocator.init(allocator, 0).allocator;
-    std.testing.expectError(std.mem.Allocator.Error.OutOfMemory, Task.createFromElf(the_elf, true, &the_vmm, allocator2));
-    std.testing.expectEqual(all_pids.num_free_entries, PidBitmap.NUM_ENTRIES - 1);
+    var allocator2 = std.testing.FailingAllocator.init(allocator, 0).allocator();
+    try std.testing.expectError(std.mem.Allocator.Error.OutOfMemory, Task.createFromElf(the_elf, true, &the_vmm, allocator2));
+    try std.testing.expectEqual(all_pids.num_free_entries, PidBitmap.NUM_ENTRIES - 1);
     // Test AlreadyAllocated
-    std.testing.expectError(error.AlreadyAllocated, Task.createFromElf(the_elf, true, &the_vmm, allocator));
+    try std.testing.expectError(error.AlreadyAllocated, Task.createFromElf(the_elf, true, &the_vmm, allocator));
     // Test OutOfBounds
     the_elf.section_headers[0].virtual_address = the_vmm.end + 1;
-    std.testing.expectError(error.OutOfBounds, Task.createFromElf(the_elf, true, &the_vmm, allocator));
+    try std.testing.expectError(error.OutOfBounds, Task.createFromElf(the_elf, true, &the_vmm, allocator));
 
     // Test errdefer clean-up by fillng up all but one block in the VMM so allocating the last section fails
     // The allocation for the first section should be cleaned up in case of an error
@@ -348,5 +348,5 @@ test "createFromElf clean-up" {
     try the_vmm.free(available_address);
     // Make the strings section allocatable so createFromElf tries to allocate more than one
     the_elf.section_headers[1].flags |= elf.SECTION_ALLOCATABLE;
-    std.testing.expectError(error.AlreadyAllocated, Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator));
+    try std.testing.expectError(error.AlreadyAllocated, Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator));
 }

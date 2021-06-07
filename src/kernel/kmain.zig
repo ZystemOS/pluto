@@ -3,10 +3,8 @@ const kmain_log = std.log.scoped(.kmain);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const tty = @import("tty.zig");
-const vga = @import("vga.zig");
 const log_root = @import("log.zig");
 const pmm = @import("pmm.zig");
 const serial = @import("serial.zig");
@@ -23,7 +21,7 @@ const Allocator = std.mem.Allocator;
 
 comptime {
     if (!is_test) {
-        switch (builtin.arch) {
+        switch (builtin.cpu.arch) {
             .i386 => _ = @import("arch/x86/boot.zig"),
             else => unreachable,
         }
@@ -42,7 +40,7 @@ export var KERNEL_PHYSADDR_START: u32 = if (builtin.is_test) 0x100000 else undef
 export var KERNEL_PHYSADDR_END: u32 = if (builtin.is_test) 0x14E000 else undefined;
 
 // Just call the panic function, as this need to be in the root source file
-pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {
+pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace) noreturn {
     @setCold(true);
     panic_root.panic(error_return_trace, "{s}", .{msg});
 }
@@ -62,7 +60,6 @@ var kernel_heap: heap.FreeListAllocator = undefined;
 
 export fn kmain(boot_payload: arch.BootPayload) void {
     const serial_stream = serial.init(boot_payload);
-
     log_root.init(serial_stream);
 
     const mem_profile = arch.initMem(boot_payload) catch |e| {
@@ -70,18 +67,18 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     };
     var fixed_allocator = mem_profile.fixed_allocator;
 
-    panic_root.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}\n", .{e});
-    };
-
-    pmm.init(&mem_profile, &fixed_allocator.allocator);
-    var kernel_vmm = vmm.init(&mem_profile, &fixed_allocator.allocator) catch |e| {
+    pmm.init(&mem_profile, fixed_allocator.allocator());
+    var kernel_vmm = vmm.init(&mem_profile, fixed_allocator.allocator()) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}", .{e});
     };
 
-    kmain_log.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+    kmain_log.info("Init arch " ++ @tagName(builtin.cpu.arch) ++ "\n", .{});
     arch.init(&mem_profile);
     kmain_log.info("Arch init done\n", .{});
+
+    panic_root.initSymbols(&mem_profile, fixed_allocator.allocator()) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic symbols: {}\n", .{e});
+    };
 
     // The VMM runtime tests can't happen until the architecture has initialised itself
     switch (build_options.test_mode) {
@@ -99,8 +96,8 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
     };
 
-    tty.init(&kernel_heap.allocator, boot_payload);
-    var arch_kb = keyboard.init(&fixed_allocator.allocator) catch |e| {
+    tty.init(kernel_heap.allocator(), boot_payload);
+    var arch_kb = keyboard.init(fixed_allocator.allocator()) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to inititalise keyboard: {}\n", .{e});
     };
     if (arch_kb) |kb| {
@@ -119,7 +116,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         const rd_len: usize = module.region.end - module.region.start;
         const ramdisk_bytes = @intToPtr([*]u8, module.region.start)[0..rd_len];
         var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
-        var ramdisk_filesystem = initrd.InitrdFS.init(&initrd_stream, &kernel_heap.allocator) catch |e| {
+        var ramdisk_filesystem = initrd.InitrdFS.init(&initrd_stream, kernel_heap.allocator()) catch |e| {
             panic_root.panic(@errorReturnTrace(), "Failed to initialise ramdisk: {}\n", .{e});
         };
 
@@ -134,7 +131,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         };
     }
 
-    scheduler.init(&kernel_heap.allocator, &mem_profile) catch |e| {
+    scheduler.init(kernel_heap.allocator(), &mem_profile) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise scheduler: {}\n", .{e});
     };
 
@@ -147,10 +144,10 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     kmain_log.info("Creating init2\n", .{});
 
     // Create a init2 task
-    var stage2_task = task.Task.create(@ptrToInt(initStage2), true, kernel_vmm, &kernel_heap.allocator) catch |e| {
+    var stage2_task = task.Task.create(@ptrToInt(initStage2), true, kernel_vmm, kernel_heap.allocator()) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to create init stage 2 task: {}\n", .{e});
     };
-    scheduler.scheduleTask(stage2_task, &kernel_heap.allocator) catch |e| {
+    scheduler.scheduleTask(stage2_task, kernel_heap.allocator()) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to schedule init stage 2 task: {}\n", .{e});
     };
 
@@ -177,7 +174,7 @@ fn initStage2() noreturn {
 
     tty.print("Hello Pluto from kernel :)\n", .{});
 
-    const devices = arch.getDevices(&kernel_heap.allocator) catch |e| {
+    const devices = arch.getDevices(kernel_heap.allocator()) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Unable to get device list: {}\n", .{e});
     };
 
