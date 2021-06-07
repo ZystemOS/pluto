@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const build_options = @import("build_options");
@@ -137,7 +137,7 @@ pub const RtcRegister = enum {
 ///     IN reg: u8                    - The register index to select in the CMOS chip.
 ///     IN comptime disable_nmi: bool - Whether to disable NMI when selecting a register.
 ///
-fn selectRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) void {
+inline fn selectRegister(reg: u8, comptime disable_nmi: bool) void {
     if (disable_nmi) {
         arch.out(ADDRESS, reg | NMI_BIT);
     } else {
@@ -151,7 +151,7 @@ fn selectRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) void {
 /// Arguments:
 ///     IN data: u8 - The data to write to the selected register.
 ///
-fn writeRegister(data: u8) callconv(.Inline) void {
+inline fn writeRegister(data: u8) void {
     arch.out(DATA, data);
 }
 
@@ -161,7 +161,7 @@ fn writeRegister(data: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The value in the selected register.
 ///
-fn readRegister() callconv(.Inline) u8 {
+inline fn readRegister() u8 {
     return arch.in(u8, DATA);
 }
 
@@ -176,7 +176,7 @@ fn readRegister() callconv(.Inline) u8 {
 /// Return: u8
 ///     The value in the selected register.
 ///
-fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) u8 {
+inline fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) u8 {
     selectRegister(reg, disable_nmi);
     arch.ioWait();
     return readRegister();
@@ -191,7 +191,7 @@ fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) 
 ///     IN data: u8                   - The data to write to the selected register.
 ///     IN comptime disable_nmi: bool - Whether to disable NMI when selecting a register.
 ///
-fn selectAndWriteRegister(reg: u8, data: u8, comptime disable_nmi: bool) callconv(.Inline) void {
+inline fn selectAndWriteRegister(reg: u8, data: u8, comptime disable_nmi: bool) void {
     selectRegister(reg, disable_nmi);
     arch.ioWait();
     writeRegister(data);

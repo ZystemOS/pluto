@@ -1,6 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.builder);
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const rt = @import("test/runtime_test.zig");
 const RuntimeStep = rt.RuntimeStep;
 const Allocator = std.mem.Allocator;

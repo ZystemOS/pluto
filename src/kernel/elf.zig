@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const Arch = std.Target.Cpu.Arch;
 const Endian = builtin.Endian;
 const log = std.log.scoped(.elf);
@@ -480,7 +480,7 @@ pub fn testInitData(allocator: *std.mem.Allocator, section_name: []const u8, str
             64 => .SixtyFourBit,
             else => unreachable,
         },
-        .endianness = switch (builtin.arch.endian()) {
+        .endianness = switch (builtin.cpu.arch.endian()) {
             .Big => .Big,
             .Little => .Little,
         },
@@ -563,7 +563,7 @@ test "init" {
     const is_32_bit = @bitSizeOf(usize) == 32;
     var data = try testInitData(testing.allocator, section_name, string_section_name, .Executable, 0, 0, 123, 789, 456, 012);
     defer testing.allocator.free(data);
-    const elf = try Elf.init(data, builtin.arch, testing.allocator);
+    const elf = try Elf.init(data, builtin.cpu.arch, testing.allocator);
     defer elf.deinit();
 
     testing.expectEqual(elf.header.data_size, if (is_32_bit) .ThirtyTwoBit else .SixtyFourBit);
@@ -602,23 +602,23 @@ test "init" {
     var section_header = elf.section_headers[1];
     section_header.section_type = .ProgramData;
     testSetSection(data, section_header, 1);
-    testing.expectError(Error.WrongStringTableIndex, Elf.init(data, builtin.arch, testing.allocator));
+    testing.expectError(Error.WrongStringTableIndex, Elf.init(data, builtin.cpu.arch, testing.allocator));
     testSetSection(data, elf.section_headers[1], 1);
 
     // Test the section_name_index being out of bounds
     var header = elf.header;
     header.section_name_index = 3;
     testSetHeader(data, header);
-    testing.expectError(Error.WrongStringTableIndex, Elf.init(data, builtin.arch, testing.allocator));
+    testing.expectError(Error.WrongStringTableIndex, Elf.init(data, builtin.cpu.arch, testing.allocator));
 
     // Test incorrect endianness
     header = elf.header;
-    header.endianness = switch (builtin.arch.endian()) {
+    header.endianness = switch (builtin.cpu.arch.endian()) {
         .Big => .Little,
         .Little => .Big,
     };
     testSetHeader(data, header);
-    testing.expectError(Error.InvalidEndianness, Elf.init(data, builtin.arch, testing.allocator));
+    testing.expectError(Error.InvalidEndianness, Elf.init(data, builtin.cpu.arch, testing.allocator));
 
     // Test invalid data size
     header.data_size = switch (@bitSizeOf(usize)) {
@@ -626,20 +626,20 @@ test "init" {
         else => .ThirtyTwoBit,
     };
     testSetHeader(data, header);
-    testing.expectError(Error.InvalidDataSize, Elf.init(data, builtin.arch, testing.allocator));
+    testing.expectError(Error.InvalidDataSize, Elf.init(data, builtin.cpu.arch, testing.allocator));
 
     // Test invalid architecture
-    header.architecture = switch (builtin.arch) {
+    header.architecture = switch (builtin.cpu.arch) {
         .x86_64 => .Aarch64,
         else => .AMD_64,
     };
     testSetHeader(data, header);
-    testing.expectError(Error.InvalidArchitecture, Elf.init(data, builtin.arch, testing.allocator));
+    testing.expectError(Error.InvalidArchitecture, Elf.init(data, builtin.cpu.arch, testing.allocator));
 
     // Test incorrect magic number
     header.magic_number = 123;
     testSetHeader(data, header);
-    testing.expectError(Error.InvalidMagicNumber, Elf.init(data, builtin.arch, testing.allocator));
+    testing.expectError(Error.InvalidMagicNumber, Elf.init(data, builtin.cpu.arch, testing.allocator));
 }
 
 test "getName" {
@@ -648,7 +648,7 @@ test "getName" {
     var string_section_name = "strings";
     const data = try testInitData(testing.allocator, section_name, string_section_name, .Executable, 0, undefined, undefined, undefined, undefined, undefined);
     defer testing.allocator.free(data);
-    const elf = try Elf.init(data, builtin.arch, testing.allocator);
+    const elf = try Elf.init(data, builtin.cpu.arch, testing.allocator);
     defer elf.deinit();
     testing.expectEqualSlices(u8, elf.section_headers[0].getName(elf), section_name);
     testing.expectEqualSlices(u8, elf.section_headers[1].getName(elf), string_section_name);

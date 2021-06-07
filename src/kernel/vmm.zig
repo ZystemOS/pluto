@@ -1,6 +1,6 @@
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const std = @import("std");
 const log = std.log.scoped(.vmm);
@@ -11,6 +11,7 @@ const tty = @import("tty.zig");
 const panic = @import("panic.zig").panic;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig").internals;
 const Allocator = std.mem.Allocator;
+const assert = std.debug.assert;
 
 /// Attributes for a virtual memory allocation
 pub const Attributes = struct {
@@ -248,9 +249,9 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         pub fn virtToPhys(self: *const Self, virt: usize) VmmError!usize {
             var it = self.allocations.iterator();
             while (it.next()) |entry| {
-                const vaddr = entry.key;
+                const vaddr = entry.key_ptr.*;
 
-                const allocation = entry.value;
+                const allocation = entry.value_ptr.*;
                 // If this allocation range covers the virtual address then figure out the corresponding physical block
                 if (vaddr <= virt and vaddr + (allocation.physical.items.len * BLOCK_SIZE) > virt) {
                     const block_number = (virt - vaddr) / BLOCK_SIZE;
@@ -532,7 +533,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                     panic(@errorReturnTrace(), "Failed to unmap VMM reserved memory from 0x{X} to 0x{X}: {}\n", .{ region_start, region_end, e });
                 };
                 // The allocation is freed so remove from the map
-                self.allocations.removeAssertDiscard(vaddr);
+                assert(self.allocations.remove(vaddr));
             } else {
                 return VmmError.NotAllocated;
             }
