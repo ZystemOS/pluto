@@ -2,7 +2,7 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const log = std.log.scoped(.x86_pic);
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
@@ -251,7 +251,7 @@ var spurious_irq_counter: u32 = 0;
 /// Arguments:
 ///     IN cmd: u8 - The command to send.
 ///
-fn sendCommandMaster(cmd: u8) callconv(.Inline) void {
+inline fn sendCommandMaster(cmd: u8) void {
     arch.out(MASTER_COMMAND_REG, cmd);
 }
 
@@ -261,7 +261,7 @@ fn sendCommandMaster(cmd: u8) callconv(.Inline) void {
 /// Arguments:
 ///     IN cmd: u8 - The command to send.
 ///
-fn sendCommandSlave(cmd: u8) callconv(.Inline) void {
+inline fn sendCommandSlave(cmd: u8) void {
     arch.out(SLAVE_COMMAND_REG, cmd);
 }
 
@@ -271,7 +271,7 @@ fn sendCommandSlave(cmd: u8) callconv(.Inline) void {
 /// Arguments:
 ///     IN data: u8 - The data to send.
 ///
-fn sendDataMaster(data: u8) callconv(.Inline) void {
+inline fn sendDataMaster(data: u8) void {
     arch.out(MASTER_DATA_REG, data);
 }
 
@@ -281,7 +281,7 @@ fn sendDataMaster(data: u8) callconv(.Inline) void {
 /// Arguments:
 ///     IN data: u8 - The data to send.
 ///
-fn sendDataSlave(data: u8) callconv(.Inline) void {
+inline fn sendDataSlave(data: u8) void {
     arch.out(SLAVE_DATA_REG, data);
 }
 
@@ -291,7 +291,7 @@ fn sendDataSlave(data: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The data that is stored in the master data register.
 ///
-fn readDataMaster() callconv(.Inline) u8 {
+inline fn readDataMaster() u8 {
     return arch.in(u8, MASTER_DATA_REG);
 }
 
@@ -301,7 +301,7 @@ fn readDataMaster() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the salve data register.
 ///
-fn readDataSlave() callconv(.Inline) u8 {
+inline fn readDataSlave() u8 {
     return arch.in(u8, SLAVE_DATA_REG);
 }
 
@@ -311,7 +311,7 @@ fn readDataSlave() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the master IRR.
 ///
-fn readMasterIrr() callconv(.Inline) u8 {
+inline fn readMasterIrr() u8 {
     sendCommandMaster(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_IRR);
     return arch.in(u8, MASTER_STATUS_REG);
 }
@@ -322,7 +322,7 @@ fn readMasterIrr() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the slave IRR.
 ///
-fn readSlaveIrr() callconv(.Inline) u8 {
+inline fn readSlaveIrr() u8 {
     sendCommandSlave(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_IRR);
     return arch.in(u8, SLAVE_STATUS_REG);
 }
@@ -333,7 +333,7 @@ fn readSlaveIrr() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the master ISR.
 ///
-fn readMasterIsr() callconv(.Inline) u8 {
+inline fn readMasterIsr() u8 {
     sendCommandMaster(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_ISR);
     return arch.in(u8, MASTER_STATUS_REG);
 }
@@ -344,7 +344,7 @@ fn readMasterIsr() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the slave ISR.
 ///
-fn readSlaveIsr() callconv(.Inline) u8 {
+inline fn readSlaveIsr() u8 {
     sendCommandSlave(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_ISR);
     return arch.in(u8, SLAVE_STATUS_REG);
 }

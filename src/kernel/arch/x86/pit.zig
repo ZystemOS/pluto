@@ -1,6 +1,6 @@
 const std = @import("std");
 const maxInt = std.math.maxInt;
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
@@ -198,7 +198,7 @@ var time_under_1_ns: u32 = undefined;
 /// Arguments:
 ///     IN cmd: u8 - The command to send to the PIT.
 ///
-fn sendCommand(cmd: u8) callconv(.Inline) void {
+inline fn sendCommand(cmd: u8) void {
     arch.out(COMMAND_REGISTER, cmd);
 }
 
@@ -211,7 +211,7 @@ fn sendCommand(cmd: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The mode the counter is operating in. Use the masks above to get each part.
 ///
-fn readBackCommand(counter: CounterSelect) callconv(.Inline) u8 {
+inline fn readBackCommand(counter: CounterSelect) u8 {
     sendCommand(0xC2);
     return 0x3F & arch.in(u8, counter.getRegister());
 }
@@ -223,7 +223,7 @@ fn readBackCommand(counter: CounterSelect) callconv(.Inline) u8 {
 ///     IN counter: CounterSelect - The counter port to send the data to.
 ///     IN data: u8               - The data to send.
 ///
-fn sendDataToCounter(counter: CounterSelect, data: u8) callconv(.Inline) void {
+inline fn sendDataToCounter(counter: CounterSelect, data: u8) void {
     arch.out(counter.getRegister(), data);
 }
 
