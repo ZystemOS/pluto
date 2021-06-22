@@ -1,17 +1,18 @@
-const builtin = @import("builtin");
+const std = @import("std");
+const builtin = std.builtin;
 const gdt = @import("gdt.zig");
-const idt = switch (builtin.arch) {
+const idt = switch (builtin.cpu.arch) {
     .i386 => @import("../32bit/idt.zig"),
     .x86_64 => @import("../64bit/idt.zig"),
     else => unreachable,
 };
-
+pub const pic = @import("pic.zig");
 const serial = @import("serial.zig");
 const panic = @import("../../../panic.zig").panic;
 
 const Serial = @import("../../../serial.zig").Serial;
 
-const BootPayload = switch (builtin.arch) {
+const BootPayload = switch (builtin.cpu.arch) {
     .i386 => @import("../32bit/arch.zig").BootPayload,
     .x86_64 => @import("../64bit/arch.zig").BootPayload,
     else => unreachable,

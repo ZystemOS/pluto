@@ -1,4 +1,5 @@
-const builtin = @import("builtin");
+const std = @import("std");
+const builtin = std.builtin;
 
 pub const DateTime = struct {
     second: u32,

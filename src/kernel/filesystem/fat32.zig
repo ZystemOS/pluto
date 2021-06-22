@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const expectEqualSlices = std.testing.expectEqualSlices;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
@@ -1128,7 +1128,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
             const self = @fieldParentPtr(Fat32Self, "instance", fs.instance);
             // As close can't error, if provided with a invalid Node that isn't opened or try to close
             // the same file twice, will just do nothing.
-            if (self.opened_files.remove(node)) |entry_node| {
+            if (self.opened_files.fetchRemove(node)) |entry_node| {
                 self.allocator.destroy(entry_node.value);
                 self.allocator.destroy(node);
             }

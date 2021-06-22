@@ -1,4 +1,4 @@
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const build_options = @import("build_options");
 const std = @import("std");
 const Allocator = std.mem.Allocator;

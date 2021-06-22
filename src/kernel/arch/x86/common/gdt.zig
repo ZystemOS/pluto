@@ -1,6 +1,6 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
-const builtin = @import("builtin");
+const builtin = std.builtin;
 
 /// The access bits for a GDT entry.
 const AccessBits = packed struct {

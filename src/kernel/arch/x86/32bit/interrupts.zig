@@ -3,6 +3,8 @@ const syscalls = @import("syscalls.zig");
 const irq = @import("irq.zig");
 const idt = @import("idt.zig");
 
+usingnamespace @import("../common/interrupts.zig");
+
 extern fn irqHandler(ctx: *arch.CpuState) usize;
 extern fn isrHandler(ctx: *arch.CpuState) usize;
 
@@ -69,38 +71,4 @@ export fn commonStub() callconv(.Naked) void {
         \\sub   $0x14, %%esp
         \\iret
     );
-}
-
-///
-/// Generate the function that is the entry point for each exception/interrupt. This will then be
-/// used as the handler for the corresponding IDT entry.
-///
-/// Arguments:
-///     IN interrupt_num: u32 - The interrupt number to generate the function for.
-///
-/// Return: idt.InterruptHandler
-///     The stub function that is called for each interrupt/exception.
-///
-pub fn getInterruptStub(comptime interrupt_num: u32) idt.InterruptHandler {
-    return struct {
-        fn func() callconv(.Naked) void {
-            asm volatile (
-                \\ cli
-            );
-
-            // These interrupts don't push an error code onto the stack, so will push a zero.
-            if (interrupt_num != 8 and !(interrupt_num >= 10 and interrupt_num <= 14) and interrupt_num != 17) {
-                asm volatile (
-                    \\ pushl $0
-                );
-            }
-
-            asm volatile (
-                \\ pushl %[nr]
-                \\ jmp commonStub
-                :
-                : [nr] "n" (interrupt_num)
-            );
-        }
-    }.func;
 }

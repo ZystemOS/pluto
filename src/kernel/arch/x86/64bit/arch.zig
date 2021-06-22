@@ -11,6 +11,8 @@ const vmm = @import("../../../vmm.zig");
 const panic = @import("../../../panic.zig").panic;
 const MemProfile = mem.MemProfile;
 
+const interrupts = @import("interrupts.zig");
+
 usingnamespace @import("../common/arch.zig");
 
 /// The memory type provided by the Limine bootloader.
@@ -22,6 +24,42 @@ const MemType = enum(u32) {
     BadMemory = 5,
     BootloaderReclaimable = 0x1000,
     KernelAndModules = 0x1001,
+};
+
+pub const CpuState = packed struct {
+    // Segment registers
+    ds: u64,
+    es: u64,
+    // CPU registers, pushed by the interrupt handler.
+    r8: u64,
+    r9: u64,
+    r10: u64,
+    r11: u64,
+    r12: u64,
+    r13: u64,
+    r14: u64,
+    r15: u64,
+
+    rdi: u64,
+    rsi: u64,
+    rbp: u64,
+    rsp: u64,
+
+    rax: u64,
+    rbx: u64,
+    rcx: u64,
+    rdx: u64,
+
+    // Interrupt number and error code, push by the interrupt stub
+    int_num: u64,
+    error_code: u64,
+
+    // Pushed by the CPU
+    rip: u64,
+    cs: u64,
+    rflags: u64,
+    user_rsp: u64,
+    user_ss: u64,
 };
 
 /// The memory map entry.
@@ -241,7 +279,7 @@ pub fn initMem(boot_payload: BootPayload) Allocator.Error!MemProfile {
             entry_len = std.mem.alignForward(entry_len, 4096);
         }
 
-        // Check for hold and mark unusable
+        // Check for hole and mark unusable
         const prev_end_addr = prev_mammap_entry.base_addr + prev_mammap_entry.len;
         if (prev_end_addr != base_addr) {
             try reserved_physical_mem.append(.{
@@ -341,6 +379,19 @@ pub fn initMem(boot_payload: BootPayload) Allocator.Error!MemProfile {
 pub fn init(mem_profile: *const MemProfile) void {
     gdt.init();
     idt.init();
+
+    pic.init();
+
+    paging.init();
+
+    comptime var i = 0;
+    inline while (i < 256) : (i += 1) {
+        idt.openInterruptGate(i, interrupts.getInterruptStub(i)) catch |err| switch (err) {
+            error.IdtEntryExists => {
+                panic(@errorReturnTrace(), "Error\n", .{});
+            },
+        };
+    }
 }
 
 test "" {
