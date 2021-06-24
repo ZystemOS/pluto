@@ -146,13 +146,13 @@ test "alloc" {
         i += 1;
         addr += BLOCK_SIZE;
     }) {
-        testing.expect(!(try isSet(addr)));
-        testing.expect(alloc().? == addr);
-        testing.expect(try isSet(addr));
-        testing.expectEqual(blocksFree(), 31 - i);
+        try testing.expect(!(try isSet(addr)));
+        try testing.expect(alloc().? == addr);
+        try testing.expect(try isSet(addr));
+        try testing.expectEqual(blocksFree(), 31 - i);
     }
     // Allocation should now fail
-    testing.expect(alloc() == null);
+    try testing.expect(alloc() == null);
 }
 
 test "free" {
@@ -162,13 +162,13 @@ test "free" {
     // Allocate and free all entries
     inline while (i < 32) : (i += 1) {
         const addr = alloc().?;
-        testing.expect(try isSet(addr));
-        testing.expectEqual(blocksFree(), 31);
+        try testing.expect(try isSet(addr));
+        try testing.expectEqual(blocksFree(), 31);
         try free(addr);
-        testing.expectEqual(blocksFree(), 32);
-        testing.expect(!(try isSet(addr)));
+        try testing.expectEqual(blocksFree(), 32);
+        try testing.expect(!(try isSet(addr)));
         // Double frees should be caught
-        testing.expectError(PmmError.NotAllocated, free(addr));
+        try testing.expectError(PmmError.NotAllocated, free(addr));
     }
 }
 
@@ -189,14 +189,14 @@ test "setAddr and isSet" {
             h += 1;
             addr2 += BLOCK_SIZE;
         }) {
-            testing.expect(try isSet(addr2));
+            try testing.expect(try isSet(addr2));
         }
 
-        testing.expectEqual(blocksFree(), num_entries - i);
+        try testing.expectEqual(blocksFree(), num_entries - i);
         // Set the current block
         try setAddr(addr);
-        testing.expect(try isSet(addr));
-        testing.expectEqual(blocksFree(), num_entries - i - 1);
+        try testing.expect(try isSet(addr));
+        try testing.expectEqual(blocksFree(), num_entries - i - 1);
 
         // Ensure all successive entries are not set
         var j: u32 = i + 1;
@@ -205,7 +205,7 @@ test "setAddr and isSet" {
             j += 1;
             addr3 += BLOCK_SIZE;
         }) {
-            testing.expect(!try isSet(addr3));
+            try testing.expect(!try isSet(addr3));
         }
     }
 }

@@ -161,7 +161,7 @@ const PciDevice = struct {
 
             // RevisionId is a u8 width, offset 0
             const res = device.configReadData(2, .RevisionId);
-            expectEqual(res, 0x12);
+            try expectEqual(res, 0x12);
         }
 
         {
@@ -175,7 +175,7 @@ const PciDevice = struct {
 
             // ProgrammingInterface is a u8 width, offset 8
             const res = device.configReadData(2, .ProgrammingInterface);
-            expectEqual(res, 0xEF);
+            try expectEqual(res, 0xEF);
         }
 
         {
@@ -189,7 +189,7 @@ const PciDevice = struct {
 
             // Subclass is a u8 width, offset 16
             const res = device.configReadData(2, .Subclass);
-            expectEqual(res, 0xCD);
+            try expectEqual(res, 0xCD);
         }
 
         {
@@ -203,7 +203,7 @@ const PciDevice = struct {
 
             // ClassCode is a u8 width, offset 24
             const res = device.configReadData(2, .ClassCode);
-            expectEqual(res, 0xAB);
+            try expectEqual(res, 0xAB);
         }
     }
 
@@ -226,7 +226,7 @@ const PciDevice = struct {
 
             // VenderId is a u16 width, offset 0
             const res = device.configReadData(2, .VenderId);
-            expectEqual(res, 0xEF12);
+            try expectEqual(res, 0xEF12);
         }
 
         {
@@ -240,7 +240,7 @@ const PciDevice = struct {
 
             // DeviceId is a u16 width, offset 16
             const res = device.configReadData(2, .DeviceId);
-            expectEqual(res, 0xABCD);
+            try expectEqual(res, 0xABCD);
         }
     }
 
@@ -263,7 +263,7 @@ const PciDevice = struct {
 
             // BaseAddr0 is a u32 width, offset 0
             const res = device.configReadData(2, .BaseAddr0);
-            expectEqual(res, 0xABCDEF12);
+            try expectEqual(res, 0xABCDEF12);
         }
     }
 };
