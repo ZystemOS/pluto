@@ -20,7 +20,7 @@ jobs:
       run: |
         export PYTHONIOENCODING=utf8
         # Lock the master commit that we download, because of blocking issues
-        wget https://ziglang.org/builds/zig-linux-x86_64-0.8.0-dev.2133+ad33e3483.tar.xz
+        wget https://ziglang.org/download/0.8.0/zig-linux-x86_64-0.8.0.tar.xz
         sudo apt-get install mtools
         tar -xvf zig*
     - name: Install qemu

@@ -754,7 +754,7 @@ test "mount" {
     var testfs = try testInitFs(allocator);
     defer allocator.destroy(testfs);
     defer testfs.deinit();
-    defer testing.expectEqual(testfs.open_count, 0);
+    defer testing.expectEqual(testfs.open_count, 0) catch unreachable;
 
     testfs.instance = 1;
     root = testfs.tree.val;
@@ -763,7 +763,7 @@ test "mount" {
     var testfs2 = try testInitFs(allocator);
     defer allocator.destroy(testfs2);
     defer testfs2.deinit();
-    defer testing.expectEqual(testfs2.open_count, 0);
+    defer testing.expectEqual(testfs2.open_count, 0) catch unreachable;
 
     testfs2.instance = 2;
     // Create the dir to mount to
@@ -771,21 +771,21 @@ test "mount" {
     defer dir.close();
     try mount(dir, testfs2.fs);
     defer umount(dir);
-    testing.expectError(MountError.DirAlreadyMounted, mount(dir, testfs2.fs));
+    try testing.expectError(MountError.DirAlreadyMounted, mount(dir, testfs2.fs));
 
     // Ensure the mount worked
-    testing.expectEqual((dir.mount orelse unreachable), testfs2.fs.getRootNode(testfs2.fs));
-    testing.expectEqual((dir.mount orelse unreachable).fs, testfs2.fs);
+    try testing.expectEqual((dir.mount orelse unreachable), testfs2.fs.getRootNode(testfs2.fs));
+    try testing.expectEqual((dir.mount orelse unreachable).fs, testfs2.fs);
     // Create a file within the mounted directory
     var test_file = try openFile("/mnt/123.txt", .CREATE_FILE);
     defer test_file.close();
-    testing.expectEqual(@ptrCast(*const FileSystem, testfs2.fs), test_file.fs);
+    try testing.expectEqual(@ptrCast(*const FileSystem, testfs2.fs), test_file.fs);
     // This shouldn't be in the root fs
-    testing.expectEqual(@as(usize, 1), testfs.tree.children.items.len);
-    testing.expectEqual(@as(usize, 0), testfs.tree.children.items[0].children.items.len);
+    try testing.expectEqual(@as(usize, 1), testfs.tree.children.items.len);
+    try testing.expectEqual(@as(usize, 0), testfs.tree.children.items[0].children.items.len);
     // It should be in the mounted fs
-    testing.expectEqual(@as(usize, 1), testfs2.tree.children.items.len);
-    testing.expectEqual(test_file, &testfs2.tree.children.items[0].val.File);
+    try testing.expectEqual(@as(usize, 1), testfs2.tree.children.items.len);
+    try testing.expectEqual(test_file, &testfs2.tree.children.items[0].val.File);
 }
 
 test "traversePath" {
@@ -797,11 +797,11 @@ test "traversePath" {
 
     // Get the root
     var test_root = try traversePath("/", false, .NO_CREATION, .{});
-    testing.expectEqual(test_root, root);
+    try testing.expectEqual(test_root, root);
     // Create a file in the root and try to traverse to it
     var child1 = try test_root.Dir.open("child1.txt", .CREATE_FILE, .{});
     var child1_traversed = try traversePath("/child1.txt", false, .NO_CREATION, .{});
-    testing.expectEqual(child1, child1_traversed);
+    try testing.expectEqual(child1, child1_traversed);
     // Close the open files
     child1.File.close();
     child1_traversed.File.close();
@@ -809,12 +809,12 @@ test "traversePath" {
     // Same but with a directory
     var child2 = try test_root.Dir.open("child2", .CREATE_DIR, .{});
     const child2_traversed = try traversePath("/child2", false, .NO_CREATION, .{});
-    testing.expectEqual(child2, child2_traversed);
+    try testing.expectEqual(child2, child2_traversed);
 
     // Again but with a file within that directory
     var child3 = try child2.Dir.open("child3.txt", .CREATE_FILE, .{});
     var child3_traversed = try traversePath("/child2/child3.txt", false, .NO_CREATION, .{});
-    testing.expectEqual(child3, child3_traversed);
+    try testing.expectEqual(child3, child3_traversed);
     // Close the open files
     child2.Dir.close();
     child2_traversed.Dir.close();
@@ -823,38 +823,38 @@ test "traversePath" {
     // Create and open a symlink
     var child4 = try traversePath("/child2/link", false, .CREATE_SYMLINK, .{ .symlink_target = "/child2/child3.txt" });
     var child4_linked = try traversePath("/child2/link", true, .NO_CREATION, .{});
-    testing.expectEqual(child4_linked, child3);
+    try testing.expectEqual(child4_linked, child3);
     var child5 = try traversePath("/child4", false, .CREATE_SYMLINK, .{ .symlink_target = "/child2" });
     var child5_linked = try traversePath("/child4/child3.txt", true, .NO_CREATION, .{});
-    testing.expectEqual(child5_linked, child4_linked);
+    try testing.expectEqual(child5_linked, child4_linked);
     child3.File.close();
     child4.Symlink.close();
     child5.Symlink.close();
     child4_linked.File.close();
     child5_linked.File.close();
 
-    testing.expectError(Error.NotAbsolutePath, traversePath("abc", false, .NO_CREATION, .{}));
-    testing.expectError(Error.NotAbsolutePath, traversePath("", false, .NO_CREATION, .{}));
-    testing.expectError(Error.NotAbsolutePath, traversePath("a/", false, .NO_CREATION, .{}));
-    testing.expectError(Error.NoSuchFileOrDir, traversePath("/notadir/abc.txt", false, .NO_CREATION, .{}));
-    testing.expectError(Error.NoSuchFileOrDir, traversePath("/ ", false, .NO_CREATION, .{}));
-    testing.expectError(Error.NotADirectory, traversePath("/child1.txt/abc.txt", false, .NO_CREATION, .{}));
-    testing.expectError(Error.NoSymlinkTarget, traversePath("/childX.txt", false, .CREATE_SYMLINK, .{}));
+    try testing.expectError(Error.NotAbsolutePath, traversePath("abc", false, .NO_CREATION, .{}));
+    try testing.expectError(Error.NotAbsolutePath, traversePath("", false, .NO_CREATION, .{}));
+    try testing.expectError(Error.NotAbsolutePath, traversePath("a/", false, .NO_CREATION, .{}));
+    try testing.expectError(Error.NoSuchFileOrDir, traversePath("/notadir/abc.txt", false, .NO_CREATION, .{}));
+    try testing.expectError(Error.NoSuchFileOrDir, traversePath("/ ", false, .NO_CREATION, .{}));
+    try testing.expectError(Error.NotADirectory, traversePath("/child1.txt/abc.txt", false, .NO_CREATION, .{}));
+    try testing.expectError(Error.NoSymlinkTarget, traversePath("/childX.txt", false, .CREATE_SYMLINK, .{}));
 
     // Since we've closed all the files, the open files count should be zero
-    testing.expectEqual(testfs.open_count, 0);
+    try testing.expectEqual(testfs.open_count, 0);
 }
 
 test "isAbsolute" {
-    testing.expect(isAbsolute("/"));
-    testing.expect(isAbsolute("/abc"));
-    testing.expect(isAbsolute("/abc/def"));
-    testing.expect(isAbsolute("/ a bc/de f"));
-    testing.expect(isAbsolute("//"));
-    testing.expect(!isAbsolute(" /"));
-    testing.expect(!isAbsolute(""));
-    testing.expect(!isAbsolute("abc"));
-    testing.expect(!isAbsolute("abc/def"));
+    try testing.expect(isAbsolute("/"));
+    try testing.expect(isAbsolute("/abc"));
+    try testing.expect(isAbsolute("/abc/def"));
+    try testing.expect(isAbsolute("/ a bc/de f"));
+    try testing.expect(isAbsolute("//"));
+    try testing.expect(!isAbsolute(" /"));
+    try testing.expect(!isAbsolute(""));
+    try testing.expect(!isAbsolute("abc"));
+    try testing.expect(!isAbsolute("abc/def"));
 }
 
 test "isDir" {
@@ -862,9 +862,9 @@ test "isDir" {
     const dir = Node{ .Dir = .{ .fs = &fs, .mount = null } };
     const file = Node{ .File = .{ .fs = &fs } };
     const symlink = Node{ .Symlink = .{ .fs = &fs, .path = "" } };
-    testing.expect(!symlink.isDir());
-    testing.expect(!file.isDir());
-    testing.expect(dir.isDir());
+    try testing.expect(!symlink.isDir());
+    try testing.expect(!file.isDir());
+    try testing.expect(dir.isDir());
 }
 
 test "isFile" {
@@ -872,9 +872,9 @@ test "isFile" {
     const dir = Node{ .Dir = .{ .fs = &fs, .mount = null } };
     const file = Node{ .File = .{ .fs = &fs } };
     const symlink = Node{ .Symlink = .{ .fs = &fs, .path = "" } };
-    testing.expect(!dir.isFile());
-    testing.expect(!symlink.isFile());
-    testing.expect(file.isFile());
+    try testing.expect(!dir.isFile());
+    try testing.expect(!symlink.isFile());
+    try testing.expect(file.isFile());
 }
 
 test "isSymlink" {
@@ -882,9 +882,9 @@ test "isSymlink" {
     const dir = Node{ .Dir = .{ .fs = &fs, .mount = null } };
     const file = Node{ .File = .{ .fs = &fs } };
     const symlink = Node{ .Symlink = .{ .fs = &fs, .path = "" } };
-    testing.expect(!dir.isSymlink());
-    testing.expect(!file.isSymlink());
-    testing.expect(symlink.isSymlink());
+    try testing.expect(!dir.isSymlink());
+    try testing.expect(!file.isSymlink());
+    try testing.expect(symlink.isSymlink());
 }
 
 test "open" {
@@ -895,46 +895,46 @@ test "open" {
 
     // Creating a file
     var test_node = try openFile("/abc.txt", .CREATE_FILE);
-    testing.expectEqual(testfs.tree.children.items.len, 1);
+    try testing.expectEqual(testfs.tree.children.items.len, 1);
     var tree = testfs.tree.children.items[0];
-    testing.expect(tree.val.isFile());
-    testing.expectEqual(test_node, &tree.val.File);
-    testing.expect(std.mem.eql(u8, tree.name, "abc.txt"));
-    testing.expectEqual(tree.data, null);
-    testing.expectEqual(tree.children.items.len, 0);
+    try testing.expect(tree.val.isFile());
+    try testing.expectEqual(test_node, &tree.val.File);
+    try testing.expect(std.mem.eql(u8, tree.name, "abc.txt"));
+    try testing.expectEqual(tree.data, null);
+    try testing.expectEqual(tree.children.items.len, 0);
 
     // Creating a dir
     var test_dir = try openDir("/def", .CREATE_DIR);
-    testing.expectEqual(testfs.tree.children.items.len, 2);
+    try testing.expectEqual(testfs.tree.children.items.len, 2);
     tree = testfs.tree.children.items[1];
-    testing.expect(tree.val.isDir());
-    testing.expectEqual(test_dir, &tree.val.Dir);
-    testing.expect(std.mem.eql(u8, tree.name, "def"));
-    testing.expectEqual(tree.data, null);
-    testing.expectEqual(tree.children.items.len, 0);
+    try testing.expect(tree.val.isDir());
+    try testing.expectEqual(test_dir, &tree.val.Dir);
+    try testing.expect(std.mem.eql(u8, tree.name, "def"));
+    try testing.expectEqual(tree.data, null);
+    try testing.expectEqual(tree.children.items.len, 0);
 
     // Creating a file under a new dir
     test_node = try openFile("/def/ghi.zig", .CREATE_FILE);
-    testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
+    try testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
     tree = testfs.tree.children.items[1].children.items[0];
-    testing.expect(tree.val.isFile());
-    testing.expectEqual(test_node, &tree.val.File);
-    testing.expect(std.mem.eql(u8, tree.name, "ghi.zig"));
-    testing.expectEqual(tree.data, null);
-    testing.expectEqual(tree.children.items.len, 0);
+    try testing.expect(tree.val.isFile());
+    try testing.expectEqual(test_node, &tree.val.File);
+    try testing.expect(std.mem.eql(u8, tree.name, "ghi.zig"));
+    try testing.expectEqual(tree.data, null);
+    try testing.expectEqual(tree.children.items.len, 0);
 
-    testing.expectError(Error.NoSuchFileOrDir, openDir("/jkl", .NO_CREATION));
-    testing.expectError(Error.NoSuchFileOrDir, openFile("/mno.txt", .NO_CREATION));
-    testing.expectError(Error.NoSuchFileOrDir, openFile("/def/pqr.txt", .NO_CREATION));
-    testing.expectError(Error.NoSuchFileOrDir, openDir("/mno/stu", .NO_CREATION));
-    testing.expectError(Error.NoSuchFileOrDir, openFile("/mno/stu.txt", .NO_CREATION));
-    testing.expectError(Error.NotADirectory, openFile("/abc.txt/vxy.md", .NO_CREATION));
-    testing.expectError(Error.IsADirectory, openFile("/def", .NO_CREATION));
-    testing.expectError(Error.InvalidFlags, openFile("/abc.txt", .CREATE_DIR));
-    testing.expectError(Error.InvalidFlags, openDir("/abc.txt", .CREATE_FILE));
-    testing.expectError(Error.NotAbsolutePath, open("", false, .NO_CREATION, .{}));
-    testing.expectError(Error.NotAbsolutePath, open("abc", false, .NO_CREATION, .{}));
-    testing.expectError(Error.NoSymlinkTarget, open("/abc", false, .CREATE_SYMLINK, .{}));
+    try testing.expectError(Error.NoSuchFileOrDir, openDir("/jkl", .NO_CREATION));
+    try testing.expectError(Error.NoSuchFileOrDir, openFile("/mno.txt", .NO_CREATION));
+    try testing.expectError(Error.NoSuchFileOrDir, openFile("/def/pqr.txt", .NO_CREATION));
+    try testing.expectError(Error.NoSuchFileOrDir, openDir("/mno/stu", .NO_CREATION));
+    try testing.expectError(Error.NoSuchFileOrDir, openFile("/mno/stu.txt", .NO_CREATION));
+    try testing.expectError(Error.NotADirectory, openFile("/abc.txt/vxy.md", .NO_CREATION));
+    try testing.expectError(Error.IsADirectory, openFile("/def", .NO_CREATION));
+    try testing.expectError(Error.InvalidFlags, openFile("/abc.txt", .CREATE_DIR));
+    try testing.expectError(Error.InvalidFlags, openDir("/abc.txt", .CREATE_FILE));
+    try testing.expectError(Error.NotAbsolutePath, open("", false, .NO_CREATION, .{}));
+    try testing.expectError(Error.NotAbsolutePath, open("abc", false, .NO_CREATION, .{}));
+    try testing.expectError(Error.NoSymlinkTarget, open("/abc", false, .CREATE_SYMLINK, .{}));
 }
 
 test "read" {
@@ -951,35 +951,35 @@ test "read" {
     var buffer: [64]u8 = undefined;
     {
         const length = try test_file.read(buffer[0..str.len]);
-        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
         const length = try test_file.read(buffer[0 .. str.len + 1]);
-        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
         const length = try test_file.read(buffer[0 .. str.len + 3]);
-        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
         const length = try test_file.read(buffer[0 .. str.len - 1]);
-        testing.expect(std.mem.eql(u8, str[0 .. str.len - 1], buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str[0 .. str.len - 1], buffer[0..length]));
     }
 
     {
         const length = try test_file.read(buffer[0..0]);
-        testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
     }
     // Try reading from a symlink
     var test_link = try openSymlink("/link", "/foo.txt", .CREATE_SYMLINK);
-    testing.expectEqual(test_link, "/foo.txt");
+    try testing.expectEqual(test_link, "/foo.txt");
     var link_file = try openFile("/link", .NO_CREATION);
     {
         const length = try link_file.read(buffer[0..]);
-        testing.expect(std.mem.eql(u8, str[0..], buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str[0..], buffer[0..length]));
     }
 }
 
@@ -991,19 +991,19 @@ test "write" {
 
     var test_file = try openFile("/foo.txt", .CREATE_FILE);
     var f_data = &testfs.tree.children.items[0].data;
-    testing.expectEqual(f_data.*, null);
+    try testing.expectEqual(f_data.*, null);
 
     var str = "test123";
     const length = try test_file.write(str);
-    testing.expect(std.mem.eql(u8, str, f_data.* orelse unreachable));
-    testing.expect(length == str.len);
+    try testing.expect(std.mem.eql(u8, str, f_data.* orelse unreachable));
+    try testing.expect(length == str.len);
 
     // Try writing to a symlink
     var test_link = try openSymlink("/link", "/foo.txt", .CREATE_SYMLINK);
-    testing.expectEqual(test_link, "/foo.txt");
+    try testing.expectEqual(test_link, "/foo.txt");
     var link_file = try openFile("/link", .NO_CREATION);
 
     var str2 = "test456";
     const length2 = try test_file.write(str2);
-    testing.expect(std.mem.eql(u8, str2, f_data.* orelse unreachable));
+    try testing.expect(std.mem.eql(u8, str2, f_data.* orelse unreachable));
 }

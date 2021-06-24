@@ -102,15 +102,15 @@ pub fn physToVirt(phys: anytype) @TypeOf(phys) {
 test "physToVirt" {
     ADDR_OFFSET = 0xC0000000;
     const offset: usize = ADDR_OFFSET;
-    expectEqual(physToVirt(@as(usize, 0)), offset + 0);
-    expectEqual(physToVirt(@as(usize, 123)), offset + 123);
-    expectEqual(@ptrToInt(physToVirt(@intToPtr(*align(1) usize, 123))), offset + 123);
+    try expectEqual(physToVirt(@as(usize, 0)), offset + 0);
+    try expectEqual(physToVirt(@as(usize, 123)), offset + 123);
+    try expectEqual(@ptrToInt(physToVirt(@intToPtr(*align(1) usize, 123))), offset + 123);
 }
 
 test "virtToPhys" {
     ADDR_OFFSET = 0xC0000000;
     const offset: usize = ADDR_OFFSET;
-    expectEqual(virtToPhys(offset + 0), 0);
-    expectEqual(virtToPhys(offset + 123), 123);
-    expectEqual(@ptrToInt(virtToPhys(@intToPtr(*align(1) usize, offset + 123))), 123);
+    try expectEqual(virtToPhys(offset + 0), 0);
+    try expectEqual(virtToPhys(offset + 123), 123);
+    try expectEqual(@ptrToInt(virtToPhys(@intToPtr(*align(1) usize, offset + 123))), 123);
 }
