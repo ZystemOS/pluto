@@ -463,14 +463,14 @@ pub fn init(mem_profile: *const MemProfile) void {
     }
 }
 
-fn checkDirEntry(entry: DirectoryEntry, virt_start: usize, virt_end: usize, phys_start: usize, attrs: vmm.Attributes, table: *Table, present: bool) void {
-    expectEqual(entry & DENTRY_PRESENT, if (present) DENTRY_PRESENT else 0);
-    expectEqual(entry & DENTRY_WRITABLE, if (attrs.writable) DENTRY_WRITABLE else 0);
-    expectEqual(entry & DENTRY_USER, if (attrs.kernel) 0 else DENTRY_USER);
-    expectEqual(entry & DENTRY_WRITE_THROUGH, DENTRY_WRITE_THROUGH);
-    expectEqual(entry & DENTRY_CACHE_DISABLED, if (attrs.cachable) 0 else DENTRY_CACHE_DISABLED);
-    expectEqual(entry & DENTRY_4MB_PAGES, 0);
-    expectEqual(entry & DENTRY_ZERO, 0);
+fn checkDirEntry(entry: DirectoryEntry, virt_start: usize, virt_end: usize, phys_start: usize, attrs: vmm.Attributes, table: *Table, present: bool) !void {
+    try expectEqual(entry & DENTRY_PRESENT, if (present) DENTRY_PRESENT else 0);
+    try expectEqual(entry & DENTRY_WRITABLE, if (attrs.writable) DENTRY_WRITABLE else 0);
+    try expectEqual(entry & DENTRY_USER, if (attrs.kernel) 0 else DENTRY_USER);
+    try expectEqual(entry & DENTRY_WRITE_THROUGH, DENTRY_WRITE_THROUGH);
+    try expectEqual(entry & DENTRY_CACHE_DISABLED, if (attrs.cachable) 0 else DENTRY_CACHE_DISABLED);
+    try expectEqual(entry & DENTRY_4MB_PAGES, 0);
+    try expectEqual(entry & DENTRY_ZERO, 0);
 
     var tentry_idx = virtToTableEntryIdx(virt_start);
     var tentry_idx_end = virtToTableEntryIdx(virt_end);
@@ -480,19 +480,19 @@ fn checkDirEntry(entry: DirectoryEntry, virt_start: usize, virt_end: usize, phys
         phys += PAGE_SIZE_4KB;
     }) {
         const tentry = table.entries[tentry_idx];
-        checkTableEntry(tentry, phys, attrs, present);
+        try checkTableEntry(tentry, phys, attrs, present);
     }
 }
 
-fn checkTableEntry(entry: TableEntry, page_phys: usize, attrs: vmm.Attributes, present: bool) void {
-    expectEqual(entry & TENTRY_PRESENT, if (present) TENTRY_PRESENT else 0);
-    expectEqual(entry & TENTRY_WRITABLE, if (attrs.writable) TENTRY_WRITABLE else 0);
-    expectEqual(entry & TENTRY_USER, if (attrs.kernel) 0 else TENTRY_USER);
-    expectEqual(entry & TENTRY_WRITE_THROUGH, TENTRY_WRITE_THROUGH);
-    expectEqual(entry & TENTRY_CACHE_DISABLED, if (attrs.cachable) 0 else TENTRY_CACHE_DISABLED);
-    expectEqual(entry & TENTRY_ZERO, 0);
-    expectEqual(entry & TENTRY_GLOBAL, 0);
-    expectEqual(entry & TENTRY_PAGE_ADDR, page_phys);
+fn checkTableEntry(entry: TableEntry, page_phys: usize, attrs: vmm.Attributes, present: bool) !void {
+    try expectEqual(entry & TENTRY_PRESENT, if (present) TENTRY_PRESENT else 0);
+    try expectEqual(entry & TENTRY_WRITABLE, if (attrs.writable) TENTRY_WRITABLE else 0);
+    try expectEqual(entry & TENTRY_USER, if (attrs.kernel) 0 else TENTRY_USER);
+    try expectEqual(entry & TENTRY_WRITE_THROUGH, TENTRY_WRITE_THROUGH);
+    try expectEqual(entry & TENTRY_CACHE_DISABLED, if (attrs.cachable) 0 else TENTRY_CACHE_DISABLED);
+    try expectEqual(entry & TENTRY_ZERO, 0);
+    try expectEqual(entry & TENTRY_GLOBAL, 0);
+    try expectEqual(entry & TENTRY_PAGE_ADDR, page_phys);
 }
 
 test "setAttribute and clearAttribute" {
@@ -502,35 +502,35 @@ test "setAttribute and clearAttribute" {
     for (attrs) |attr| {
         const old_val = val;
         setAttribute(&val, attr);
-        std.testing.expectEqual(val, old_val | attr);
+        try std.testing.expectEqual(val, old_val | attr);
     }
 
     for (attrs) |attr| {
         const old_val = val;
         clearAttribute(&val, attr);
-        std.testing.expectEqual(val, old_val & ~attr);
+        try std.testing.expectEqual(val, old_val & ~attr);
     }
 }
 
 test "virtToDirEntryIdx" {
-    expectEqual(virtToDirEntryIdx(0), 0);
-    expectEqual(virtToDirEntryIdx(123), 0);
-    expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB - 1), 0);
-    expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB), 1);
-    expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB + 1), 1);
-    expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB * 2), 2);
-    expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB * (ENTRIES_PER_DIRECTORY - 1)), ENTRIES_PER_DIRECTORY - 1);
+    try expectEqual(virtToDirEntryIdx(0), 0);
+    try expectEqual(virtToDirEntryIdx(123), 0);
+    try expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB - 1), 0);
+    try expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB), 1);
+    try expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB + 1), 1);
+    try expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB * 2), 2);
+    try expectEqual(virtToDirEntryIdx(PAGE_SIZE_4MB * (ENTRIES_PER_DIRECTORY - 1)), ENTRIES_PER_DIRECTORY - 1);
 }
 
 test "virtToTableEntryIdx" {
-    expectEqual(virtToTableEntryIdx(0), 0);
-    expectEqual(virtToTableEntryIdx(123), 0);
-    expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB - 1), 0);
-    expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB), 1);
-    expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB + 1), 1);
-    expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB * 2), 2);
-    expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB * (ENTRIES_PER_TABLE - 1)), ENTRIES_PER_TABLE - 1);
-    expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB * (ENTRIES_PER_TABLE)), 0);
+    try expectEqual(virtToTableEntryIdx(0), 0);
+    try expectEqual(virtToTableEntryIdx(123), 0);
+    try expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB - 1), 0);
+    try expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB), 1);
+    try expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB + 1), 1);
+    try expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB * 2), 2);
+    try expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB * (ENTRIES_PER_TABLE - 1)), ENTRIES_PER_TABLE - 1);
+    try expectEqual(virtToTableEntryIdx(PAGE_SIZE_4KB * (ENTRIES_PER_TABLE)), 0);
 }
 
 test "mapDirEntry" {
@@ -550,7 +550,7 @@ test "mapDirEntry" {
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
         const table = dir.tables[entry_idx].?;
-        checkDirEntry(entry, virt, virt_end, phys, attrs, table, true);
+        try checkDirEntry(entry, virt, virt_end, phys, attrs, table, true);
         const table_free = @ptrCast([*]Table, table)[0..1];
         allocator.free(table_free);
     }
@@ -565,7 +565,7 @@ test "mapDirEntry" {
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
         const table = dir.tables[entry_idx].?;
-        checkDirEntry(entry, virt, virt_end, phys, attrs, table, true);
+        try checkDirEntry(entry, virt, virt_end, phys, attrs, table, true);
         const table_free = @ptrCast([*]Table, table)[0..1];
         allocator.free(table_free);
     }
@@ -575,11 +575,11 @@ test "mapDirEntry returns errors correctly" {
     var allocator = std.testing.allocator;
     var dir = Directory{ .entries = [_]DirectoryEntry{0} ** ENTRIES_PER_DIRECTORY, .tables = undefined };
     const attrs = vmm.Attributes{ .kernel = true, .writable = true, .cachable = true };
-    testing.expectError(vmm.MapperError.MisalignedVirtualAddress, mapDirEntry(&dir, 1, PAGE_SIZE_4KB + 1, 0, PAGE_SIZE_4KB, attrs, allocator));
-    testing.expectError(vmm.MapperError.MisalignedPhysicalAddress, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB + 1, attrs, allocator));
-    testing.expectError(vmm.MapperError.AddressMismatch, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB, attrs, allocator));
-    testing.expectError(vmm.MapperError.InvalidVirtualAddress, mapDirEntry(&dir, 1, 0, 0, PAGE_SIZE_4KB, attrs, allocator));
-    testing.expectError(vmm.MapperError.InvalidPhysicalAddress, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, 0, attrs, allocator));
+    try testing.expectError(vmm.MapperError.MisalignedVirtualAddress, mapDirEntry(&dir, 1, PAGE_SIZE_4KB + 1, 0, PAGE_SIZE_4KB, attrs, allocator));
+    try testing.expectError(vmm.MapperError.MisalignedPhysicalAddress, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB + 1, attrs, allocator));
+    try testing.expectError(vmm.MapperError.AddressMismatch, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, PAGE_SIZE_4KB, attrs, allocator));
+    try testing.expectError(vmm.MapperError.InvalidVirtualAddress, mapDirEntry(&dir, 1, 0, 0, PAGE_SIZE_4KB, attrs, allocator));
+    try testing.expectError(vmm.MapperError.InvalidPhysicalAddress, mapDirEntry(&dir, 0, PAGE_SIZE_4KB, 1, 0, attrs, allocator));
 }
 
 test "map and unmap" {
@@ -605,7 +605,7 @@ test "map and unmap" {
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
         const table = dir.tables[entry_idx].?;
-        checkDirEntry(entry, virt, virt + PAGE_SIZE_4MB, phys, attrs, table, true);
+        try checkDirEntry(entry, virt, virt + PAGE_SIZE_4MB, phys, attrs, table, true);
     }
 
     try unmap(virt_start, virt_end, allocator, &dir);
@@ -618,7 +618,7 @@ test "map and unmap" {
         const entry_idx = virtToDirEntryIdx(virt);
         const entry = dir.entries[entry_idx];
         const table = dir.tables[entry_idx].?;
-        checkDirEntry(entry, virt, virt + PAGE_SIZE_4MB, phys, attrs, table, false);
+        try checkDirEntry(entry, virt, virt + PAGE_SIZE_4MB, phys, attrs, table, false);
     }
 }
 
@@ -634,12 +634,12 @@ test "copy" {
     var dir2 = dir.copy();
     const dir_slice = @ptrCast([*]const u8, &dir)[0..@sizeOf(Directory)];
     const dir2_slice = @ptrCast([*]const u8, &dir2)[0..@sizeOf(Directory)];
-    testing.expectEqualSlices(u8, dir_slice, dir2_slice);
+    try testing.expectEqualSlices(u8, dir_slice, dir2_slice);
 
     // Changes to one should not affect the other
     dir2.tables[1] = &table0;
     dir.tables[0] = &table56;
-    testing.expect(!std.mem.eql(u8, dir_slice, dir2_slice));
+    try expect(!std.mem.eql(u8, dir_slice, dir2_slice));
 }
 
 // The labels to jump to after attempting to cause a page fault. This is needed as we don't want to cause an

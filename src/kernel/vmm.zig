@@ -210,10 +210,10 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             var it = self.allocations.iterator();
             while (it.next()) |entry| {
                 var list = std.ArrayList(usize).init(self.allocator);
-                for (entry.value.physical.items) |block| {
+                for (entry.value_ptr.physical.items) |block| {
                     _ = try list.append(block);
                 }
-                _ = try clone.allocations.put(entry.key, Allocation{ .physical = list });
+                _ = try clone.allocations.put(entry.key_ptr.*, Allocation{ .physical = list });
             }
             return clone;
         }
@@ -228,7 +228,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             self.bmp.deinit();
             var it = self.allocations.iterator();
             while (it.next()) |entry| {
-                entry.value.physical.deinit();
+                entry.value_ptr.physical.deinit();
             }
             self.allocations.deinit();
         }
@@ -278,8 +278,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         pub fn physToVirt(self: *const Self, phys: usize) VmmError!usize {
             var it = self.allocations.iterator();
             while (it.next()) |entry| {
-                const vaddr = entry.key;
-                const allocation = entry.value;
+                const vaddr = entry.key_ptr.*;
+                const allocation = entry.value_ptr.*;
 
                 for (allocation.physical.items) |block, i| {
                     if (block <= phys and block + BLOCK_SIZE > phys) {
@@ -453,8 +453,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             defer blocks.deinit();
             var it = other.allocations.iterator();
             while (it.next()) |allocation| {
-                const virtual = allocation.key;
-                const physical = allocation.value.physical.items;
+                const virtual = allocation.key_ptr.*;
+                const physical = allocation.value_ptr.*.physical.items;
                 if (start_addr >= virtual and virtual + physical.len * BLOCK_SIZE >= end_addr) {
                     const first_block_idx = (start_addr - virtual) / BLOCK_SIZE;
                     const last_block_idx = (end_addr - virtual) / BLOCK_SIZE;
@@ -596,13 +596,13 @@ test "virtToPhys" {
     try vmm.set(.{ .start = vstart, .end = vstart + BLOCK_SIZE }, mem.Range{ .start = pstart + BLOCK_SIZE * 2, .end = pend }, .{ .kernel = true, .writable = true, .cachable = true });
     try vmm.set(.{ .start = vstart + BLOCK_SIZE, .end = vend }, mem.Range{ .start = pstart, .end = pstart + BLOCK_SIZE * 2 }, .{ .kernel = true, .writable = true, .cachable = true });
 
-    std.testing.expectEqual(pstart + BLOCK_SIZE * 2, try vmm.virtToPhys(vstart));
-    std.testing.expectEqual(pstart + BLOCK_SIZE * 2 + 29, (try vmm.virtToPhys(vstart + 29)));
-    std.testing.expectEqual(pstart + 29, (try vmm.virtToPhys(vstart + BLOCK_SIZE + 29)));
+    try std.testing.expectEqual(pstart + BLOCK_SIZE * 2, try vmm.virtToPhys(vstart));
+    try std.testing.expectEqual(pstart + BLOCK_SIZE * 2 + 29, (try vmm.virtToPhys(vstart + 29)));
+    try std.testing.expectEqual(pstart + 29, (try vmm.virtToPhys(vstart + BLOCK_SIZE + 29)));
 
-    std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vstart - 1));
-    std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vend));
-    std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vend + 1));
+    try std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vstart - 1));
+    try std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vend));
+    try std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(vend + 1));
 }
 
 test "physToVirt" {
@@ -619,13 +619,13 @@ test "physToVirt" {
     try vmm.set(.{ .start = vstart, .end = vstart + BLOCK_SIZE }, mem.Range{ .start = pstart + BLOCK_SIZE * 2, .end = pend }, .{ .kernel = true, .writable = true, .cachable = true });
     try vmm.set(.{ .start = vstart + BLOCK_SIZE, .end = vend }, mem.Range{ .start = pstart, .end = pstart + BLOCK_SIZE * 2 }, .{ .kernel = true, .writable = true, .cachable = true });
 
-    std.testing.expectEqual(vstart, try vmm.physToVirt(pstart + BLOCK_SIZE * 2));
-    std.testing.expectEqual(vstart + 29, (try vmm.physToVirt(pstart + BLOCK_SIZE * 2 + 29)));
-    std.testing.expectEqual(vstart + BLOCK_SIZE + 29, (try vmm.physToVirt(pstart + 29)));
+    try std.testing.expectEqual(vstart, try vmm.physToVirt(pstart + BLOCK_SIZE * 2));
+    try std.testing.expectEqual(vstart + 29, (try vmm.physToVirt(pstart + BLOCK_SIZE * 2 + 29)));
+    try std.testing.expectEqual(vstart + BLOCK_SIZE + 29, (try vmm.physToVirt(pstart + 29)));
 
-    std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pstart - 1));
-    std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pend));
-    std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pend + 1));
+    try std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pstart - 1));
+    try std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pend));
+    try std.testing.expectError(VmmError.NotAllocated, vmm.physToVirt(pend + 1));
 }
 
 test "alloc and free" {
@@ -646,11 +646,11 @@ test "alloc and free" {
         var should_be_set = true;
         if (entry + num_to_alloc > num_entries) {
             // If the number to allocate exceeded the number of entries, then allocation should have failed
-            std.testing.expectEqual(@as(?usize, null), result);
+            try std.testing.expectEqual(@as(?usize, null), result);
             should_be_set = false;
         } else {
             // Else it should have succeeded and allocated the correct address
-            std.testing.expectEqual(@as(?usize, vmm.start + entry * BLOCK_SIZE), result);
+            try std.testing.expectEqual(@as(?usize, vmm.start + entry * BLOCK_SIZE), result);
             try virtual_allocations.append(result.?);
         }
 
@@ -659,20 +659,20 @@ test "alloc and free" {
         while (vaddr < (entry + num_to_alloc) * BLOCK_SIZE) : (vaddr += BLOCK_SIZE) {
             if (should_be_set) {
                 // Allocation succeeded so this address should be set
-                std.testing.expect(try vmm.isSet(vaddr));
+                try std.testing.expect(try vmm.isSet(vaddr));
                 // The test mapper should have received this address
-                std.testing.expect(try allocations.isSet(vaddr / BLOCK_SIZE));
+                try std.testing.expect(try allocations.isSet(vaddr / BLOCK_SIZE));
             } else {
                 // Allocation failed as there weren't enough free entries
                 if (vaddr >= num_entries * BLOCK_SIZE) {
                     // If this address is beyond the VMM's end address, it should be out of bounds
-                    std.testing.expectError(bitmap.Bitmap(u32).BitmapError.OutOfBounds, vmm.isSet(vaddr));
-                    std.testing.expectError(bitmap.Bitmap(u64).BitmapError.OutOfBounds, allocations.isSet(vaddr / BLOCK_SIZE));
+                    try std.testing.expectError(bitmap.Bitmap(u32).BitmapError.OutOfBounds, vmm.isSet(vaddr));
+                    try std.testing.expectError(bitmap.Bitmap(u64).BitmapError.OutOfBounds, allocations.isSet(vaddr / BLOCK_SIZE));
                 } else {
                     // Else it should not be set
-                    std.testing.expect(!(try vmm.isSet(vaddr)));
+                    try std.testing.expect(!(try vmm.isSet(vaddr)));
                     // The test mapper should not have received this address
-                    std.testing.expect(!(try allocations.isSet(vaddr / BLOCK_SIZE)));
+                    try std.testing.expect(!(try allocations.isSet(vaddr / BLOCK_SIZE)));
                 }
             }
         }
@@ -681,31 +681,31 @@ test "alloc and free" {
         // All later entries should not be set
         var later_entry = entry;
         while (later_entry < num_entries) : (later_entry += 1) {
-            std.testing.expect(!(try vmm.isSet(vmm.start + later_entry * BLOCK_SIZE)));
-            std.testing.expect(!(try pmm.isSet(later_entry * BLOCK_SIZE)));
+            try std.testing.expect(!(try vmm.isSet(vmm.start + later_entry * BLOCK_SIZE)));
+            try std.testing.expect(!(try pmm.isSet(later_entry * BLOCK_SIZE)));
         }
     }
 
     // Try freeing all allocations
     for (virtual_allocations.items) |alloc| {
         const alloc_group = vmm.allocations.get(alloc);
-        std.testing.expect(alloc_group != null);
+        try std.testing.expect(alloc_group != null);
         const physical = alloc_group.?.physical;
         // We need to create a copy of the physical allocations since the free call deinits them
         var physical_copy = std.ArrayList(usize).init(std.testing.allocator);
         defer physical_copy.deinit();
         // Make sure they are all reserved in the PMM
         for (physical.items) |phys| {
-            std.testing.expect(try pmm.isSet(phys));
+            try std.testing.expect(try pmm.isSet(phys));
             try physical_copy.append(phys);
         }
         vmm.free(alloc) catch unreachable;
         // This virtual allocation should no longer be in the hashmap
-        std.testing.expectEqual(vmm.allocations.get(alloc), null);
-        std.testing.expect(!try vmm.isSet(alloc));
+        try std.testing.expectEqual(vmm.allocations.get(alloc), null);
+        try std.testing.expect(!try vmm.isSet(alloc));
         // And all its physical blocks should now be free
         for (physical_copy.items) |phys| {
-            std.testing.expect(!try pmm.isSet(phys));
+            try std.testing.expect(!try pmm.isSet(phys));
         }
     }
 }
@@ -749,21 +749,21 @@ test "set" {
     const attrs = Attributes{ .kernel = true, .writable = true, .cachable = true };
     try vmm.set(.{ .start = vstart, .end = vend }, mem.Range{ .start = pstart, .end = pend }, attrs);
     // Make sure it put the correct address in the map
-    std.testing.expect(vmm.allocations.get(vstart) != null);
+    try std.testing.expect(vmm.allocations.get(vstart) != null);
 
     var allocations = test_allocations.?;
     // The entries before the virtual start shouldn't be set
     var vaddr = vmm.start;
     while (vaddr < vstart) : (vaddr += BLOCK_SIZE) {
-        std.testing.expect(!(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE)));
+        try std.testing.expect(!(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE)));
     }
     // The entries up until the virtual end should be set
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
-        std.testing.expect(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE));
+        try std.testing.expect(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE));
     }
     // The entries after the virtual end should not be set
     while (vaddr < vmm.end) : (vaddr += BLOCK_SIZE) {
-        std.testing.expect(!(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE)));
+        try std.testing.expect(!(try allocations.isSet((vaddr - vmm.start) / BLOCK_SIZE)));
     }
 }
 
@@ -777,33 +777,33 @@ test "copy" {
 
     var mirrored = try vmm.copy();
     defer mirrored.deinit();
-    std.testing.expectEqual(vmm.bmp.num_free_entries, mirrored.bmp.num_free_entries);
-    std.testing.expectEqual(vmm.start, mirrored.start);
-    std.testing.expectEqual(vmm.end, mirrored.end);
-    std.testing.expectEqual(vmm.allocations.count(), mirrored.allocations.count());
+    try std.testing.expectEqual(vmm.bmp.num_free_entries, mirrored.bmp.num_free_entries);
+    try std.testing.expectEqual(vmm.start, mirrored.start);
+    try std.testing.expectEqual(vmm.end, mirrored.end);
+    try std.testing.expectEqual(vmm.allocations.count(), mirrored.allocations.count());
     var it = vmm.allocations.iterator();
     while (it.next()) |next| {
-        for (mirrored.allocations.get(next.key).?.physical.items) |block, i| {
-            std.testing.expectEqual(block, vmm.allocations.get(next.key).?.physical.items[i]);
+        for (mirrored.allocations.get(next.key_ptr.*).?.physical.items) |block, i| {
+            try std.testing.expectEqual(block, vmm.allocations.get(next.key_ptr.*).?.physical.items[i]);
         }
     }
-    std.testing.expectEqual(vmm.mapper, mirrored.mapper);
-    std.testing.expectEqual(vmm.payload, mirrored.payload);
+    try std.testing.expectEqual(vmm.mapper, mirrored.mapper);
+    try std.testing.expectEqual(vmm.payload, mirrored.payload);
 
     // Allocating in the new VMM shouldn't allocate in the mirrored one
     const alloc1 = (try mirrored.alloc(3, null, attrs)).?;
-    std.testing.expectEqual(vmm.allocations.count() + 1, mirrored.allocations.count());
-    std.testing.expectEqual(vmm.bmp.num_free_entries - 3, mirrored.bmp.num_free_entries);
-    std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(alloc1));
+    try std.testing.expectEqual(vmm.allocations.count() + 1, mirrored.allocations.count());
+    try std.testing.expectEqual(vmm.bmp.num_free_entries - 3, mirrored.bmp.num_free_entries);
+    try std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(alloc1));
 
     // And vice-versa
     const alloc2 = (try vmm.alloc(3, null, attrs)).?;
     const alloc3 = (try vmm.alloc(1, null, attrs)).?;
     const alloc4 = (try vmm.alloc(1, null, attrs)).?;
-    std.testing.expectEqual(vmm.allocations.count() - 2, mirrored.allocations.count());
-    std.testing.expectEqual(vmm.bmp.num_free_entries + 2, mirrored.bmp.num_free_entries);
-    std.testing.expectError(VmmError.NotAllocated, mirrored.virtToPhys(alloc3));
-    std.testing.expectError(VmmError.NotAllocated, mirrored.virtToPhys(alloc4));
+    try std.testing.expectEqual(vmm.allocations.count() - 2, mirrored.allocations.count());
+    try std.testing.expectEqual(vmm.bmp.num_free_entries + 2, mirrored.bmp.num_free_entries);
+    try std.testing.expectError(VmmError.NotAllocated, mirrored.virtToPhys(alloc3));
+    try std.testing.expectError(VmmError.NotAllocated, mirrored.virtToPhys(alloc4));
 }
 
 test "copyData from" {
@@ -821,21 +821,21 @@ test "copyData from" {
 
     // Make sure they are the same
     var buff2 = @intToPtr([*]u8, alloc)[0..buff.len];
-    std.testing.expectEqualSlices(u8, buff[0..buff.len], buff2);
-    std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
+    try std.testing.expectEqualSlices(u8, buff[0..buff.len], buff2);
+    try std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
     // TODO Remove the subtraction by one once we are able to free the temp space in copyData
-    std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
+    try std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
 
     // Test NotAllocated
-    std.testing.expectError(VmmError.NotAllocated, vmm2.copyData(&vmm, true, buff[0..buff.len], alloc + alloc1_blocks * BLOCK_SIZE));
-    std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
-    std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
+    try std.testing.expectError(VmmError.NotAllocated, vmm2.copyData(&vmm, true, buff[0..buff.len], alloc + alloc1_blocks * BLOCK_SIZE));
+    try std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
+    try std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
 
     // Test Bitmap.Error.OutOfBounds
-    std.testing.expectError(bitmap.Bitmap(usize).BitmapError.OutOfBounds, vmm2.copyData(&vmm, true, buff[0..buff.len], vmm.end));
-    std.testing.expectError(bitmap.Bitmap(usize).BitmapError.OutOfBounds, vmm.copyData(&vmm2, true, buff[0..buff.len], vmm2.end));
-    std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
-    std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
+    try std.testing.expectError(bitmap.Bitmap(usize).BitmapError.OutOfBounds, vmm2.copyData(&vmm, true, buff[0..buff.len], vmm.end));
+    try std.testing.expectError(bitmap.Bitmap(usize).BitmapError.OutOfBounds, vmm.copyData(&vmm2, true, buff[0..buff.len], vmm2.end));
+    try std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
+    try std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
 }
 
 test "copyDaya to" {
@@ -852,9 +852,9 @@ test "copyDaya to" {
     var buff2 = @intToPtr([*]u8, alloc)[0..buff.len];
     try vmm2.copyData(&vmm, false, buff[0..], alloc);
 
-    std.testing.expectEqualSlices(u8, buff[0..buff.len], buff2);
-    std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
-    std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
+    try std.testing.expectEqualSlices(u8, buff[0..buff.len], buff2);
+    try std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
+    try std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
 }
 
 var test_allocations: ?*bitmap.Bitmap(u64) = null;
@@ -924,8 +924,13 @@ pub fn testDeinit(vmm: *VirtualMemoryManager(arch.VmmPayload)) void {
 ///     IN/OUT allocator: *Allocator - The allocator to use. Ignored
 ///     IN payload: arch.VmmPayload - The payload value. Expected to be arch.KERNEL_VMM_PAYLOAD
 ///
+<<<<<<< HEAD
 fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: *Allocator, payload: arch.VmmPayload) (Allocator.Error || MapperError)!void {
     std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
+=======
+fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: *Allocator, payload: u8) (Allocator.Error || MapperError)!void {
+    std.testing.expectEqual(@as(u8, 39), payload) catch unreachable;
+>>>>>>> 9caa42e (Add try before expect functions and fix std lib usage in tests)
     var vaddr = vstart;
     var allocations = test_allocations.?;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
@@ -941,8 +946,13 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
 ///     IN vend: usize - The end of the virtual region to unmap
 ///     IN payload: arch.VmmPayload - The payload value. Expected to be arch.KERNEL_VMM_PAYLOAD
 ///
+<<<<<<< HEAD
 fn testUnmap(vstart: usize, vend: usize, allocator: *Allocator, payload: arch.VmmPayload) MapperError!void {
     std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
+=======
+fn testUnmap(vstart: usize, vend: usize, allocator: *Allocator, payload: u8) MapperError!void {
+    std.testing.expectEqual(@as(u8, 39), payload) catch unreachable;
+>>>>>>> 9caa42e (Add try before expect functions and fix std lib usage in tests)
     var vaddr = vstart;
     var allocations = test_allocations.?;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {

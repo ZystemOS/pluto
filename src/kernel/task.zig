@@ -190,28 +190,28 @@ test "create out of memory for task" {
     // Set the global allocator
     var fa = FailingAllocator.init(testing_allocator, 0);
 
-    expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, &fa.allocator));
-    expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, &fa.allocator));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, &fa.allocator));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, &fa.allocator));
 
     // Make sure any memory allocated is freed
-    expectEqual(fa.allocated_bytes, fa.freed_bytes);
+    try expectEqual(fa.allocated_bytes, fa.freed_bytes);
 
     // Make sure no PIDs were allocated
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "create out of memory for stack" {
     // Set the global allocator
     var fa = FailingAllocator.init(testing_allocator, 1);
 
-    expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, &fa.allocator));
-    expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, &fa.allocator));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, &fa.allocator));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, &fa.allocator));
 
     // Make sure any memory allocated is freed
-    expectEqual(fa.allocated_bytes, fa.freed_bytes);
+    try expectEqual(fa.allocated_bytes, fa.freed_bytes);
 
     // Make sure no PIDs were allocated
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "create expected setup" {
@@ -219,15 +219,15 @@ test "create expected setup" {
     defer task.destroy(std.testing.allocator);
 
     // Will allocate the first PID 0
-    expectEqual(task.pid, 0);
-    expectEqual(task.kernel_stack.len, STACK_SIZE);
-    expectEqual(task.user_stack.len, 0);
+    try expectEqual(task.pid, 0);
+    try expectEqual(task.kernel_stack.len, STACK_SIZE);
+    try expectEqual(task.user_stack.len, 0);
 
     var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
     defer user_task.destroy(std.testing.allocator);
-    expectEqual(user_task.pid, 1);
-    expectEqual(user_task.user_stack.len, STACK_SIZE);
-    expectEqual(user_task.kernel_stack.len, STACK_SIZE);
+    try expectEqual(user_task.pid, 1);
+    try expectEqual(user_task.user_stack.len, STACK_SIZE);
+    try expectEqual(user_task.kernel_stack.len, STACK_SIZE);
 }
 
 test "destroy cleans up" {
@@ -242,54 +242,54 @@ test "destroy cleans up" {
     user_task.destroy(allocator);
 
     // All PIDs were freed
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "Multiple create" {
     var task1 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
     var task2 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
 
-    expectEqual(task1.pid, 0);
-    expectEqual(task2.pid, 1);
-    expectEqual(all_pids.bitmap, 3);
+    try expectEqual(task1.pid, 0);
+    try expectEqual(task2.pid, 1);
+    try expectEqual(all_pids.bitmap, 3);
 
     task1.destroy(std.testing.allocator);
 
-    expectEqual(all_pids.bitmap, 2);
+    try expectEqual(all_pids.bitmap, 2);
 
     var task3 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
 
-    expectEqual(task3.pid, 0);
-    expectEqual(all_pids.bitmap, 3);
+    try expectEqual(task3.pid, 0);
+    try expectEqual(all_pids.bitmap, 3);
 
     task2.destroy(std.testing.allocator);
     task3.destroy(std.testing.allocator);
 
     var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
 
-    expectEqual(user_task.pid, 0);
-    expectEqual(all_pids.bitmap, 1);
+    try expectEqual(user_task.pid, 0);
+    try expectEqual(all_pids.bitmap, 1);
 
     user_task.destroy(std.testing.allocator);
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "allocatePid and freePid" {
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 
     var i: usize = 0;
     while (i < PidBitmap.NUM_ENTRIES) : (i += 1) {
-        expectEqual(i, allocatePid());
+        try expectEqual(i, allocatePid());
     }
 
-    expectEqual(all_pids.bitmap, PidBitmap.BITMAP_FULL);
+    try expectEqual(all_pids.bitmap, PidBitmap.BITMAP_FULL);
 
     i = 0;
     while (i < PidBitmap.NUM_ENTRIES) : (i += 1) {
         freePid(@truncate(PidBitmap.IndexType, i));
     }
 
-    expectEqual(all_pids.bitmap, 0);
+    try expectEqual(all_pids.bitmap, 0);
 }
 
 test "createFromElf" {

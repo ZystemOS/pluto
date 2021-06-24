@@ -1167,7 +1167,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
             const self = @fieldParentPtr(Fat32Self, "instance", fs.instance);
             // As close can't error, if provided with a invalid Node that isn't opened or try to close
             // the same file twice, will just do nothing.
-            if (self.opened_files.remove(node)) |entry_node| {
+            if (self.opened_files.fetchRemove(node)) |entry_node| {
                 self.allocator.destroy(entry_node.value);
                 self.allocator.destroy(node);
             }
@@ -2307,7 +2307,7 @@ test "LongName.getName" {
         // 2 * 13 u16's
         var buff: [26]u8 = undefined;
         const end = try lfn.getName(buff[0..]);
-        expectEqualSlices(u8, "12345123", buff[0..end]);
+        try expectEqualSlices(u8, "12345123", buff[0..end]);
     }
     {
         const lfn = LongName{
@@ -2321,7 +2321,7 @@ test "LongName.getName" {
         // 2 * 13 u16's
         var buff: [26]u8 = undefined;
         const end = try lfn.getName(buff[0..]);
-        expectEqualSlices(u8, "€1€2", buff[0..end]);
+        try expectEqualSlices(u8, "€1€2", buff[0..end]);
     }
     {
         const lfn = LongName{
@@ -2334,7 +2334,7 @@ test "LongName.getName" {
 
         // 2 * 13 u16's
         var buff: [26]u8 = undefined;
-        expectError(error.DanglingSurrogateHalf, lfn.getName(buff[0..]));
+        try expectError(error.DanglingSurrogateHalf, lfn.getName(buff[0..]));
     }
     {
         const lfn = LongName{
@@ -2347,7 +2347,7 @@ test "LongName.getName" {
 
         // 2 * 13 u16's
         var buff: [26]u8 = undefined;
-        expectError(error.ExpectedSecondSurrogateHalf, lfn.getName(buff[0..]));
+        try expectError(error.ExpectedSecondSurrogateHalf, lfn.getName(buff[0..]));
     }
     {
         const lfn = LongName{
@@ -2360,7 +2360,7 @@ test "LongName.getName" {
 
         // 2 * 13 u16's
         var buff: [26]u8 = undefined;
-        expectError(error.UnexpectedSecondSurrogateHalf, lfn.getName(buff[0..]));
+        try expectError(error.UnexpectedSecondSurrogateHalf, lfn.getName(buff[0..]));
     }
 }
 
@@ -2382,7 +2382,7 @@ test "ShortName.getName - File" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "12345678.123", name[0..name_end]);
+        try expectEqualSlices(u8, "12345678.123", name[0..name_end]);
     }
     {
         const sfn = ShortName{
@@ -2401,7 +2401,7 @@ test "ShortName.getName - File" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "12345.123", name[0..name_end]);
+        try expectEqualSlices(u8, "12345.123", name[0..name_end]);
     }
     {
         const sfn = ShortName{
@@ -2420,7 +2420,7 @@ test "ShortName.getName - File" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "12345.1", name[0..name_end]);
+        try expectEqualSlices(u8, "12345.1", name[0..name_end]);
     }
     {
         const sfn = ShortName{
@@ -2439,7 +2439,7 @@ test "ShortName.getName - File" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "σ2345.1", name[0..name_end]);
+        try expectEqualSlices(u8, "σ2345.1", name[0..name_end]);
     }
     {
         const sfn = ShortName{
@@ -2458,7 +2458,7 @@ test "ShortName.getName - File" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "Éá345.1", name[0..name_end]);
+        try expectEqualSlices(u8, "Éá345.1", name[0..name_end]);
     }
     {
         const sfn = ShortName{
@@ -2477,7 +2477,7 @@ test "ShortName.getName - File" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "12345.1░", name[0..name_end]);
+        try expectEqualSlices(u8, "12345.1░", name[0..name_end]);
     }
 }
 
@@ -2499,7 +2499,7 @@ test "ShortName.getName - Dir" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "12345678", name[0..name_end]);
+        try expectEqualSlices(u8, "12345678", name[0..name_end]);
     }
     {
         const sfn = ShortName{
@@ -2518,7 +2518,7 @@ test "ShortName.getName - Dir" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "12345", name[0..name_end]);
+        try expectEqualSlices(u8, "12345", name[0..name_end]);
     }
     {
         const sfn = ShortName{
@@ -2537,7 +2537,7 @@ test "ShortName.getName - Dir" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "σ2345", name[0..name_end]);
+        try expectEqualSlices(u8, "σ2345", name[0..name_end]);
     }
     {
         const sfn = ShortName{
@@ -2556,7 +2556,7 @@ test "ShortName.getName - Dir" {
         };
         var name: [12]u8 = undefined;
         const name_end = sfn.getName(name[0..]);
-        expectEqualSlices(u8, "12345", name[0..name_end]);
+        try expectEqualSlices(u8, "12345", name[0..name_end]);
     }
 }
 
@@ -2577,7 +2577,7 @@ test "ShortName.getSFNName" {
     };
     const name = sfn.getSFNName();
     const expected = [_]u8{ 0x05, 0xAA } ++ "345   1  ";
-    expectEqualSlices(u8, expected, name[0..]);
+    try expectEqualSlices(u8, expected, name[0..]);
 }
 
 test "ShortName.isDir" {
@@ -2597,7 +2597,7 @@ test "ShortName.isDir" {
             .size = 0x00000000,
         };
 
-        expect(sfn.isDir());
+        try expect(sfn.isDir());
     }
     {
         const sfn = ShortName{
@@ -2615,7 +2615,7 @@ test "ShortName.isDir" {
             .size = 0x00000000,
         };
 
-        expect(!sfn.isDir());
+        try expect(!sfn.isDir());
     }
 }
 
@@ -2635,7 +2635,7 @@ test "ShortName.getCluster" {
         .size = 0x00000000,
     };
 
-    expectEqual(sfn.getCluster(), 0xABCD1234);
+    try expectEqual(sfn.getCluster(), 0xABCD1234);
 }
 
 test "ShortName.calcCheckSum" {
@@ -2654,7 +2654,7 @@ test "ShortName.calcCheckSum" {
         .size = 0x00000000,
     };
 
-    expectEqual(sfn.calcCheckSum(), 0x7A);
+    try expectEqual(sfn.calcCheckSum(), 0x7A);
 }
 
 test "ClusterChainIterator.checkRead - Within cluster, within FAT" {
@@ -2691,10 +2691,10 @@ test "ClusterChainIterator.checkRead - Within cluster, within FAT" {
     try it.checkRead();
 
     // Nothing changed
-    expectEqual(it.cluster, 2);
-    expectEqual(it.cluster_offset, 0);
-    expectEqual(it.table_offset, 0);
-    expectEqualSlices(u32, it.fat, fat[0..]);
+    try expectEqual(it.cluster, 2);
+    try expectEqual(it.cluster_offset, 0);
+    try expectEqual(it.table_offset, 0);
+    try expectEqualSlices(u32, it.fat, fat[0..]);
 }
 
 test "ClusterChainIterator.checkRead - Multiple clusters, within FAT" {
@@ -2733,10 +2733,10 @@ test "ClusterChainIterator.checkRead - Multiple clusters, within FAT" {
     try it.checkRead();
 
     // Updated the cluster only
-    expectEqual(it.cluster, 3);
-    expectEqual(it.cluster_offset, 0);
-    expectEqual(it.table_offset, 0);
-    expectEqualSlices(u32, it.fat, fat[0..]);
+    try expectEqual(it.cluster, 3);
+    try expectEqual(it.cluster_offset, 0);
+    try expectEqual(it.table_offset, 0);
+    try expectEqualSlices(u32, it.fat, fat[0..]);
 }
 
 test "ClusterChainIterator.checkRead - Multiple clusters, outside FAT" {
@@ -2784,10 +2784,10 @@ test "ClusterChainIterator.checkRead - Multiple clusters, outside FAT" {
     try it.checkRead();
 
     // Updated the cluster and table offset
-    expectEqual(it.cluster, 4);
-    expectEqual(it.cluster_offset, 0);
-    expectEqual(it.table_offset, 1);
-    expectEqualSlices(u32, it.fat, expected_fat[0..]);
+    try expectEqual(it.cluster, 4);
+    try expectEqual(it.cluster_offset, 0);
+    try expectEqual(it.table_offset, 1);
+    try expectEqualSlices(u32, it.fat, expected_fat[0..]);
 }
 
 test "ClusterChainIterator.read - end of buffer" {
@@ -2802,7 +2802,7 @@ test "ClusterChainIterator.read - end of buffer" {
         .cluster_offset = undefined,
     };
     const actual = try it.read(&[_]u8{});
-    expectEqual(actual, null);
+    try expectEqual(actual, null);
 }
 
 test "ClusterChainIterator.read - cluster 0" {
@@ -2818,7 +2818,7 @@ test "ClusterChainIterator.read - cluster 0" {
     };
     var buff: [128]u8 = undefined;
     const actual = try it.read(buff[0..]);
-    expectEqual(actual, null);
+    try expectEqual(actual, null);
 }
 
 test "ClusterChainIterator.read - end of cluster chain" {
@@ -2851,7 +2851,7 @@ test "ClusterChainIterator.read - end of cluster chain" {
     };
     var buff: [128]u8 = undefined;
     const actual = try it.read(buff[0..]);
-    expectEqual(actual, null);
+    try expectEqual(actual, null);
 }
 
 test "ClusterChainIterator.read - BadRead" {
@@ -2884,7 +2884,7 @@ test "ClusterChainIterator.read - BadRead" {
     };
     // Buffer is too small
     var buff: [128]u8 = undefined;
-    expectError(error.BadRead, it.read(buff[0..]));
+    try expectError(error.BadRead, it.read(buff[0..]));
 }
 
 test "ClusterChainIterator.read - success" {
@@ -2934,11 +2934,11 @@ test "ClusterChainIterator.read - success" {
     var buff: [16]u8 = undefined;
     const read = try it.read(buff[0..]);
 
-    expectEqual(read, 16);
-    expectEqualSlices(u8, buff[0..], "abcd1234ABCD!\"$%");
-    expectEqual(it.table_offset, 0);
-    expectEqual(it.cluster_offset, 0);
-    expectEqual(it.cluster, 0x0FFFFFFF);
+    try expectEqual(read, 16);
+    try expectEqualSlices(u8, buff[0..], "abcd1234ABCD!\"$%");
+    try expectEqual(it.table_offset, 0);
+    try expectEqual(it.cluster_offset, 0);
+    try expectEqual(it.cluster, 0x0FFFFFFF);
 }
 
 test "ClusterChainIterator.init - free on BadRead" {
@@ -2958,7 +2958,7 @@ test "ClusterChainIterator.init - free on BadRead" {
         .cluster_end_marker = 0x0FFFFFFF,
     };
     var stream = &std.io.fixedBufferStream(&[_]u8{});
-    expectError(error.BadRead, Fat32FS(@TypeOf(stream)).ClusterChainIterator.init(std.testing.allocator, fat_config, 2, stream));
+    try expectError(error.BadRead, Fat32FS(@TypeOf(stream)).ClusterChainIterator.init(std.testing.allocator, fat_config, 2, stream));
 }
 
 test "ClusterChainIterator.init - free on OutOfMemory" {
@@ -2994,7 +2994,7 @@ test "ClusterChainIterator.init - free on OutOfMemory" {
     var i: usize = 0;
     while (i < allocations) : (i += 1) {
         var fa = std.testing.FailingAllocator.init(std.testing.allocator, i);
-        expectError(error.OutOfMemory, Fat32FS(@TypeOf(stream)).ClusterChainIterator.init(&fa.allocator, fat_config, 2, stream));
+        try expectError(error.OutOfMemory, Fat32FS(@TypeOf(stream)).ClusterChainIterator.init(&fa.allocator, fat_config, 2, stream));
     }
 }
 
@@ -3030,17 +3030,17 @@ test "ClusterChainIterator.init - success and good read" {
     defer it.deinit();
 
     var buff: [16]u8 = undefined;
-    // If orelse, then 'expectEqual(read, 16);' will fail
+    // If orelse, then 'try expectEqual(read, 16);' will fail
     const read = (try it.read(buff[0..])) orelse 0;
 
-    expectEqual(read, 16);
-    expectEqualSlices(u8, buff[0..], "abcd1234ABCD!\"$%");
-    expectEqual(it.table_offset, 0);
-    expectEqual(it.cluster_offset, 0);
-    expectEqual(it.cluster, 0x0FFFFFFF);
+    try expectEqual(read, 16);
+    try expectEqualSlices(u8, buff[0..], "abcd1234ABCD!\"$%");
+    try expectEqual(it.table_offset, 0);
+    try expectEqual(it.cluster_offset, 0);
+    try expectEqual(it.cluster, 0x0FFFFFFF);
 
     const expect_null = try it.read(buff[read..]);
-    expectEqual(expect_null, null);
+    try expectEqual(expect_null, null);
 }
 
 test "EntryIterator.checkRead - inside cluster block" {
@@ -3086,10 +3086,10 @@ test "EntryIterator.checkRead - inside cluster block" {
         .cluster_chain = cluster_chain,
     };
 
-    expectEqualSlices(u8, it.cluster_block, "abcd1234ABCD!\"$%");
+    try expectEqualSlices(u8, it.cluster_block, "abcd1234ABCD!\"$%");
     try it.checkRead();
     // nothing changed
-    expectEqualSlices(u8, it.cluster_block, "abcd1234ABCD!\"$%");
+    try expectEqualSlices(u8, it.cluster_block, "abcd1234ABCD!\"$%");
 }
 
 test "EntryIterator.checkRead - read new cluster" {
@@ -3136,10 +3136,10 @@ test "EntryIterator.checkRead - read new cluster" {
         .cluster_chain = cluster_chain,
     };
 
-    expectEqualSlices(u8, it.cluster_block, "abcd1234ABCD!\"$%");
+    try expectEqualSlices(u8, it.cluster_block, "abcd1234ABCD!\"$%");
     try it.checkRead();
-    expectEqualSlices(u8, it.cluster_block, "efgh5678EFGH^&*(");
-    expectEqual(it.index, 0);
+    try expectEqualSlices(u8, it.cluster_block, "efgh5678EFGH^&*(");
+    try expectEqual(it.index, 0);
 }
 
 test "EntryIterator.checkRead - end of cluster chain" {
@@ -3186,8 +3186,8 @@ test "EntryIterator.checkRead - end of cluster chain" {
         .cluster_chain = cluster_chain,
     };
 
-    expectEqualSlices(u8, it.cluster_block, "abcd1234ABCD!\"$%");
-    expectError(error.EndClusterChain, it.checkRead());
+    try expectEqualSlices(u8, it.cluster_block, "abcd1234ABCD!\"$%");
+    try expectError(error.EndClusterChain, it.checkRead());
 }
 
 test "EntryIterator.nextImp - end of entries" {
@@ -3243,7 +3243,7 @@ test "EntryIterator.nextImp - end of entries" {
     };
 
     const actual = try it.nextImp();
-    expectEqual(actual, null);
+    try expectEqual(actual, null);
 }
 
 test "EntryIterator.nextImp - just deleted files" {
@@ -3301,7 +3301,7 @@ test "EntryIterator.nextImp - just deleted files" {
     };
 
     const actual = try it.nextImp();
-    expectEqual(actual, null);
+    try expectEqual(actual, null);
 }
 
 test "EntryIterator.nextImp - short name only" {
@@ -3360,8 +3360,8 @@ test "EntryIterator.nextImp - short name only" {
 
     const actual = (try it.nextImp()) orelse return error.TestFail;
     defer actual.deinit();
-    expectEqualSlices(u8, actual.short_name.getSFNName()[0..], "BSHORT  TXT");
-    expectEqual(actual.long_name, null);
+    try expectEqualSlices(u8, actual.short_name.getSFNName()[0..], "BSHORT  TXT");
+    try expectEqual(actual.long_name, null);
 }
 
 test "EntryIterator.nextImp - long name only" {
@@ -3432,7 +3432,7 @@ test "EntryIterator.nextImp - long name only" {
             .cluster_chain = cluster_chain,
         };
 
-        expectError(error.Orphan, it.nextImp());
+        try expectError(error.Orphan, it.nextImp());
     }
 
     // FAT 4 test
@@ -3451,7 +3451,7 @@ test "EntryIterator.nextImp - long name only" {
             .cluster_chain = cluster_chain,
         };
 
-        expectError(error.Orphan, it.nextImp());
+        try expectError(error.Orphan, it.nextImp());
     }
 }
 
@@ -3515,7 +3515,7 @@ test "EntryIterator.nextImp - long name, incorrect check sum" {
         .cluster_chain = cluster_chain,
     };
 
-    expectError(error.Orphan, it.nextImp());
+    try expectError(error.Orphan, it.nextImp());
 }
 
 test "EntryIterator.nextImp - long name missing entry" {
@@ -3581,7 +3581,7 @@ test "EntryIterator.nextImp - long name missing entry" {
         .cluster_chain = cluster_chain,
     };
 
-    expectError(error.Orphan, it.nextImp());
+    try expectError(error.Orphan, it.nextImp());
 }
 
 test "EntryIterator.nextImp - valid short and long entry" {
@@ -3649,8 +3649,8 @@ test "EntryIterator.nextImp - valid short and long entry" {
 
     const actual = (try it.nextImp()) orelse return error.TestFail;
     defer actual.deinit();
-    expectEqualSlices(u8, actual.short_name.getSFNName()[0..], "LOOOOO~1TXT");
-    expectEqualSlices(u8, actual.long_name.?, "looooongloooongveryloooooongname.txt");
+    try expectEqualSlices(u8, actual.short_name.getSFNName()[0..], "LOOOOO~1TXT");
+    try expectEqualSlices(u8, actual.long_name.?, "looooongloooongveryloooooongname.txt");
 }
 
 test "EntryIterator.next - skips orphan long entry" {
@@ -3729,15 +3729,15 @@ test "EntryIterator.next - skips orphan long entry" {
 
     const actual1 = (try it.next()) orelse return error.TestFail;
     defer actual1.deinit();
-    expectEqualSlices(u8, actual1.short_name.getSFNName()[0..], "LOOOOO~1TXT");
-    expectEqual(actual1.long_name, null);
+    try expectEqualSlices(u8, actual1.short_name.getSFNName()[0..], "LOOOOO~1TXT");
+    try expectEqual(actual1.long_name, null);
 
     const actual2 = (try it.next()) orelse return error.TestFail;
     defer actual2.deinit();
-    expectEqualSlices(u8, actual2.short_name.getSFNName()[0..], "RAMDIS~1TXT");
-    expectEqualSlices(u8, actual2.long_name.?, "ramdisk_test1.txt");
+    try expectEqualSlices(u8, actual2.short_name.getSFNName()[0..], "RAMDIS~1TXT");
+    try expectEqualSlices(u8, actual2.long_name.?, "ramdisk_test1.txt");
 
-    expectEqual(try it.next(), null);
+    try expectEqual(try it.next(), null);
 }
 
 test "EntryIterator.init - free on OutOfMemory" {
@@ -3773,7 +3773,7 @@ test "EntryIterator.init - free on OutOfMemory" {
     var i: usize = 0;
     while (i < allocations) : (i += 1) {
         var fa = std.testing.FailingAllocator.init(std.testing.allocator, i);
-        expectError(error.OutOfMemory, Fat32FS(@TypeOf(stream)).EntryIterator.init(&fa.allocator, fat_config, 2, stream));
+        try expectError(error.OutOfMemory, Fat32FS(@TypeOf(stream)).EntryIterator.init(&fa.allocator, fat_config, 2, stream));
     }
 }
 
@@ -3804,7 +3804,7 @@ test "EntryIterator.init - free on BadRead" {
         'a',  'b',  'c',  'd',  '1',  '2',  '3',  '4',
     };
     var stream = &std.io.fixedBufferStream(buff_stream[0..]);
-    expectError(error.BadRead, Fat32FS(@TypeOf(stream)).EntryIterator.init(std.testing.allocator, fat_config, 2, stream));
+    try expectError(error.BadRead, Fat32FS(@TypeOf(stream)).EntryIterator.init(std.testing.allocator, fat_config, 2, stream));
 }
 
 test "Fat32FS.getRootNode" {
@@ -3814,9 +3814,9 @@ test "Fat32FS.getRootNode" {
     var test_fs = try initialiseFAT32(std.testing.allocator, test_fat32_image);
     defer test_fs.destroy() catch unreachable;
 
-    expectEqual(test_fs.fs.getRootNode(test_fs.fs), &test_fs.root_node.node.Dir);
-    expectEqual(test_fs.root_node.cluster, 2);
-    expectEqual(test_fs.fat_config.root_directory_cluster, 2);
+    try expectEqual(test_fs.fs.getRootNode(test_fs.fs), &test_fs.root_node.node.Dir);
+    try expectEqual(test_fs.root_node.cluster, 2);
+    try expectEqual(test_fs.fat_config.root_directory_cluster, 2);
 }
 
 test "Fat32FS.createNode - dir" {
@@ -3828,12 +3828,12 @@ test "Fat32FS.createNode - dir" {
 
     const dir_node = try test_fs.createNode(3, 0, 0, 0, .CREATE_DIR);
     defer std.testing.allocator.destroy(dir_node);
-    expect(dir_node.isDir());
-    expect(test_fs.opened_files.contains(dir_node));
-    const opened_info = test_fs.opened_files.remove(dir_node).?.value;
+    try expect(dir_node.isDir());
+    try expect(test_fs.opened_files.contains(dir_node));
+    const opened_info = test_fs.opened_files.fetchRemove(dir_node).?.value;
     defer std.testing.allocator.destroy(opened_info);
-    expectEqual(opened_info.cluster, 3);
-    expectEqual(opened_info.size, 0);
+    try expectEqual(opened_info.cluster, 3);
+    try expectEqual(opened_info.size, 0);
 }
 
 test "Fat32FS.createNode - file" {
@@ -3845,12 +3845,12 @@ test "Fat32FS.createNode - file" {
 
     const file_node = try test_fs.createNode(4, 16, 0, 0, .CREATE_FILE);
     defer std.testing.allocator.destroy(file_node);
-    expect(file_node.isFile());
-    expect(test_fs.opened_files.contains(file_node));
-    const opened_info = test_fs.opened_files.remove(file_node).?.value;
+    try expect(file_node.isFile());
+    try expect(test_fs.opened_files.contains(file_node));
+    const opened_info = test_fs.opened_files.fetchRemove(file_node).?.value;
     defer std.testing.allocator.destroy(opened_info);
-    expectEqual(opened_info.cluster, 4);
-    expectEqual(opened_info.size, 16);
+    try expectEqual(opened_info.cluster, 4);
+    try expectEqual(opened_info.size, 16);
 }
 
 test "Fat32FS.createNode - symlink" {
@@ -3860,7 +3860,7 @@ test "Fat32FS.createNode - symlink" {
     var test_fs = try initialiseFAT32(std.testing.allocator, test_fat32_image);
     defer test_fs.destroy() catch unreachable;
 
-    expectError(error.InvalidFlags, test_fs.createNode(4, 16, 0, 0, .CREATE_SYMLINK));
+    try expectError(error.InvalidFlags, test_fs.createNode(4, 16, 0, 0, .CREATE_SYMLINK));
 }
 
 test "Fat32FS.createNode - no create" {
@@ -3870,7 +3870,7 @@ test "Fat32FS.createNode - no create" {
     var test_fs = try initialiseFAT32(std.testing.allocator, test_fat32_image);
     defer test_fs.destroy() catch unreachable;
 
-    expectError(error.InvalidFlags, test_fs.createNode(4, 16, 0, 0, .NO_CREATION));
+    try expectError(error.InvalidFlags, test_fs.createNode(4, 16, 0, 0, .NO_CREATION));
 }
 
 test "Fat32FS.createNode - free memory" {
@@ -3886,7 +3886,7 @@ test "Fat32FS.createNode - free memory" {
         var fa = std.testing.FailingAllocator.init(std.testing.allocator, allocations);
         const allocator = &fa.allocator;
         test_fs.allocator = allocator;
-        expectError(error.OutOfMemory, test_fs.createNode(3, 16, 0, 0, .CREATE_FILE));
+        try expectError(error.OutOfMemory, test_fs.createNode(3, 16, 0, 0, .CREATE_FILE));
     }
 }
 
@@ -3901,7 +3901,7 @@ test "Fat32FS.getDirCluster - root dir" {
     defer test_node_1.File.close();
 
     const actual = try test_fs.getDirCluster(&test_fs.root_node.node.Dir);
-    expectEqual(actual, 2);
+    try expectEqual(actual, 2);
 }
 
 test "Fat32FS.getDirCluster - sub dir" {
@@ -3915,7 +3915,7 @@ test "Fat32FS.getDirCluster - sub dir" {
     defer test_node_1.Dir.close();
 
     const actual = try test_fs.getDirCluster(&test_node_1.Dir);
-    expectEqual(actual, 5);
+    try expectEqual(actual, 5);
 }
 
 test "Fat32FS.getDirCluster - not opened dir" {
@@ -3926,10 +3926,10 @@ test "Fat32FS.getDirCluster - not opened dir" {
     defer test_fs.destroy() catch unreachable;
 
     var test_node_1 = try test_fs.createNode(5, 0, 0, 0, .CREATE_DIR);
-    const elem = test_fs.opened_files.remove(test_node_1).?.value;
+    const elem = test_fs.opened_files.fetchRemove(test_node_1).?.value;
     std.testing.allocator.destroy(elem);
 
-    expectError(error.NotOpened, test_fs.getDirCluster(&test_node_1.Dir));
+    try expectError(error.NotOpened, test_fs.getDirCluster(&test_node_1.Dir));
     std.testing.allocator.destroy(test_node_1);
 }
 
@@ -3947,7 +3947,7 @@ test "Fat32FS.openImpl - entry iterator failed init" {
     const allocator = &fa.allocator;
     test_fs.allocator = allocator;
 
-    expectError(error.OutOfMemory, Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_node_1.Dir, "file.txt"));
+    try expectError(error.OutOfMemory, Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_node_1.Dir, "file.txt"));
 }
 
 test "Fat32FS.openImpl - entry iterator failed next" {
@@ -3961,7 +3961,7 @@ test "Fat32FS.openImpl - entry iterator failed next" {
     const allocator = &fa.allocator;
     test_fs.allocator = allocator;
 
-    expectError(error.OutOfMemory, Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "short.txt"));
+    try expectError(error.OutOfMemory, Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "short.txt"));
 }
 
 test "Fat32FS.openImpl - entry iterator failed 2nd next" {
@@ -3975,7 +3975,7 @@ test "Fat32FS.openImpl - entry iterator failed 2nd next" {
     const allocator = &fa.allocator;
     test_fs.allocator = allocator;
 
-    expectError(error.OutOfMemory, Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "short.txt"));
+    try expectError(error.OutOfMemory, Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "short.txt"));
 }
 
 test "Fat32FS.openImpl - match short name" {
@@ -4010,7 +4010,7 @@ test "Fat32FS.openImpl - no match" {
     var test_node_1 = try test_fs.createNode(5, 0, 0, 0, .CREATE_DIR);
     defer test_node_1.Dir.close();
 
-    expectError(vfs.Error.NoSuchFileOrDir, Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_node_1.Dir, "file.txt"));
+    try expectError(vfs.Error.NoSuchFileOrDir, Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_node_1.Dir, "file.txt"));
 }
 
 test "Fat32FS.open - no create - hand crafted" {
@@ -4058,10 +4058,10 @@ test "Fat32FS.open - no create - hand crafted" {
     const file = try vfs.openFile("/ramdisk_test1.txt", .NO_CREATION);
     defer file.close();
 
-    expect(test_fs.opened_files.contains(@ptrCast(*const vfs.Node, file)));
+    try expect(test_fs.opened_files.contains(@ptrCast(*const vfs.Node, file)));
     const opened_info = test_fs.opened_files.get(@ptrCast(*const vfs.Node, file)).?;
-    expectEqual(opened_info.cluster, 3);
-    expectEqual(opened_info.size, 16);
+    try expectEqual(opened_info.cluster, 3);
+    try expectEqual(opened_info.size, 16);
 }
 
 fn testOpenRec(dir_node: *const vfs.DirNode, path: []const u8) anyerror!void {
@@ -4116,7 +4116,7 @@ test "Fat32FS.open - create file" {
     open_file.close();
 
     // Can't open it as a dir
-    expectError(error.IsAFile, vfs.openDir("/fileαfile€file.txt", .NO_CREATION));
+    try expectError(error.IsAFile, vfs.openDir("/fileαfile€file.txt", .NO_CREATION));
 
     // Can we open the same file
     const read_file = try vfs.openFile("/fileαfile€file.txt", .NO_CREATION);
@@ -4125,8 +4125,8 @@ test "Fat32FS.open - create file" {
     // Reads nothing
     var buff = [_]u8{0xAA} ** 512;
     const read = read_file.read(buff[0..]);
-    expectEqual(read, 0);
-    expectEqualSlices(u8, buff[0..], &[_]u8{0xAA} ** 512);
+    try expectEqual(read, 0);
+    try expectEqualSlices(u8, buff[0..], &[_]u8{0xAA} ** 512);
 }
 
 test "Fat32FS.open - create directory" {
@@ -4147,7 +4147,7 @@ test "Fat32FS.open - create directory" {
     open_dir.close();
 
     // Can't open it as a file
-    expectError(error.IsADirectory, vfs.openFile("/fileαfile€file", .NO_CREATION));
+    try expectError(error.IsADirectory, vfs.openFile("/fileαfile€file", .NO_CREATION));
 
     const open = try vfs.openDir("/fileαfile€file", .NO_CREATION);
     defer open.close();
@@ -4166,7 +4166,7 @@ test "Fat32FS.open - create symlink" {
 
     try vfs.setRoot(test_fs.root_node.node);
 
-    expectError(error.InvalidFlags, vfs.openSymlink("/fileαfile€file.txt", "/file.txt", .CREATE_SYMLINK));
+    try expectError(error.InvalidFlags, vfs.openSymlink("/fileαfile€file.txt", "/file.txt", .CREATE_SYMLINK));
 }
 
 test "Fat32FS.open - create nested directories" {
@@ -4216,7 +4216,7 @@ test "Fat32FS.read - not opened" {
     defer std.testing.allocator.destroy(node);
     node.* = .{ .File = .{ .fs = test_fs.fs } };
 
-    expectError(error.NotOpened, node.File.read(&[_]u8{}));
+    try expectError(error.NotOpened, node.File.read(&[_]u8{}));
 }
 
 test "Fat32FS.read - cluster iterator init fail" {
@@ -4234,7 +4234,7 @@ test "Fat32FS.read - cluster iterator init fail" {
     test_fs.allocator = allocator;
 
     var buff = [_]u8{0xAA} ** 128;
-    expectError(error.OutOfMemory, test_node.File.read(buff[0..]));
+    try expectError(error.OutOfMemory, test_node.File.read(buff[0..]));
 }
 
 test "Fat32FS.read - buffer smaller than file" {
@@ -4251,7 +4251,7 @@ test "Fat32FS.read - buffer smaller than file" {
 
     var buff = [_]u8{0xAA} ** 8;
     const read = try test_node.read(buff[0..]);
-    expectEqualSlices(u8, buff[0..read], "short.tx");
+    try expectEqualSlices(u8, buff[0..read], "short.tx");
 }
 
 test "Fat32FS.read - buffer bigger than file" {
@@ -4268,9 +4268,9 @@ test "Fat32FS.read - buffer bigger than file" {
 
     var buff = [_]u8{0xAA} ** 16;
     const read = try test_node.read(buff[0..]);
-    expectEqualSlices(u8, buff[0..read], "short.txt");
+    try expectEqualSlices(u8, buff[0..read], "short.txt");
     // The rest should be unchanged
-    expectEqualSlices(u8, buff[read..], &[_]u8{0xAA} ** 7);
+    try expectEqualSlices(u8, buff[read..], &[_]u8{0xAA} ** 7);
 }
 
 test "Fat32FS.read - large" {
@@ -4287,10 +4287,10 @@ test "Fat32FS.read - large" {
 
     var buff = [_]u8{0xAA} ** 8450;
     const read = try test_node.read(buff[0..]);
-    expectEqual(read, 8450);
+    try expectEqual(read, 8450);
 
     const large_file_content = @embedFile("../../../test/fat32/test_files/large_file.txt");
-    expectEqualSlices(u8, buff[0..], large_file_content[0..]);
+    try expectEqualSlices(u8, buff[0..], large_file_content[0..]);
 }
 
 fn testReadRec(dir_node: *const vfs.DirNode, path: []const u8, read_big: bool) anyerror!void {
@@ -4319,8 +4319,8 @@ fn testReadRec(dir_node: *const vfs.DirNode, path: []const u8, read_big: bool) a
                 var buff = [_]u8{0xAA} ** 8450;
                 const large_file_content = @embedFile("../../../test/fat32/test_files/large_file.txt");
                 const read = try open_file.read(buff[0..]);
-                expectEqualSlices(u8, buff[0..], large_file_content[0..]);
-                expectEqual(read, 8450);
+                try expectEqualSlices(u8, buff[0..], large_file_content[0..]);
+                try expectEqual(read, 8450);
                 continue;
             }
 
@@ -4329,8 +4329,8 @@ fn testReadRec(dir_node: *const vfs.DirNode, path: []const u8, read_big: bool) a
             const read = try open_file.read(buff[0..]);
 
             // The file content is the same as the file name
-            expectEqual(file.name.len, read);
-            expectEqualSlices(u8, buff[0..read], file.name[0..]);
+            try expectEqual(file.name.len, read);
+            try expectEqualSlices(u8, buff[0..read], file.name[0..]);
         }
     }
 }
@@ -4378,7 +4378,7 @@ test "Fat32FS.findNextFreeCluster - free on error" {
     var test_fs = try testFAT32FS(std.testing.allocator, stream, fat_config);
     defer test_fs.destroy() catch unreachable;
 
-    expectError(error.BadRead, test_fs.findNextFreeCluster(2, null));
+    try expectError(error.BadRead, test_fs.findNextFreeCluster(2, null));
 }
 
 test "Fat32FS.findNextFreeCluster - alloc cluster in first sector" {
@@ -4425,10 +4425,10 @@ test "Fat32FS.findNextFreeCluster - alloc cluster in first sector" {
     defer test_fs.destroy() catch unreachable;
 
     const cluster = try test_fs.findNextFreeCluster(2, null);
-    expectEqual(cluster, 6);
+    try expectEqual(cluster, 6);
     // check the FAT where the update would happen + backup FAT
-    expectEqualSlices(u8, fat_buff_stream[24..28], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, fat_buff_stream[88..92], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, fat_buff_stream[24..28], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, fat_buff_stream[88..92], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.findNextFreeCluster - alloc cluster in second sector" {
@@ -4475,10 +4475,10 @@ test "Fat32FS.findNextFreeCluster - alloc cluster in second sector" {
     defer test_fs.destroy() catch unreachable;
 
     const cluster = try test_fs.findNextFreeCluster(10, null);
-    expectEqual(cluster, 10);
+    try expectEqual(cluster, 10);
     // check the FAT where the update would happen + backup FAT
-    expectEqualSlices(u8, fat_buff_stream[40..44], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, fat_buff_stream[104..108], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, fat_buff_stream[40..44], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, fat_buff_stream[104..108], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.findNextFreeCluster - alloc cluster over sector boundary" {
@@ -4525,10 +4525,10 @@ test "Fat32FS.findNextFreeCluster - alloc cluster over sector boundary" {
     defer test_fs.destroy() catch unreachable;
 
     const cluster = try test_fs.findNextFreeCluster(2, null);
-    expectEqual(cluster, 10);
+    try expectEqual(cluster, 10);
     // check the FAT where the update would happen + backup FAT
-    expectEqualSlices(u8, fat_buff_stream[24..28], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, fat_buff_stream[88..92], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, fat_buff_stream[24..28], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, fat_buff_stream[88..92], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.findNextFreeCluster - no free cluster" {
@@ -4564,7 +4564,7 @@ test "Fat32FS.findNextFreeCluster - no free cluster" {
     var test_fs = try testFAT32FS(std.testing.allocator, stream, fat_config);
     defer test_fs.destroy() catch unreachable;
 
-    expectError(error.DiskFull, test_fs.findNextFreeCluster(2, null));
+    try expectError(error.DiskFull, test_fs.findNextFreeCluster(2, null));
 }
 
 test "Fat32FS.findNextFreeCluster - updates FSInfo" {
@@ -4622,13 +4622,13 @@ test "Fat32FS.findNextFreeCluster - updates FSInfo" {
     defer test_fs.destroy() catch unreachable;
 
     const cluster = try test_fs.findNextFreeCluster(2, null);
-    expectEqual(cluster, 6);
-    expectEqual(test_fs.fat_config.number_free_clusters, 9);
-    expectEqual(test_fs.fat_config.next_free_cluster, 7);
-    expectEqual(buff_stream[488], 9);
-    expectEqual(buff_stream[492], 7);
-    expectEqual(buff_stream[1000], 9);
-    expectEqual(buff_stream[1004], 7);
+    try expectEqual(cluster, 6);
+    try expectEqual(test_fs.fat_config.number_free_clusters, 9);
+    try expectEqual(test_fs.fat_config.next_free_cluster, 7);
+    try expectEqual(buff_stream[488], 9);
+    try expectEqual(buff_stream[492], 7);
+    try expectEqual(buff_stream[1000], 9);
+    try expectEqual(buff_stream[1004], 7);
 }
 
 test "Fat32FS.findNextFreeCluster - updates cluster chain with parent" {
@@ -4675,16 +4675,16 @@ test "Fat32FS.findNextFreeCluster - updates cluster chain with parent" {
     defer test_fs.destroy() catch unreachable;
 
     const cluster = try test_fs.findNextFreeCluster(2, 5);
-    expectEqual(cluster, 6);
+    try expectEqual(cluster, 6);
     // check the FAT where the update would happen + backup FAT
-    expectEqualSlices(u8, fat_buff_stream[20..28], &[_]u8{ 0x06, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, fat_buff_stream[84..92], &[_]u8{ 0x06, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, fat_buff_stream[20..28], &[_]u8{ 0x06, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, fat_buff_stream[84..92], &[_]u8{ 0x06, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.nameToLongName - name too long" {
     const long_name = [_]u8{'A'} ** 256;
     var stream = &std.io.fixedBufferStream(&[_]u8{});
-    expectError(error.InvalidName, Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, long_name[0..]));
+    try expectError(error.InvalidName, Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, long_name[0..]));
 }
 
 test "Fat32FS.nameToLongName - leading spaces" {
@@ -4701,7 +4701,7 @@ test "Fat32FS.nameToLongName - leading spaces" {
     for (name_cases) |case| {
         const actual = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]);
         defer std.testing.allocator.free(actual);
-        expectEqualSlices(u16, expected[0..], actual);
+        try expectEqualSlices(u16, expected[0..], actual);
     }
 }
 
@@ -4723,7 +4723,7 @@ test "Fat32FS.nameToLongName - invalid name" {
 
     var stream = &std.io.fixedBufferStream(&[_]u8{});
     for (name_cases) |case| {
-        expectError(error.InvalidName, Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]));
+        try expectError(error.InvalidName, Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]));
     }
 }
 
@@ -4742,7 +4742,7 @@ test "Fat32FS.nameToLongName - trailing spaces or dots" {
     for (name_cases) |case| {
         const actual = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]);
         defer std.testing.allocator.free(actual);
-        expectEqualSlices(u16, expected[0..], actual);
+        try expectEqualSlices(u16, expected[0..], actual);
     }
 }
 
@@ -4773,17 +4773,17 @@ test "Fat32FS.nameToLongName - valid name" {
 
 test "Fat32FS.isValidSFNChar - invalid" {
     var stream = &std.io.fixedBufferStream(&[_]u8{});
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar(' '), null);
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('€'), null);
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('+'), null);
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar(','), null);
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar(';'), null);
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('='), null);
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('['), null);
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar(']'), null);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar(' '), null);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('€'), null);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('+'), null);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar(','), null);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar(';'), null);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('='), null);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('['), null);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar(']'), null);
 
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('α'), 0xE0);
-    expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('a'), 'a');
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('α'), 0xE0);
+    try expectEqual(Fat32FS(@TypeOf(stream)).isValidSFNChar('a'), 'a');
 }
 
 test "Fat32FS.longNameToShortName - leading dots and spaces" {
@@ -4800,7 +4800,7 @@ test "Fat32FS.longNameToShortName - leading dots and spaces" {
         const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]);
         defer std.testing.allocator.free(long_name);
         const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, &[_][11]u8{});
-        expectEqualSlices(u8, actual[0..], expected[0..]);
+        try expectEqualSlices(u8, actual[0..], expected[0..]);
     }
 }
 
@@ -4820,7 +4820,7 @@ test "Fat32FS.longNameToShortName - embedded spaces" {
         const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]);
         defer std.testing.allocator.free(long_name);
         const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, &[_][11]u8{});
-        expectEqualSlices(u8, actual[0..], expected[0..]);
+        try expectEqualSlices(u8, actual[0..], expected[0..]);
     }
 }
 
@@ -4840,7 +4840,7 @@ test "Fat32FS.longNameToShortName - dot before end" {
         const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]);
         defer std.testing.allocator.free(long_name);
         const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, &[_][11]u8{});
-        expectEqualSlices(u8, actual[0..], expected[0..]);
+        try expectEqualSlices(u8, actual[0..], expected[0..]);
     }
 }
 
@@ -4862,7 +4862,7 @@ test "Fat32FS.longNameToShortName - long name" {
         const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]);
         defer std.testing.allocator.free(long_name);
         const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, &[_][11]u8{});
-        expectEqualSlices(u8, actual[0..], expected[0..]);
+        try expectEqualSlices(u8, actual[0..], expected[0..]);
     }
 }
 
@@ -4880,7 +4880,7 @@ test "Fat32FS.longNameToShortName - short name" {
         const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]);
         defer std.testing.allocator.free(long_name);
         const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, &[_][11]u8{});
-        expectEqualSlices(u8, actual[0..], expected[0..]);
+        try expectEqualSlices(u8, actual[0..], expected[0..]);
     }
 }
 
@@ -4903,7 +4903,7 @@ test "Fat32FS.longNameToShortName - invalid short name characters" {
         const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, case[0..]);
         defer std.testing.allocator.free(long_name);
         const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, &[_][11]u8{});
-        expectEqualSlices(u8, actual[0..], expected[0..]);
+        try expectEqualSlices(u8, actual[0..], expected[0..]);
     }
 }
 
@@ -4921,7 +4921,7 @@ test "Fat32FS.longNameToShortName - existing name short" {
     const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, "file.txt");
     defer std.testing.allocator.free(long_name);
     const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, excising_names);
-    expectEqualSlices(u8, actual[0..], expected[0..]);
+    try expectEqualSlices(u8, actual[0..], expected[0..]);
 }
 
 test "Fat32FS.longNameToShortName - existing name short rev" {
@@ -4938,7 +4938,7 @@ test "Fat32FS.longNameToShortName - existing name short rev" {
     const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, "file.txt");
     defer std.testing.allocator.free(long_name);
     const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, excising_names);
-    expectEqualSlices(u8, actual[0..], expected[0..]);
+    try expectEqualSlices(u8, actual[0..], expected[0..]);
 }
 
 test "Fat32FS.longNameToShortName - existing name long" {
@@ -4955,7 +4955,7 @@ test "Fat32FS.longNameToShortName - existing name long" {
     const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, "filefilefile.txt");
     defer std.testing.allocator.free(long_name);
     const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, excising_names);
-    expectEqualSlices(u8, actual[0..], expected[0..]);
+    try expectEqualSlices(u8, actual[0..], expected[0..]);
 }
 
 test "Fat32FS.longNameToShortName - existing name long no match" {
@@ -4971,7 +4971,7 @@ test "Fat32FS.longNameToShortName - existing name long no match" {
     const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, "filefile.txt");
     defer std.testing.allocator.free(long_name);
     const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, excising_names);
-    expectEqualSlices(u8, actual[0..], expected[0..]);
+    try expectEqualSlices(u8, actual[0..], expected[0..]);
 }
 
 test "Fat32FS.longNameToShortName - trail number to large" {
@@ -4983,7 +4983,7 @@ test "Fat32FS.longNameToShortName - trail number to large" {
 
     const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, "filefilefile.txt");
     defer std.testing.allocator.free(long_name);
-    expectError(error.InvalidName, Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, excising_names));
+    try expectError(error.InvalidName, Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, excising_names));
 }
 
 test "Fat32FS.longNameToShortName - large trail number" {
@@ -5005,7 +5005,7 @@ test "Fat32FS.longNameToShortName - large trail number" {
     const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, "file.txt");
     defer std.testing.allocator.free(long_name);
     const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, excising_names);
-    expectEqualSlices(u8, actual[0..], expected[0..]);
+    try expectEqualSlices(u8, actual[0..], expected[0..]);
 }
 
 test "Fat32FS.longNameToShortName - CP437" {
@@ -5015,7 +5015,7 @@ test "Fat32FS.longNameToShortName - CP437" {
     const long_name = try Fat32FS(@TypeOf(stream)).nameToLongName(std.testing.allocator, "αlpha.txt");
     defer std.testing.allocator.free(long_name);
     const actual = try Fat32FS(@TypeOf(stream)).longNameToShortName(long_name, &[_][11]u8{});
-    expectEqualSlices(u8, actual[0..], expected[0..]);
+    try expectEqualSlices(u8, actual[0..], expected[0..]);
 }
 
 test "Fat32FS.createLongNameEntry - less than 13 characters" {
@@ -5028,7 +5028,7 @@ test "Fat32FS.createLongNameEntry - less than 13 characters" {
     const entries = try Fat32FS(@TypeOf(stream)).createLongNameEntry(std.testing.allocator, long_name, check_sum);
     defer std.testing.allocator.free(entries);
 
-    expectEqual(entries.len, 1);
+    try expectEqual(entries.len, 1);
 
     const expected = LongName{
         .order = 0x41,
@@ -5038,7 +5038,7 @@ test "Fat32FS.createLongNameEntry - less than 13 characters" {
         .third = [_]u16{ 0xFFFF, 0xFFFF },
     };
 
-    expectEqual(entries[0], expected);
+    try expectEqual(entries[0], expected);
 }
 
 test "Fat32FS.createLongNameEntry - greater than 13 characters" {
@@ -5051,7 +5051,7 @@ test "Fat32FS.createLongNameEntry - greater than 13 characters" {
     const entries = try Fat32FS(@TypeOf(stream)).createLongNameEntry(std.testing.allocator, long_name, check_sum);
     defer std.testing.allocator.free(entries);
 
-    expectEqual(entries.len, 2);
+    try expectEqual(entries.len, 2);
 
     var expected = [_]LongName{
         LongName{
@@ -5070,8 +5070,8 @@ test "Fat32FS.createLongNameEntry - greater than 13 characters" {
         },
     };
 
-    expectEqual(entries[0], expected[0]);
-    expectEqual(entries[1], expected[1]);
+    try expectEqual(entries[0], expected[0]);
+    try expectEqual(entries[1], expected[1]);
 }
 
 test "Fat32FS.createLongNameEntry - max 255 characters" {
@@ -5085,7 +5085,7 @@ test "Fat32FS.createLongNameEntry - max 255 characters" {
     const entries = try Fat32FS(@TypeOf(stream)).createLongNameEntry(std.testing.allocator, long_name, check_sum);
     defer std.testing.allocator.free(entries);
 
-    expectEqual(entries.len, 20);
+    try expectEqual(entries.len, 20);
 
     const UA = [_]u16{'A'};
 
@@ -5109,7 +5109,7 @@ test "Fat32FS.createLongNameEntry - max 255 characters" {
     };
 
     for (expected) |ex, i| {
-        expectEqual(entries[i], ex);
+        try expectEqual(entries[i], ex);
     }
 }
 
@@ -5131,7 +5131,7 @@ test "Fat32FS.createShortNameEntry" {
         .cluster_low = 0x10,
         .size = 0x00000000,
     };
-    expectEqual(actual, expected);
+    try expectEqual(actual, expected);
 }
 
 test "Fat32FS.writeEntries - all free cluster" {
@@ -5182,7 +5182,7 @@ test "Fat32FS.writeEntries - all free cluster" {
     initBytes(ShortName, entries.short_entry, expected_bytes[0..]);
 
     _ = try test_fs.writeEntries(entries, 2, 3, 0);
-    expectEqualSlices(u8, expected_bytes[0..], buff_stream[64..]);
+    try expectEqualSlices(u8, expected_bytes[0..], buff_stream[64..]);
 }
 
 test "Fat32FS.writeEntries - half free cluster" {
@@ -5245,7 +5245,7 @@ test "Fat32FS.writeEntries - half free cluster" {
     initBytes(ShortName, entries.short_entry, expected_bytes[0..]);
 
     _ = try test_fs.writeEntries(entries, 2, 3, 32);
-    expectEqualSlices(u8, expected_bytes[0..], buff_stream[160..]);
+    try expectEqualSlices(u8, expected_bytes[0..], buff_stream[160..]);
 }
 
 test "Fat32FS.writeEntries - full cluster" {
@@ -5301,9 +5301,9 @@ test "Fat32FS.writeEntries - full cluster" {
     initBytes(ShortName, entries.short_entry, expected_bytes[0..]);
 
     _ = try test_fs.writeEntries(entries, 2, 3, 32);
-    expectEqualSlices(u8, expected_bytes[0..], buff_stream[96..]);
-    expectEqualSlices(u8, buff_stream[8..16], &[_]u8{ 0x03, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, buff_stream[40..48], &[_]u8{ 0x03, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, expected_bytes[0..], buff_stream[96..]);
+    try expectEqualSlices(u8, buff_stream[8..16], &[_]u8{ 0x03, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[40..48], &[_]u8{ 0x03, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.writeEntries - large entry over 3 clusters" {
@@ -5366,7 +5366,7 @@ test "Fat32FS.writeEntries - large entry over 3 clusters" {
     const long_entry = try Fat32FS(@TypeOf(stream)).createLongNameEntry(std.testing.allocator, long_name, short_entry.calcCheckSum());
     defer std.testing.allocator.free(long_entry);
 
-    expectEqual(long_entry.len, 2);
+    try expectEqual(long_entry.len, 2);
 
     const entries = FatDirEntry{
         .short_entry = short_entry,
@@ -5380,7 +5380,7 @@ test "Fat32FS.writeEntries - large entry over 3 clusters" {
     initBytes(ShortName, entries.short_entry, expected_bytes[64..]);
 
     _ = try test_fs.writeEntries(entries, 2, 3, 32);
-    expectEqualSlices(u8, expected_bytes[0..], buff_stream[96..]);
+    try expectEqualSlices(u8, expected_bytes[0..], buff_stream[96..]);
 }
 
 test "Fat32FS.createFileOrDir - create file" {
@@ -5441,14 +5441,14 @@ test "Fat32FS.createFileOrDir - create file" {
 
     var temp_buf: [32]u8 = undefined;
     initBytes(LongName, expected_long_entry[0], temp_buf[0..]);
-    expectEqualSlices(u8, buff_stream[64..96], temp_buf[0..]);
+    try expectEqualSlices(u8, buff_stream[64..96], temp_buf[0..]);
     initBytes(ShortName, expected_short_entry, temp_buf[0..]);
-    expectEqualSlices(u8, buff_stream[128..], temp_buf[0..]);
+    try expectEqualSlices(u8, buff_stream[128..], temp_buf[0..]);
 
     // FAT
-    expectEqualSlices(u8, buff_stream[8..12], &[_]u8{ 0x04, 0x00, 0x00, 0x00 });
-    expectEqualSlices(u8, buff_stream[12..16], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, buff_stream[16..20], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[8..12], &[_]u8{ 0x04, 0x00, 0x00, 0x00 });
+    try expectEqualSlices(u8, buff_stream[12..16], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[16..20], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.createFileOrDir - create directory" {
@@ -5509,14 +5509,14 @@ test "Fat32FS.createFileOrDir - create directory" {
 
     var temp_buf: [32]u8 = undefined;
     initBytes(LongName, expected_long_entry[0], temp_buf[0..]);
-    expectEqualSlices(u8, buff_stream[64..96], temp_buf[0..]);
+    try expectEqualSlices(u8, buff_stream[64..96], temp_buf[0..]);
     initBytes(ShortName, expected_short_entry, temp_buf[0..]);
-    expectEqualSlices(u8, buff_stream[128..], temp_buf[0..]);
+    try expectEqualSlices(u8, buff_stream[128..], temp_buf[0..]);
 
     // FAT
-    expectEqualSlices(u8, buff_stream[8..12], &[_]u8{ 0x04, 0x00, 0x00, 0x00 });
-    expectEqualSlices(u8, buff_stream[12..16], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, buff_stream[16..20], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[8..12], &[_]u8{ 0x04, 0x00, 0x00, 0x00 });
+    try expectEqualSlices(u8, buff_stream[12..16], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[16..20], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.createFileOrDir - create file parent cluster full" {
@@ -5582,15 +5582,15 @@ test "Fat32FS.createFileOrDir - create file parent cluster full" {
 
     var temp_buf: [32]u8 = undefined;
     initBytes(LongName, expected_long_entry[0], temp_buf[0..]);
-    expectEqualSlices(u8, buff_stream[128..160], temp_buf[0..]);
+    try expectEqualSlices(u8, buff_stream[128..160], temp_buf[0..]);
     initBytes(ShortName, expected_short_entry, temp_buf[0..]);
-    expectEqualSlices(u8, buff_stream[160..], temp_buf[0..]);
+    try expectEqualSlices(u8, buff_stream[160..], temp_buf[0..]);
 
     // FAT
-    expectEqualSlices(u8, buff_stream[8..12], &[_]u8{ 0x04, 0x00, 0x00, 0x00 });
-    expectEqualSlices(u8, buff_stream[12..16], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, buff_stream[16..20], &[_]u8{ 0x05, 0x00, 0x00, 0x00 });
-    expectEqualSlices(u8, buff_stream[20..24], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[8..12], &[_]u8{ 0x04, 0x00, 0x00, 0x00 });
+    try expectEqualSlices(u8, buff_stream[12..16], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[16..20], &[_]u8{ 0x05, 0x00, 0x00, 0x00 });
+    try expectEqualSlices(u8, buff_stream[20..24], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.createFileOrDir - half root" {
@@ -5672,14 +5672,14 @@ test "Fat32FS.createFileOrDir - half root" {
 
     var temp_buf: [32]u8 = undefined;
     initBytes(LongName, expected_long_entry[0], temp_buf[0..]);
-    expectEqualSlices(u8, buff_stream[160..192], temp_buf[0..]);
+    try expectEqualSlices(u8, buff_stream[160..192], temp_buf[0..]);
     initBytes(ShortName, expected_short_entry, temp_buf[0..]);
-    expectEqualSlices(u8, buff_stream[256..288], temp_buf[0..]);
+    try expectEqualSlices(u8, buff_stream[256..288], temp_buf[0..]);
 
     // FAT
-    expectEqualSlices(u8, buff_stream[8..12], &[_]u8{ 0x04, 0x00, 0x00, 0x00 });
-    expectEqualSlices(u8, buff_stream[12..16], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
-    expectEqualSlices(u8, buff_stream[16..20], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[8..12], &[_]u8{ 0x04, 0x00, 0x00, 0x00 });
+    try expectEqualSlices(u8, buff_stream[12..16], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, buff_stream[16..20], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
 }
 
 test "Fat32FS.write - small file" {
@@ -5700,12 +5700,12 @@ test "Fat32FS.write - small file" {
     const text = "Hello, world!\n";
 
     const written = try file.write(text[0..]);
-    expectEqual(written, text.len);
+    try expectEqual(written, text.len);
 
     var read_buf1: [text.len * 2]u8 = undefined;
     const read1 = try file.read(read_buf1[0..]);
-    expectEqual(read1, text.len);
-    expectEqualSlices(u8, text[0..], read_buf1[0..read1]);
+    try expectEqual(read1, text.len);
+    try expectEqualSlices(u8, text[0..], read_buf1[0..read1]);
     file.close();
 
     const read_file = try vfs.openFile("/file.txt", .NO_CREATION);
@@ -5714,8 +5714,8 @@ test "Fat32FS.write - small file" {
     var read_buf2: [text.len * 2]u8 = undefined;
     const read2 = try read_file.read(read_buf2[0..]);
 
-    expectEqual(read2, text.len);
-    expectEqualSlices(u8, text[0..], read_buf2[0..read2]);
+    try expectEqual(read2, text.len);
+    try expectEqualSlices(u8, text[0..], read_buf2[0..read2]);
 }
 
 test "Fat32FS.write - large file" {
@@ -5735,43 +5735,43 @@ test "Fat32FS.write - large file" {
 
     // Check the opened file
     const open_info1 = test_fs.opened_files.get(@ptrCast(*const vfs.Node, file)).?;
-    expectEqual(open_info1.cluster, 3);
-    expectEqual(open_info1.size, 0);
-    expectEqual(open_info1.entry_cluster, 2);
-    expectEqual(open_info1.entry_offset, 60);
+    try expectEqual(open_info1.cluster, 3);
+    try expectEqual(open_info1.size, 0);
+    try expectEqual(open_info1.entry_cluster, 2);
+    try expectEqual(open_info1.entry_offset, 60);
 
     const fat_offset = test_fs.fat_config.reserved_sectors * test_fs.fat_config.bytes_per_sector + 12;
-    expectEqualSlices(u8, test_file_buf[fat_offset .. fat_offset + 4], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
+    try expectEqualSlices(u8, test_file_buf[fat_offset .. fat_offset + 4], &[_]u8{ 0xFF, 0xFF, 0xFF, 0x0F });
 
     const text = [_]u8{'A'} ** (8 * 1024);
 
     const written = try file.write(text[0..]);
-    expectEqual(written, text.len);
+    try expectEqual(written, text.len);
 
     // Check the FAT
     const expected_fat = [_]u32{ 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x0FFFFFFF };
-    expectEqualSlices(u8, test_file_buf[fat_offset .. fat_offset + (16 * 4)], std.mem.sliceAsBytes(expected_fat[0..]));
+    try expectEqualSlices(u8, test_file_buf[fat_offset .. fat_offset + (16 * 4)], std.mem.sliceAsBytes(expected_fat[0..]));
 
     var read_buf1: [text.len * 2]u8 = undefined;
     const read1 = try file.read(read_buf1[0..]);
-    expectEqual(read1, text.len);
-    expectEqualSlices(u8, text[0..], read_buf1[0..read1]);
+    try expectEqual(read1, text.len);
+    try expectEqualSlices(u8, text[0..], read_buf1[0..read1]);
     file.close();
 
     const read_file = try vfs.openFile("/file.txt", .NO_CREATION);
     defer read_file.close();
 
     const open_info2 = test_fs.opened_files.get(@ptrCast(*const vfs.Node, read_file)).?;
-    expectEqual(open_info2.cluster, 3);
-    expectEqual(open_info2.size, text.len);
-    expectEqual(open_info2.entry_cluster, 2);
-    expectEqual(open_info2.entry_offset, 60);
+    try expectEqual(open_info2.cluster, 3);
+    try expectEqual(open_info2.size, text.len);
+    try expectEqual(open_info2.entry_cluster, 2);
+    try expectEqual(open_info2.entry_offset, 60);
 
     var read_buf2: [text.len * 2]u8 = undefined;
     const read2 = try read_file.read(read_buf2[0..]);
 
-    expectEqual(read2, text.len);
-    expectEqualSlices(u8, text[0..], read_buf2[0..read2]);
+    try expectEqual(read2, text.len);
+    try expectEqualSlices(u8, text[0..], read_buf2[0..read2]);
 }
 
 fn testWriteRec(dir_node: *const vfs.DirNode, path: []const u8) anyerror!void {
@@ -5851,10 +5851,10 @@ test "Fat32FS.write - not enough space" {
     const file = try vfs.openFile("/file.txt", .CREATE_FILE);
     defer file.close();
 
-    expectError(error.Unexpected, file.write(text[0..]));
+    try expectError(error.Unexpected, file.write(text[0..]));
 
     const offset = test_fs.fat_config.clusterToSector(3) * test_fs.fat_config.bytes_per_sector;
-    expectEqualSlices(u8, test_file_buf[offset .. offset + 1024], &[_]u8{0x00} ** 1024);
+    try expectEqualSlices(u8, test_file_buf[offset .. offset + 1024], &[_]u8{0x00} ** 1024);
 }
 
 test "Fat32FS.init no error" {
@@ -5877,79 +5877,79 @@ test "Fat32FS.init errors" {
 
     // BadMBRMagic
     test_file_buf[510] = 0x00;
-    expectError(error.BadMBRMagic, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadMBRMagic, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[510] = 0x55;
 
     test_file_buf[511] = 0x00;
-    expectError(error.BadMBRMagic, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadMBRMagic, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[511] = 0xAA;
 
     // BadRootCluster
     // Little endian, so just eed to set the upper bytes
     test_file_buf[44] = 0;
-    expectError(error.BadRootCluster, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadRootCluster, initialiseFAT32(std.testing.allocator, stream));
 
     test_file_buf[44] = 1;
-    expectError(error.BadRootCluster, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadRootCluster, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[44] = 2;
 
     // BadFATCount
     test_file_buf[16] = 0;
-    expectError(error.BadFATCount, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadFATCount, initialiseFAT32(std.testing.allocator, stream));
 
     test_file_buf[16] = 1;
-    expectError(error.BadFATCount, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadFATCount, initialiseFAT32(std.testing.allocator, stream));
 
     test_file_buf[16] = 10;
-    expectError(error.BadFATCount, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadFATCount, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[16] = 2;
 
     // NotMirror
     test_file_buf[40] = 1;
-    expectError(error.NotMirror, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.NotMirror, initialiseFAT32(std.testing.allocator, stream));
 
     test_file_buf[40] = 10;
-    expectError(error.NotMirror, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.NotMirror, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[40] = 0;
 
     // BadMedia
     test_file_buf[21] = 0xF0;
-    expectError(error.BadMedia, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadMedia, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[21] = 0xF8;
 
     // BadFat32
     test_file_buf[17] = 10;
-    expectError(error.BadFat32, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadFat32, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[17] = 0;
 
     test_file_buf[19] = 10;
-    expectError(error.BadFat32, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadFat32, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[19] = 0;
 
     test_file_buf[22] = 10;
-    expectError(error.BadFat32, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadFat32, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[22] = 0;
 
     // BadSignature
     test_file_buf[66] = 0x28;
-    expectError(error.BadSignature, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadSignature, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[66] = 0x29;
 
     // BadFSType
     // Change from FAT32 to FAT16
     test_file_buf[85] = '1';
     test_file_buf[86] = '6';
-    expectError(error.BadFSType, initialiseFAT32(std.testing.allocator, stream));
+    try expectError(error.BadFSType, initialiseFAT32(std.testing.allocator, stream));
     test_file_buf[85] = '3';
     test_file_buf[86] = '2';
 
     // Test the bad reads
     // Boot sector
-    expectError(error.BadRead, initialiseFAT32(std.testing.allocator, &std.io.fixedBufferStream(test_file_buf[0..510])));
+    try expectError(error.BadRead, initialiseFAT32(std.testing.allocator, &std.io.fixedBufferStream(test_file_buf[0..510])));
     // FSInfo (we have one)
-    expectError(error.BadRead, initialiseFAT32(std.testing.allocator, &std.io.fixedBufferStream(test_file_buf[0 .. 512 + 100])));
+    try expectError(error.BadRead, initialiseFAT32(std.testing.allocator, &std.io.fixedBufferStream(test_file_buf[0 .. 512 + 100])));
     // FAT
-    expectError(error.BadRead, initialiseFAT32(std.testing.allocator, &std.io.fixedBufferStream(test_file_buf[0 .. (32 * 512 + 4) + 1])));
+    try expectError(error.BadRead, initialiseFAT32(std.testing.allocator, &std.io.fixedBufferStream(test_file_buf[0 .. (32 * 512 + 4) + 1])));
 }
 
 test "Fat32FS.init free memory" {
@@ -5960,7 +5960,7 @@ test "Fat32FS.init free memory" {
     var i: usize = 0;
     while (i < allocations) : (i += 1) {
         var fa = std.testing.FailingAllocator.init(std.testing.allocator, i);
-        expectError(error.OutOfMemory, initialiseFAT32(&fa.allocator, test_fat32_image));
+        try expectError(error.OutOfMemory, initialiseFAT32(&fa.allocator, test_fat32_image));
     }
 }
 
@@ -5988,7 +5988,7 @@ test "Fat32FS.init FATConfig expected" {
         .cluster_end_marker = 0x0FFFFFFF,
     };
 
-    expectEqual(test_fs.fat_config, expected);
+    try expectEqual(test_fs.fat_config, expected);
 }
 
 test "Fat32FS.init FATConfig mix FSInfo" {
@@ -6026,7 +6026,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
             .cluster_end_marker = 0x0FFFFFFF,
         };
 
-        expectEqual(test_fs.fat_config, expected);
+        try expectEqual(test_fs.fat_config, expected);
         test_file_buf[48] = 0x01;
     }
 
@@ -6055,7 +6055,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
             .cluster_end_marker = 0x0FFFFFFF,
         };
 
-        expectEqual(test_fs.fat_config, expected);
+        try expectEqual(test_fs.fat_config, expected);
         test_file_buf[512] = 0x52;
     }
 
@@ -6087,6 +6087,6 @@ test "Fat32FS.init FATConfig mix FSInfo" {
             .cluster_end_marker = 0x0FFFFFFF,
         };
 
-        expectEqual(test_fs.fat_config, expected);
+        try expectEqual(test_fs.fat_config, expected);
     }
 }

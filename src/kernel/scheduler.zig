@@ -214,26 +214,26 @@ test "pickNextTask" {
     const fn1_stack_pointer = test_fn1_task.stack_pointer;
     const fn2_stack_pointer = test_fn2_task.stack_pointer;
 
-    expectEqual(pickNextTask(&ctx), fn1_stack_pointer);
+    try expectEqual(pickNextTask(&ctx), fn1_stack_pointer);
     // The stack pointer of the re-added task should point to the context
-    expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
+    try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
     // Should be the PID of the next task
-    expectEqual(current_task.pid, 1);
+    try expectEqual(current_task.pid, 1);
 
-    expectEqual(pickNextTask(&ctx), fn2_stack_pointer);
+    try expectEqual(pickNextTask(&ctx), fn2_stack_pointer);
     // The stack pointer of the re-added task should point to the context
-    expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
+    try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
     // Should be the PID of the next task
-    expectEqual(current_task.pid, 2);
+    try expectEqual(current_task.pid, 2);
 
-    expectEqual(pickNextTask(&ctx), @ptrToInt(&ctx));
+    try expectEqual(pickNextTask(&ctx), @ptrToInt(&ctx));
     // The stack pointer of the re-added task should point to the context
-    expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
+    try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
     // Should be back tot he beginning
-    expectEqual(current_task.pid, 0);
+    try expectEqual(current_task.pid, 0);
 
     // Reset the test pid
     test_pid_counter = 1;
@@ -255,7 +255,7 @@ test "createNewTask add new task" {
     defer test_fn1_task.destroy(allocator);
     try scheduleTask(test_fn1_task, allocator);
 
-    expectEqual(tasks.len, 1);
+    try expectEqual(tasks.len, 1);
 
     // Free the memory
     allocator.destroy(tasks.first.?);
@@ -266,11 +266,11 @@ test "init" {
 
     try init(allocator, undefined);
 
-    expectEqual(current_task.pid, 0);
-    expectEqual(@ptrToInt(current_task.kernel_stack.ptr), @ptrToInt(&KERNEL_STACK_START));
-    expectEqual(current_task.kernel_stack.len, @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START));
+    try expectEqual(current_task.pid, 0);
+    try expectEqual(@ptrToInt(current_task.kernel_stack.ptr), @ptrToInt(&KERNEL_STACK_START));
+    try expectEqual(current_task.kernel_stack.len, @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START));
 
-    expectEqual(tasks.len, 1);
+    try expectEqual(tasks.len, 1);
 
     // Free the tasks created
     current_task.destroy(allocator);

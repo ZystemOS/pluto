@@ -195,16 +195,16 @@ pub fn init() void {
 fn testHandler0() callconv(.Naked) void {}
 fn testHandler1() callconv(.Naked) void {}
 
-fn mock_lidt(ptr: *const IdtPtr) void {
-    expectEqual(TABLE_SIZE, ptr.limit);
-    expectEqual(@ptrToInt(&idt_entries[0]), ptr.base);
+fn mock_lidt(ptr: *const IdtPtr) anyerror!void {
+    try expectEqual(TABLE_SIZE, ptr.limit);
+    try expectEqual(@ptrToInt(&idt_entries[0]), ptr.base);
 }
 
 test "IDT entries" {
-    expectEqual(@as(u32, 8), @sizeOf(IdtEntry));
-    expectEqual(@as(u32, 6), @sizeOf(IdtPtr));
-    expectEqual(TABLE_SIZE, idt_ptr.limit);
-    expectEqual(@as(u32, 0), idt_ptr.base);
+    try expectEqual(@as(u32, 8), @sizeOf(IdtEntry));
+    try expectEqual(@as(u32, 6), @sizeOf(IdtPtr));
+    try expectEqual(TABLE_SIZE, idt_ptr.limit);
+    try expectEqual(@as(u32, 0), idt_ptr.base);
 }
 
 test "makeEntry alternating bit pattern" {
@@ -212,7 +212,7 @@ test "makeEntry alternating bit pattern" {
 
     const expected: u64 = 0b0101010101010101101001010000000001010101010101010101010101010101;
 
-    expectEqual(expected, @bitCast(u64, actual));
+    try expectEqual(expected, @bitCast(u64, actual));
 }
 
 test "isIdtOpen" {
@@ -238,14 +238,14 @@ test "isIdtOpen" {
         .base_high = 0,
     };
 
-    expectEqual(false, isIdtOpen(not_open));
-    expectEqual(true, isIdtOpen(open));
+    try expectEqual(false, isIdtOpen(not_open));
+    try expectEqual(true, isIdtOpen(open));
 }
 
 test "openInterruptGate" {
     const index: u8 = 100;
     openInterruptGate(index, testHandler0) catch unreachable;
-    expectError(IdtError.IdtEntryExists, openInterruptGate(index, testHandler0));
+    try expectError(IdtError.IdtEntryExists, openInterruptGate(index, testHandler0));
 
     const test_fn_0_addr = @ptrToInt(testHandler0);
     const test_fn_1_addr = @ptrToInt(testHandler1);
@@ -261,7 +261,8 @@ test "openInterruptGate" {
         .base_high = @truncate(u16, test_fn_0_addr >> 16),
     };
 
-    expectEqual(expected_entry0, idt_entries[index]);
+    std.debug.print("Expected {}, actual {}\n", .{ expected_entry0, idt_entries[index] });
+    try expectEqual(expected_entry0, idt_entries[index]);
 
     // Reset
     idt_entries[index] = IdtEntry{
@@ -277,7 +278,7 @@ test "openInterruptGate" {
 
     openInterruptGate(index, testHandler0) catch unreachable;
     // With different handler
-    expectError(IdtError.IdtEntryExists, openInterruptGate(index, testHandler1));
+    try expectError(IdtError.IdtEntryExists, openInterruptGate(index, testHandler1));
 
     const expected_entry1 = IdtEntry{
         .base_low = @truncate(u16, test_fn_0_addr),
@@ -290,7 +291,7 @@ test "openInterruptGate" {
         .base_high = @truncate(u16, test_fn_0_addr >> 16),
     };
 
-    expectEqual(expected_entry1, idt_entries[index]);
+    try expectEqual(expected_entry1, idt_entries[index]);
 
     // Reset
     idt_entries[index] = IdtEntry{
@@ -316,7 +317,7 @@ test "init" {
     init();
 
     // Post testing
-    expectEqual(@ptrToInt(&idt_entries), idt_ptr.base);
+    try expectEqual(@ptrToInt(&idt_entries), idt_ptr.base);
 
     // Reset
     idt_ptr.base = 0;

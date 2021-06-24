@@ -395,7 +395,7 @@ fn testHandler6(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4
 
 test "registerSyscall returns SyscallExists" {
     try registerSyscall(122, testHandler0);
-    std.testing.expectError(Error.SyscallExists, registerSyscall(122, testHandler0));
+    try std.testing.expectError(Error.SyscallExists, registerSyscall(122, testHandler0));
 }
 
 fn runtimeTests() void {
