@@ -567,8 +567,8 @@ pub const Fat32 = struct {
     ///     @TypeOf(stream).WriteError - Error writing to the stream.
     ///
     fn clearStream(stream: anytype, size: usize) ErrorSet(@TypeOf(stream))!void {
-        comptime const buff_size = 4096;
-        comptime const bytes: [buff_size]u8 = [_]u8{0x00} ** buff_size;
+        const buff_size = 4096;
+        const bytes: [buff_size]u8 = [_]u8{0x00} ** buff_size;
 
         var remaining: usize = size;
         while (remaining > 0) {
