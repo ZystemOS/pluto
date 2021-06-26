@@ -15,7 +15,7 @@ pub const FreeListAllocator = struct {
         size: usize,
         next_free: ?*Header,
 
-        const Self = @Self();
+        const Self = @This();
 
         ///
         /// Initialise the header for a free allocation node
