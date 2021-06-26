@@ -526,6 +526,7 @@ pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocato
 
     // TODO Will need to add the exit point
     // Set up everything as a kernel task
+    task.vmm.payload = &paging.kernel_directory;
     stack.*[kernel_stack_bottom] = mem.virtToPhys(@ptrToInt(&paging.kernel_directory));
     stack.*[kernel_stack_bottom + 1] = data_offset; // gs
     stack.*[kernel_stack_bottom + 2] = data_offset; // fs

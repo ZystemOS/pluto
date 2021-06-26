@@ -39,10 +39,10 @@ pub fn build(b: *Builder) !void {
     const main_src = "src/kernel/kmain.zig";
     const arch_root = "src/kernel/arch";
     const linker_script_path = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "link.ld" });
-    const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
-    const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso" });
-    const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
-    const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
+    const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "pluto.iso" });
+    const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "iso" });
+    const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "iso", "boot" });
+    const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "iso", "modules" });
     const ramdisk_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "initrd.ramdisk" });
     const fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "fat32.img" });
     const test_fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ "test", "fat32", "test_fat32.img" });
@@ -82,19 +82,19 @@ pub fn build(b: *Builder) !void {
         try ramdisk_files_al.append("test/ramdisk_test1.txt");
         try ramdisk_files_al.append("test/ramdisk_test2.txt");
     } else if (test_mode == .Scheduler) {
-        // Add some test files for the user mode runtime tests
-        const user_program = b.addAssemble("user_program", "test/user_program.s");
-        user_program.setOutputDir(b.install_path);
-        user_program.setTarget(target);
-        user_program.setBuildMode(build_mode);
-        user_program.strip = true;
-
-        const user_program_path = try std.mem.join(b.allocator, "/", &[_][]const u8{ b.install_path, "user_program" });
-        const user_program_obj_path = try std.mem.join(b.allocator, "/", &[_][]const u8{ b.install_path, "user_program.o" });
-        const copy_user_program = b.addSystemCommand(&[_][]const u8{ "objcopy", "-O", "binary", user_program_obj_path, user_program_path });
-        copy_user_program.step.dependOn(&user_program.step);
-        try ramdisk_files_al.append(user_program_path);
-        exec.step.dependOn(&copy_user_program.step);
+        inline for (&[_][]const u8{ "user_program_data", "user_program" }) |user_program| {
+            // Add some test files for the user mode runtime tests
+            const user_program_step = b.addExecutable(user_program ++ ".elf", null);
+            user_program_step.setLinkerScriptPath("test/user_program.ld");
+            user_program_step.addAssemblyFile("test/" ++ user_program ++ ".s");
+            user_program_step.setOutputDir(b.install_path);
+            user_program_step.setTarget(target);
+            user_program_step.setBuildMode(build_mode);
+            user_program_step.strip = true;
+            exec.step.dependOn(&user_program_step.step);
+            const user_program_path = try std.mem.join(b.allocator, "/", &[_][]const u8{ b.install_path, user_program ++ ".elf" });
+            try ramdisk_files_al.append(user_program_path);
+        }
     }
 
     const ramdisk_step = RamdiskStep.create(b, target, ramdisk_files_al.toOwnedSlice(), ramdisk_path);

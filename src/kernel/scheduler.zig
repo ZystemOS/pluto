@@ -13,6 +13,8 @@ const task = @import("task.zig");
 const vmm = @import("vmm.zig");
 const mem = @import("mem.zig");
 const fs = @import("filesystem/vfs.zig");
+const elf = @import("elf.zig");
+const pmm = @import("pmm.zig");
 const Task = task.Task;
 const EntryPoint = task.EntryPoint;
 const Allocator = std.mem.Allocator;
@@ -304,8 +306,8 @@ fn rt_variable_preserved(allocator: *Allocator) void {
     defer allocator.destroy(is_set);
     is_set.* = true;
 
-    var test_task = Task.create(@ptrToInt(task_function), true, undefined, allocator) catch unreachable;
-    scheduleTask(test_task, allocator) catch unreachable;
+    var test_task = Task.create(@ptrToInt(task_function), true, &vmm.kernel_vmm, allocator) catch |e| panic(@errorReturnTrace(), "Failed to create task in rt_variable_preserved: {}\n", .{e});
+    scheduleTask(test_task, allocator) catch |e| panic(@errorReturnTrace(), "Failed to schedule a task in rt_variable_preserved: {}\n", .{e});
     // TODO: Need to add the ability to remove tasks
 
     var w: u32 = 0;
@@ -352,37 +354,53 @@ fn rt_variable_preserved(allocator: *Allocator) void {
 ///     IN mem_profile: mem.MemProfile - The system's memory profile. Determines the end address of the user task's VMM.
 ///
 fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void {
-    // 1. Create user VMM
-    var task_vmm = allocator.create(vmm.VirtualMemoryManager(arch.VmmPayload)) catch |e| {
-        panic(@errorReturnTrace(), "Failed to allocate user task VMM: {}\n", .{e});
-    };
-    task_vmm.* = vmm.VirtualMemoryManager(arch.VmmPayload).init(0, @ptrToInt(mem_profile.vaddr_start), allocator, arch.VMM_MAPPER, undefined) catch unreachable;
-    // 2. Create user task. The code will be loaded at address 0
-    var user_task = task.Task.create(0, false, task_vmm, allocator) catch |e| {
-        panic(@errorReturnTrace(), "Failed to create user task: {}\n", .{e});
-    };
-    // 3. Read the user program file from the filesystem
-    const user_program_file = fs.openFile("/user_program", .NO_CREATION) catch |e| {
-        panic(@errorReturnTrace(), "Failed to open /user_program: {}\n", .{e});
-    };
-    defer user_program_file.close();
-    var code: [1024]u8 = undefined;
-    const code_len = user_program_file.read(code[0..1024]) catch |e| {
-        panic(@errorReturnTrace(), "Failed to read user program file: {}\n", .{e});
-    };
-    // 4. Allocate space in the vmm for the user_program
-    const code_start = task_vmm.alloc(std.mem.alignForward(code_len, vmm.BLOCK_SIZE) / vmm.BLOCK_SIZE, .{ .kernel = false, .writable = true, .cachable = true }) catch |e| {
-        panic(@errorReturnTrace(), "Failed to allocate VMM memory for user program code: {}\n", .{e});
-    } orelse panic(null, "User task VMM didn't allocate space for the user program\n", .{});
-    if (code_start != 0) panic(null, "User program start address was {} instead of 0\n", .{code_start});
-    // 5. Copy user_program code over
-    vmm.kernel_vmm.copyData(task_vmm, code[0..code_len], code_start, true) catch |e| {
-        panic(@errorReturnTrace(), "Failed to copy user code: {}\n", .{e});
-    };
-    // 6. Schedule it
-    scheduleTask(user_task, allocator) catch |e| {
-        panic(@errorReturnTrace(), "Failed to schedule the user task: {}\n", .{e});
-    };
+    for (&[_][]const u8{ "/user_program_data.elf", "/user_program.elf" }) |user_program| {
+        // 1. Create user VMM
+        var task_vmm = allocator.create(vmm.VirtualMemoryManager(arch.VmmPayload)) catch |e| {
+            panic(@errorReturnTrace(), "Failed to allocate VMM for {s}: {}\n", .{ user_program, e });
+        };
+        task_vmm.* = vmm.VirtualMemoryManager(arch.VmmPayload).init(0, @ptrToInt(mem_profile.vaddr_start), allocator, arch.VMM_MAPPER, undefined) catch |e| panic(@errorReturnTrace(), "Failed to create the vmm for {s}: {}\n", .{ user_program, e });
+
+        const user_program_file = fs.openFile(user_program, .NO_CREATION) catch |e| {
+            panic(@errorReturnTrace(), "Failed to open {s}: {}\n", .{ user_program, e });
+        };
+        defer user_program_file.close();
+        var code: [1024 * 9]u8 = undefined;
+        const code_len = user_program_file.read(code[0..code.len]) catch |e| {
+            panic(@errorReturnTrace(), "Failed to read {s}: {}\n", .{ user_program, e });
+        };
+        const program_elf = elf.Elf.init(code[0..code_len], builtin.arch, allocator) catch |e| panic(@errorReturnTrace(), "Failed to load {s}: {}\n", .{ user_program, e });
+        defer program_elf.deinit();
+
+        const current_physical_blocks = pmm.blocksFree();
+
+        var user_task = task.Task.createFromElf(program_elf, false, task_vmm, allocator) catch |e| {
+            panic(@errorReturnTrace(), "Failed to create task for {s}: {}\n", .{ user_program, e });
+        };
+
+        scheduleTask(user_task, allocator) catch |e| {
+            panic(@errorReturnTrace(), "Failed to schedule the task for {s}: {}\n", .{ user_program, e });
+        };
+
+        var num_allocatable_sections: usize = 0;
+        var size_allocatable_sections: usize = 0;
+        for (program_elf.section_headers) |section| {
+            if (section.flags & elf.SECTION_ALLOCATABLE != 0) {
+                num_allocatable_sections += 1;
+                size_allocatable_sections += std.mem.alignForward(section.size, vmm.BLOCK_SIZE);
+            }
+        }
+
+        // Only a certain number of elf section are expected to have been allocated in the vmm
+        if (task_vmm.allocations.count() != num_allocatable_sections) {
+            panic(@errorReturnTrace(), "VMM allocated wrong number of virtual regions for {s}. Expected {} but found {}\n", .{ user_program, num_allocatable_sections, task_vmm.allocations.count() });
+        }
+
+        const allocated_size = (task_vmm.bmp.num_entries - task_vmm.bmp.num_free_entries) * vmm.BLOCK_SIZE;
+        if (size_allocatable_sections != allocated_size) {
+            panic(@errorReturnTrace(), "VMM allocated wrong amount of memory for {s}. Expected {} but found {}\n", .{ user_program, size_allocatable_sections, allocated_size });
+        }
+    }
 }
 
 ///

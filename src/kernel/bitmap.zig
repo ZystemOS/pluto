@@ -89,11 +89,13 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         /// Arguments:
         ///     IN/OUT self: *Self - The bitmap to modify.
         ///     IN num: usize - The number of entries to set.
+        ///     IN from: ?IndexType - The entry number to start allocate from or null if it can start anywhere
         ///
         /// Return: ?IndexType
         ///     The first entry set or null if there weren't enough contiguous entries.
+        ///     If `from` was not null and any entry between `from` and `from` + num is set then null is returned.
         ///
-        pub fn setContiguous(self: *Self, num: usize) ?IndexType {
+        pub fn setContiguous(self: *Self, num: usize, from: ?IndexType) ?IndexType {
             if (num > self.num_free_entries) {
                 return null;
             }
@@ -101,7 +103,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
             var count: usize = 0;
             var start: ?IndexType = null;
 
-            var bit: IndexType = 0;
+            var bit = from orelse 0;
             while (true) {
                 const entry = bit;
                 if (entry >= NUM_ENTRIES) {
@@ -111,6 +113,11 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
                     // This is a one so clear the progress
                     count = 0;
                     start = null;
+                    // If the caller requested the allocation to start from
+                    // a specific entry and it failed then return null
+                    if (from) |_| {
+                        return null;
+                    }
                 } else {
                     // It's a zero so increment the count
                     count += 1;
@@ -334,19 +341,26 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Arguments:
         ///     IN/OUT self: *Self - The bitmap to modify.
         ///     IN num: usize - The number of entries to set.
+        ///     IN from: ?usize - The entry number to allocate from or null if it can start anywhere
         ///
         /// Return: ?usize
         ///     The first entry set or null if there weren't enough contiguous entries.
+        ///     If `from` was not null and any entry between `from` and `from` + num is set then null is returned.
         ///
-        pub fn setContiguous(self: *Self, num: usize) ?usize {
+        pub fn setContiguous(self: *Self, num: usize, from: ?usize) ?usize {
             if (num > self.num_free_entries) {
                 return null;
             }
 
             var count: usize = 0;
-            var start: ?usize = null;
-            for (self.bitmaps) |bmp, i| {
-                var bit: IndexType = 0;
+            var start: ?usize = from;
+            var i: usize = if (from) |f| f / ENTRIES_PER_BITMAP else 0;
+            var bit: IndexType = if (from) |f| @truncate(IndexType, f % ENTRIES_PER_BITMAP) else 0;
+            while (i < self.bitmaps.len) : ({
+                i += 1;
+                bit = 0;
+            }) {
+                var bmp = self.bitmaps[i];
                 while (true) {
                     const entry = bit + i * ENTRIES_PER_BITMAP;
                     if (entry >= self.num_entries) {
@@ -356,6 +370,11 @@ pub fn Bitmap(comptime BitmapType: type) type {
                         // This is a one so clear the progress
                         count = 0;
                         start = null;
+                        // If the caller requested the allocation to start from
+                        // a specific entry and it failed then return null
+                        if (from) |_| {
+                            return null;
+                        }
                     } else {
                         // It's a zero so increment the count
                         count += 1;
@@ -383,10 +402,10 @@ pub fn Bitmap(comptime BitmapType: type) type {
 
             if (count == num) {
                 if (start) |start_entry| {
-                    var i: usize = 0;
-                    while (i < num) : (i += 1) {
+                    var j: usize = 0;
+                    while (j < num) : (j += 1) {
                         // Can't fail as the entry was found to be free
-                        self.setEntry(start_entry + i) catch unreachable;
+                        self.setEntry(start_entry + j) catch unreachable;
                     }
                     return start_entry;
                 }
@@ -547,24 +566,40 @@ test "Comptime indexToBit" {
 }
 
 test "Comptime setContiguous" {
-    var bmp = ComptimeBitmap(u15).init();
+    var bmp = ComptimeBitmap(u16).init();
     // Test trying to set more entries than the bitmap has
-    testing.expectEqual(bmp.setContiguous(ComptimeBitmap(u15).NUM_ENTRIES + 1), null);
+    testing.expectEqual(bmp.setContiguous(bmp.num_free_entries + 1, null), null);
+    testing.expectEqual(bmp.setContiguous(bmp.num_free_entries + 1, 1), null);
     // All entries should still be free
-    testing.expectEqual(bmp.num_free_entries, ComptimeBitmap(u15).NUM_ENTRIES);
-    testing.expectEqual(bmp.setContiguous(3) orelse unreachable, 0);
-    testing.expectEqual(bmp.setContiguous(4) orelse unreachable, 3);
-    // 0b0000.0000.0111.1111
-    bmp.bitmap |= 0x200;
-    // 0b0000.0010.0111.1111
-    testing.expectEqual(bmp.setContiguous(3) orelse unreachable, 10);
-    // 0b0001.1110.0111.1111
-    testing.expectEqual(bmp.setContiguous(5), null);
-    testing.expectEqual(bmp.setContiguous(2), 7);
-    // 0b001.1111.1111.1111
-    // Test trying to set beyond the end of the bitmaps
-    testing.expectEqual(bmp.setContiguous(3), null);
-    testing.expectEqual(bmp.setContiguous(2), 13);
+    testing.expectEqual(bmp.num_free_entries, 16);
+    testing.expectEqual(bmp.bitmap, 0b0000000000000000);
+
+    testing.expectEqual(bmp.setContiguous(3, 0) orelse unreachable, 0);
+    testing.expectEqual(bmp.bitmap, 0b0000000000000111);
+
+    // Test setting from top
+    testing.expectEqual(bmp.setContiguous(2, 14) orelse unreachable, 14);
+    testing.expectEqual(bmp.bitmap, 0b1100000000000111);
+
+    testing.expectEqual(bmp.setContiguous(3, 12), null);
+    testing.expectEqual(bmp.bitmap, 0b1100000000000111);
+
+    testing.expectEqual(bmp.setContiguous(3, null) orelse unreachable, 3);
+    testing.expectEqual(bmp.bitmap, 0b1100000000111111);
+
+    // Test setting beyond the what is available
+    testing.expectEqual(bmp.setContiguous(9, null), null);
+    testing.expectEqual(bmp.bitmap, 0b1100000000111111);
+
+    testing.expectEqual(bmp.setContiguous(8, null) orelse unreachable, 6);
+    testing.expectEqual(bmp.bitmap, 0b1111111111111111);
+
+    // No more are possible
+    testing.expectEqual(bmp.setContiguous(1, null), null);
+    testing.expectEqual(bmp.bitmap, 0b1111111111111111);
+
+    testing.expectEqual(bmp.setContiguous(1, 0), null);
+    testing.expectEqual(bmp.bitmap, 0b1111111111111111);
 }
 
 test "setEntry" {
@@ -723,25 +758,47 @@ test "indexToBit" {
     testing.expectEqual(bmp.indexToBit(9), 2);
 }
 
+fn testCheckBitmaps(bmp: Bitmap(u4), b1: u4, b2: u4, b3: u4, b4: u4) void {
+    testing.expectEqual(@as(u4, b1), bmp.bitmaps[0]);
+    testing.expectEqual(@as(u4, b2), bmp.bitmaps[1]);
+    testing.expectEqual(@as(u4, b3), bmp.bitmaps[2]);
+    testing.expectEqual(@as(u4, b4), bmp.bitmaps[3]);
+}
+
 test "setContiguous" {
-    var bmp = try Bitmap(u4).init(15, std.testing.allocator);
+    var bmp = try Bitmap(u4).init(16, std.testing.allocator);
     defer bmp.deinit();
     // Test trying to set more entries than the bitmap has
-    testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1), null);
+    testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1, null), null);
+    testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1, 1), null);
     // All entries should still be free
     testing.expectEqual(bmp.num_free_entries, bmp.num_entries);
+    testCheckBitmaps(bmp, 0, 0, 0, 0);
 
-    testing.expectEqual(bmp.setContiguous(3) orelse unreachable, 0);
-    testing.expectEqual(bmp.setContiguous(4) orelse unreachable, 3);
-    // 0b0000.0000.0111.1111
-    bmp.bitmaps[2] |= 2;
-    // 0b0000.0010.0111.1111
-    testing.expectEqual(bmp.setContiguous(3) orelse unreachable, 10);
-    // 0b0001.1110.0111.1111
-    testing.expectEqual(bmp.setContiguous(5), null);
-    testing.expectEqual(bmp.setContiguous(2), 7);
-    // 0b001.1111.1111.1111
-    // Test trying to set beyond the end of the bitmaps
-    testing.expectEqual(bmp.setContiguous(3), null);
-    testing.expectEqual(bmp.setContiguous(2), 13);
+    testing.expectEqual(bmp.setContiguous(3, 0) orelse unreachable, 0);
+    testCheckBitmaps(bmp, 0b0111, 0, 0, 0);
+
+    // Test setting from top
+    testing.expectEqual(bmp.setContiguous(2, 14) orelse unreachable, 14);
+    testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
+
+    testing.expectEqual(bmp.setContiguous(3, 12), null);
+    testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
+
+    testing.expectEqual(bmp.setContiguous(3, null) orelse unreachable, 3);
+    testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
+
+    // Test setting beyond the what is available
+    testing.expectEqual(bmp.setContiguous(9, null), null);
+    testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
+
+    testing.expectEqual(bmp.setContiguous(8, null) orelse unreachable, 6);
+    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
+
+    // No more are possible
+    testing.expectEqual(bmp.setContiguous(1, null), null);
+    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
+
+    testing.expectEqual(bmp.setContiguous(1, 0), null);
+    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
 }
