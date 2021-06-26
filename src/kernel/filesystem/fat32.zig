@@ -1241,6 +1241,8 @@ pub fn Fat32FS(comptime StreamType: type) type {
 
         /// See vfs.FileSystem.open
         fn open(fs: *const vfs.FileSystem, dir: *const vfs.DirNode, name: []const u8, flags: vfs.OpenFlags, open_args: vfs.OpenArgs) (Allocator.Error || vfs.Error)!*vfs.Node {
+            // Suppress unused var warning
+            _ = open_args;
             return switch (flags) {
                 .NO_CREATION => openImpl(fs, dir, name),
                 .CREATE_FILE => createFileOrDir(fs, dir, name, false),
@@ -1570,9 +1572,6 @@ pub fn Fat32FS(comptime StreamType: type) type {
                     return vfs.Error.Unexpected;
                 },
             };
-
-            // Calculate the offset where the file size is stored on disk
-            const file_size_offset = previous_index + (entries.long_entry.len * 32) + 28;
 
             return self.createNode(free_cluster, 0, short_offset.cluster, short_offset.offset + 28, if (is_dir) .CREATE_DIR else .CREATE_FILE);
         }
@@ -2279,13 +2278,13 @@ pub fn initialiseFAT32(allocator: *Allocator, stream: anytype) (Allocator.Error 
 ///
 fn testFAT32FS(allocator: *Allocator, stream: anytype, fat_config: FATConfig) anyerror!*Fat32FS(@TypeOf(stream)) {
     var test_file_buf = try std.testing.allocator.alloc(u8, 35 * 512);
-    defer std.testing.allocator.free(test_file_buf);
+    defer allocator.free(test_file_buf);
 
     var temp_stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
     try mkfat32.Fat32.make(.{ .image_size = test_file_buf.len }, temp_stream, true);
 
-    var test_fs = try initialiseFAT32(std.testing.allocator, temp_stream);
+    var test_fs = try initialiseFAT32(allocator, temp_stream);
     test_fs.stream = stream;
     test_fs.fat_config = fat_config;
 
@@ -2920,7 +2919,6 @@ test "ClusterChainIterator.read - success" {
     var stream = &std.io.fixedBufferStream(buff_stream[0..]);
     // First 2 are for other purposed and not needed, the third is the first real FAT entry
     var fat = [_]u32{ 0x0FFFFFFF, 0xFFFFFFF8, 0x0FFFFFFF, 0x0FFFFFFF };
-    var expected_fat = [_]u32{ 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF };
     var it = Fat32FS(@TypeOf(stream)).ClusterChainIterator{
         .allocator = undefined,
         .cluster = 2,
@@ -5872,7 +5870,7 @@ test "Fat32FS.init errors" {
     var test_file_buf = try std.testing.allocator.alloc(u8, (32 * 512 + 4) + 1);
     defer std.testing.allocator.free(test_file_buf);
 
-    const read = try test_fat32_image.reader().readAll(test_file_buf[0..]);
+    _ = try test_fat32_image.reader().readAll(test_file_buf[0..]);
     const stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
     // BadMBRMagic
@@ -5998,7 +5996,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
     var test_file_buf = try std.testing.allocator.alloc(u8, 1024 * 1024);
     defer std.testing.allocator.free(test_file_buf);
 
-    const read = try test_fat32_image.reader().readAll(test_file_buf[0..]);
+    _ = try test_fat32_image.reader().readAll(test_file_buf[0..]);
     const stream = &std.io.fixedBufferStream(test_file_buf[0..]);
 
     // No FSInfo

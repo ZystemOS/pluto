@@ -260,7 +260,7 @@ fn scroll() void {
 
         // Move rows up pages by temp, will usually be one.
         // TODO: Maybe panic here as we have the check above, so if this fails, then is a big problem
-        pagesMoveRowsUp(rows_to_move) catch |e| {
+        pagesMoveRowsUp(rows_to_move) catch {
             panic(@errorReturnTrace(), "Can't move {} rows up. Must be less than {}\n", .{ rows_to_move, ROW_TOTAL });
         };
 

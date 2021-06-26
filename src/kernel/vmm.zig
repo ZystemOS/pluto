@@ -9,7 +9,7 @@ const pmm = @import("pmm.zig");
 const mem = @import("mem.zig");
 const tty = @import("tty.zig");
 const panic = @import("panic.zig").panic;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig").internals;
+const arch = @import("arch.zig").internals;
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
@@ -751,7 +751,7 @@ test "copy" {
     defer testDeinit(&vmm);
 
     const attrs = .{ .kernel = true, .cachable = true, .writable = true };
-    const alloc0 = (try vmm.alloc(24, attrs)).?;
+    _ = (try vmm.alloc(24, attrs)).?;
 
     var mirrored = try vmm.copy();
     defer mirrored.deinit();
@@ -775,7 +775,7 @@ test "copy" {
     try std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(alloc1));
 
     // And vice-versa
-    const alloc2 = (try vmm.alloc(3, attrs)).?;
+    _ = (try vmm.alloc(3, attrs)).?;
     const alloc3 = (try vmm.alloc(1, attrs)).?;
     const alloc4 = (try vmm.alloc(1, attrs)).?;
     try std.testing.expectEqual(vmm.allocations.count() - 2, mirrored.allocations.count());
@@ -846,7 +846,6 @@ fn testInit(num_entries: u32) Allocator.Error!VirtualMemoryManager(u8) {
             allocations.clearEntry(entry) catch unreachable;
         }
     }
-    var allocations = test_allocations orelse unreachable;
     const mem_profile = mem.MemProfile{
         .vaddr_end = undefined,
         .vaddr_start = undefined,
@@ -889,6 +888,9 @@ fn testDeinit(vmm: *VirtualMemoryManager(u8)) void {
 ///     IN payload: u8 - The payload value. Expected to be 39
 ///
 fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: *Allocator, payload: u8) (Allocator.Error || MapperError)!void {
+    // Suppress unused var warning
+    _ = attrs;
+    _ = allocator;
     std.testing.expectEqual(@as(u8, 39), payload) catch unreachable;
     var vaddr = vstart;
     var allocations = test_allocations.?;
@@ -906,6 +908,8 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
 ///     IN payload: u8 - The payload value. Expected to be 39
 ///
 fn testUnmap(vstart: usize, vend: usize, allocator: *Allocator, payload: u8) MapperError!void {
+    // Suppress unused var warning
+    _ = allocator;
     std.testing.expectEqual(@as(u8, 39), payload) catch unreachable;
     var vaddr = vstart;
     var allocations = test_allocations.?;
