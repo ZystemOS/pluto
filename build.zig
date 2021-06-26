@@ -59,14 +59,15 @@ pub fn build(b: *Builder) !void {
     const disable_display = b.option(bool, "disable-display", "Disable the qemu window") orelse false;
 
     const exec = b.addExecutable("pluto.elf", main_src);
+    const exec_output_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "pluto.elf" });
     exec.setOutputDir(b.install_path);
     exec.addBuildOption(TestMode, "test_mode", test_mode);
     exec.setBuildMode(build_mode);
-    exec.setLinkerScriptPath(linker_script_path);
+    exec.setLinkerScriptPath(std.build.FileSource{ .path = linker_script_path });
     exec.setTarget(target);
 
     const make_iso = switch (target.getCpuArch()) {
-        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
+        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec_output_path, ramdisk_path, output_iso }),
         else => unreachable,
     };
     make_iso.step.dependOn(&exec.step);
@@ -175,7 +176,7 @@ pub fn build(b: *Builder) !void {
     run_debug_step.dependOn(&qemu_debug_cmd.step);
 
     const debug_step = b.step("debug", "Debug with gdb and connect to a running qemu instance");
-    const symbol_file_arg = try std.mem.join(b.allocator, " ", &[_][]const u8{ "symbol-file", exec.getOutputPath() });
+    const symbol_file_arg = try std.mem.join(b.allocator, " ", &[_][]const u8{ "symbol-file", exec_output_path });
     const debug_cmd = b.addSystemCommand(&[_][]const u8{
         "gdb-multiarch",
         "-ex",
@@ -239,7 +240,7 @@ const Fat32BuilderStep = struct {
     pub fn create(builder: *Builder, options: Fat32.Options, out_file_path: []const u8) *Fat32BuilderStep {
         const fat32_builder_step = builder.allocator.create(Fat32BuilderStep) catch unreachable;
         fat32_builder_step.* = .{
-            .step = Step.init(.Custom, builder.fmt("Fat32BuilderStep", .{}), builder.allocator, make),
+            .step = Step.init(.custom, builder.fmt("Fat32BuilderStep", .{}), builder.allocator, make),
             .builder = builder,
             .options = options,
             .out_file_path = out_file_path,
@@ -354,7 +355,7 @@ const RamdiskStep = struct {
     pub fn create(builder: *Builder, target: CrossTarget, files: []const []const u8, out_file_path: []const u8) *RamdiskStep {
         const ramdisk_step = builder.allocator.create(RamdiskStep) catch unreachable;
         ramdisk_step.* = .{
-            .step = Step.init(.Custom, builder.fmt("Ramdisk", .{}), builder.allocator, make),
+            .step = Step.init(.custom, builder.fmt("Ramdisk", .{}), builder.allocator, make),
             .builder = builder,
             .target = target,
             .files = files,
