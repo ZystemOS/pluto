@@ -318,6 +318,8 @@ fn writeSerialCom1(byte: u8) void {
 ///     The Serial instance constructed with the function used to write bytes
 ///
 pub fn initSerial(boot_payload: BootPayload) Serial {
+    // Suppress unused var warning
+    _ = boot_payload;
     serial.init(serial.DEFAULT_BAUDRATE, serial.Port.COM1) catch |e| {
         panic(@errorReturnTrace(), "Failed to initialise serial: {}", .{e});
     };
@@ -336,6 +338,8 @@ pub fn initSerial(boot_payload: BootPayload) Serial {
 ///     The TTY instance constructed with the information required by the rest of the kernel
 ///
 pub fn initTTY(boot_payload: BootPayload) TTY {
+    // Suppress unused var warning
+    _ = boot_payload;
     return .{
         .print = tty.writeString,
         .setCursor = tty.setCursor,

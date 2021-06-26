@@ -277,6 +277,8 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
 ///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
 ///
 fn unmapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, allocator: *Allocator) vmm.MapperError!void {
+    // Suppress unused var warning
+    _ = allocator;
     const entry = virtToDirEntryIdx(virt_start);
     const table = dir.tables[entry] orelse return vmm.MapperError.NotMapped;
     var addr = virt_start;
@@ -682,7 +684,6 @@ fn rt_accessMappedMem(v_end: u32) void {
     faulted = false;
     // Accessing mapped memory doesn't cause a page fault
     var ptr = @intToPtr(*u8, v_end - PAGE_SIZE_4KB);
-    var value = ptr.*;
     asm volatile (
         \\.global rt_fault_callback2
         \\rt_fault_callback2:

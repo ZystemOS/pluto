@@ -50,7 +50,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         ///
         pub fn setEntry(self: *Self, idx: IndexType) void {
             if (!self.isSet(idx)) {
-                self.bitmap |= self.indexToBit(idx);
+                self.bitmap |= indexToBit(idx);
                 self.num_free_entries -= 1;
             }
         }
@@ -64,7 +64,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         ///
         pub fn clearEntry(self: *Self, idx: IndexType) void {
             if (self.isSet(idx)) {
-                self.bitmap &= ~self.indexToBit(idx);
+                self.bitmap &= ~indexToBit(idx);
                 self.num_free_entries += 1;
             }
         }
@@ -79,7 +79,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         /// Return: BitmapType.
         ///     The bit corresponding to that index but within a single BitmapType.
         ///
-        fn indexToBit(self: *const Self, idx: IndexType) BitmapType {
+        fn indexToBit(idx: IndexType) BitmapType {
             return @as(BitmapType, 1) << idx;
         }
 
@@ -178,7 +178,7 @@ pub fn ComptimeBitmap(comptime BitmapType: type) type {
         ///     True if the entry is set, else false.
         ///
         pub fn isSet(self: *const Self, idx: IndexType) bool {
-            return (self.bitmap & self.indexToBit(idx)) != 0;
+            return (self.bitmap & indexToBit(idx)) != 0;
         }
     };
 }
@@ -294,7 +294,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
                 return BitmapError.OutOfBounds;
             }
             if (!try self.isSet(idx)) {
-                const bit = self.indexToBit(idx);
+                const bit = indexToBit(idx);
                 self.bitmaps[idx / ENTRIES_PER_BITMAP] |= bit;
                 self.num_free_entries -= 1;
             }
@@ -315,7 +315,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
                 return BitmapError.OutOfBounds;
             }
             if (try self.isSet(idx)) {
-                const bit = self.indexToBit(idx);
+                const bit = indexToBit(idx);
                 self.bitmaps[idx / ENTRIES_PER_BITMAP] &= ~bit;
                 self.num_free_entries += 1;
             }
@@ -331,7 +331,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Return: BitmapType.
         ///     The bit corresponding to that index but within a single BitmapType.
         ///
-        fn indexToBit(self: *const Self, idx: usize) BitmapType {
+        fn indexToBit(idx: usize) BitmapType {
             return @as(BitmapType, 1) << @intCast(IndexType, idx % ENTRIES_PER_BITMAP);
         }
 
@@ -454,7 +454,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
             if (idx >= self.num_entries) {
                 return BitmapError.OutOfBounds;
             }
-            return (self.bitmaps[idx / ENTRIES_PER_BITMAP] & self.indexToBit(idx)) != 0;
+            return (self.bitmaps[idx / ENTRIES_PER_BITMAP] & indexToBit(idx)) != 0;
         }
     };
 }
@@ -554,15 +554,15 @@ test "Comptime isSet" {
 }
 
 test "Comptime indexToBit" {
-    var bmp = ComptimeBitmap(u8).init();
-    try testing.expectEqual(bmp.indexToBit(0), 1);
-    try testing.expectEqual(bmp.indexToBit(1), 2);
-    try testing.expectEqual(bmp.indexToBit(2), 4);
-    try testing.expectEqual(bmp.indexToBit(3), 8);
-    try testing.expectEqual(bmp.indexToBit(4), 16);
-    try testing.expectEqual(bmp.indexToBit(5), 32);
-    try testing.expectEqual(bmp.indexToBit(6), 64);
-    try testing.expectEqual(bmp.indexToBit(7), 128);
+    const Type = ComptimeBitmap(u8);
+    try testing.expectEqual(Type.indexToBit(0), 1);
+    try testing.expectEqual(Type.indexToBit(1), 2);
+    try testing.expectEqual(Type.indexToBit(2), 4);
+    try testing.expectEqual(Type.indexToBit(3), 8);
+    try testing.expectEqual(Type.indexToBit(4), 16);
+    try testing.expectEqual(Type.indexToBit(5), 32);
+    try testing.expectEqual(Type.indexToBit(6), 64);
+    try testing.expectEqual(Type.indexToBit(7), 128);
 }
 
 test "Comptime setContiguous" {
@@ -744,18 +744,19 @@ test "isSet" {
 }
 
 test "indexToBit" {
-    var bmp = try Bitmap(u8).init(10, std.testing.allocator);
+    const Type = Bitmap(u8);
+    var bmp = try Type.init(10, std.testing.allocator);
     defer bmp.deinit();
-    try testing.expectEqual(bmp.indexToBit(0), 1);
-    try testing.expectEqual(bmp.indexToBit(1), 2);
-    try testing.expectEqual(bmp.indexToBit(2), 4);
-    try testing.expectEqual(bmp.indexToBit(3), 8);
-    try testing.expectEqual(bmp.indexToBit(4), 16);
-    try testing.expectEqual(bmp.indexToBit(5), 32);
-    try testing.expectEqual(bmp.indexToBit(6), 64);
-    try testing.expectEqual(bmp.indexToBit(7), 128);
-    try testing.expectEqual(bmp.indexToBit(8), 1);
-    try testing.expectEqual(bmp.indexToBit(9), 2);
+    try testing.expectEqual(Type.indexToBit(0), 1);
+    try testing.expectEqual(Type.indexToBit(1), 2);
+    try testing.expectEqual(Type.indexToBit(2), 4);
+    try testing.expectEqual(Type.indexToBit(3), 8);
+    try testing.expectEqual(Type.indexToBit(4), 16);
+    try testing.expectEqual(Type.indexToBit(5), 32);
+    try testing.expectEqual(Type.indexToBit(6), 64);
+    try testing.expectEqual(Type.indexToBit(7), 128);
+    try testing.expectEqual(Type.indexToBit(8), 1);
+    try testing.expectEqual(Type.indexToBit(9), 2);
 }
 
 fn testCheckBitmaps(bmp: Bitmap(u4), b1: u4, b2: u4, b3: u4, b4: u4) void {

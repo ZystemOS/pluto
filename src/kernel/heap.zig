@@ -195,6 +195,9 @@ pub const FreeListAllocator = struct {
     ///     std.Allocator.Error.OutOfMemory - If there wasn't enough free memory to expand into
     ///
     fn resize(allocator: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, size_alignment: u29, ret_addr: usize) Allocator.Error!usize {
+        // Suppress unused var warning
+        _ = old_align;
+        _ = ret_addr;
         var self = @fieldParentPtr(FreeListAllocator, "allocator", allocator);
         if (new_size == 0) {
             self.free(old_mem);
@@ -316,6 +319,8 @@ pub const FreeListAllocator = struct {
     ///     std.Allocator.Error.OutOfMemory - There wasn't enough memory left to fulfill the request
     ///
     pub fn alloc(allocator: *Allocator, size: usize, alignment: u29, size_alignment: u29, ret_addr: usize) Allocator.Error![]u8 {
+        // Suppress unused var warning
+        _ = ret_addr;
         var self = @fieldParentPtr(FreeListAllocator, "allocator", allocator);
         if (self.first_free == null) return Allocator.Error.OutOfMemory;
 
@@ -497,7 +502,6 @@ pub const FreeListAllocator = struct {
         const alloc4_addr = @ptrToInt(alloc4.ptr);
         const alloc4_end = alloc4_addr + std.mem.alignForward(13, @alignOf(Header));
         const header3 = @intToPtr(*Header, alloc4_end);
-        const header4 = @intToPtr(*Header, alloc4_addr);
 
         // We should still have a length of 13
         try testing.expectEqual(alloc4.len, 13);

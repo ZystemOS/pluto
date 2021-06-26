@@ -256,15 +256,23 @@ pub fn init() void {
 
 fn testFunction0() callconv(.Naked) void {}
 fn testFunction1(ctx: *arch.CpuState) u32 {
+    // Suppress unused var warning
+    _ = ctx;
     return 0;
 }
 fn testFunction2(ctx: *arch.CpuState) u32 {
+    // Suppress unused var warning
+    _ = ctx;
     return 0;
 }
 fn testFunction3(ctx: *arch.CpuState) u32 {
+    // Suppress unused var warning
+    _ = ctx;
     return 0;
 }
 fn testFunction4(ctx: *arch.CpuState) u32 {
+    // Suppress unused var warning
+    _ = ctx;
     return 0;
 }
 

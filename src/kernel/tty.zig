@@ -37,6 +37,8 @@ var allocator: *Allocator = undefined;
 ///     The number of characters printed
 ///
 fn printCallback(ctx: void, str: []const u8) !usize {
+    // Suppress unused var warning
+    _ = ctx;
     tty.print(str) catch |e| panic(@errorReturnTrace(), "Failed to print to tty: {}\n", .{e});
     return str.len;
 }

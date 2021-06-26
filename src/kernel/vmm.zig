@@ -9,7 +9,7 @@ const pmm = @import("pmm.zig");
 const mem = @import("mem.zig");
 const tty = @import("tty.zig");
 const panic = @import("panic.zig").panic;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig").internals;
+const arch = @import("arch.zig").internals;
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
@@ -773,7 +773,7 @@ test "copy" {
     defer testDeinit(&vmm);
 
     const attrs = .{ .kernel = true, .cachable = true, .writable = true };
-    const alloc0 = (try vmm.alloc(24, null, attrs)).?;
+    _ = (try vmm.alloc(24, null, attrs)).?;
 
     var mirrored = try vmm.copy();
     defer mirrored.deinit();
@@ -797,7 +797,7 @@ test "copy" {
     try std.testing.expectError(VmmError.NotAllocated, vmm.virtToPhys(alloc1));
 
     // And vice-versa
-    const alloc2 = (try vmm.alloc(3, null, attrs)).?;
+    _ = (try vmm.alloc(3, null, attrs)).?;
     const alloc3 = (try vmm.alloc(1, null, attrs)).?;
     const alloc4 = (try vmm.alloc(1, null, attrs)).?;
     try std.testing.expectEqual(vmm.allocations.count() - 2, mirrored.allocations.count());
@@ -882,7 +882,6 @@ pub fn testInit(num_entries: u32) Allocator.Error!VirtualMemoryManager(arch.VmmP
             allocations.clearEntry(entry) catch unreachable;
         }
     }
-    var allocations = test_allocations orelse unreachable;
     const mem_profile = mem.MemProfile{
         .vaddr_end = undefined,
         .vaddr_start = undefined,
@@ -924,13 +923,11 @@ pub fn testDeinit(vmm: *VirtualMemoryManager(arch.VmmPayload)) void {
 ///     IN/OUT allocator: *Allocator - The allocator to use. Ignored
 ///     IN payload: arch.VmmPayload - The payload value. Expected to be arch.KERNEL_VMM_PAYLOAD
 ///
-<<<<<<< HEAD
 fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: *Allocator, payload: arch.VmmPayload) (Allocator.Error || MapperError)!void {
-    std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
-=======
-fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: *Allocator, payload: u8) (Allocator.Error || MapperError)!void {
-    std.testing.expectEqual(@as(u8, 39), payload) catch unreachable;
->>>>>>> 9caa42e (Add try before expect functions and fix std lib usage in tests)
+    // Suppress unused var warning
+    _ = attrs;
+    _ = allocator;
+    try std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
     var vaddr = vstart;
     var allocations = test_allocations.?;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
@@ -946,13 +943,10 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
 ///     IN vend: usize - The end of the virtual region to unmap
 ///     IN payload: arch.VmmPayload - The payload value. Expected to be arch.KERNEL_VMM_PAYLOAD
 ///
-<<<<<<< HEAD
 fn testUnmap(vstart: usize, vend: usize, allocator: *Allocator, payload: arch.VmmPayload) MapperError!void {
-    std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
-=======
-fn testUnmap(vstart: usize, vend: usize, allocator: *Allocator, payload: u8) MapperError!void {
-    std.testing.expectEqual(@as(u8, 39), payload) catch unreachable;
->>>>>>> 9caa42e (Add try before expect functions and fix std lib usage in tests)
+    // Suppress unused var warning
+    _ = allocator;
+    try std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
     var vaddr = vstart;
     var allocations = test_allocations.?;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {

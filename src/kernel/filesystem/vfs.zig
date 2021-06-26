@@ -635,6 +635,8 @@ const TestFS = struct {
     }
 
     fn close(fs: *const FileSystem, node: *const Node) void {
+        // Suppress unused var warning
+        _ = node;
         var test_fs = @fieldParentPtr(TestFS, "instance", fs.instance);
         test_fs.open_count -= 1;
     }
@@ -1001,9 +1003,9 @@ test "write" {
     // Try writing to a symlink
     var test_link = try openSymlink("/link", "/foo.txt", .CREATE_SYMLINK);
     try testing.expectEqual(test_link, "/foo.txt");
-    var link_file = try openFile("/link", .NO_CREATION);
+    _ = try openFile("/link", .NO_CREATION);
 
     var str2 = "test456";
-    const length2 = try test_file.write(str2);
+    _ = try test_file.write(str2);
     try testing.expect(std.mem.eql(u8, str2, f_data.* orelse unreachable));
 }

@@ -67,7 +67,7 @@ pub const InitrdFS = struct {
         var self = @fieldParentPtr(InitrdFS, "instance", fs.instance);
         // As close can't error, if provided with a invalid Node that isn't opened or try to close
         // the same file twice, will just do nothing.
-        if (self.opened_files.fetchRemove(node)) |entry_node| {
+        if (self.opened_files.remove(node)) {
             self.allocator.destroy(node);
         }
     }
@@ -84,12 +84,19 @@ pub const InitrdFS = struct {
 
     /// See vfs.FileSystem.write
     fn write(fs: *const vfs.FileSystem, node: *const vfs.FileNode, bytes: []const u8) (Allocator.Error || vfs.Error)!usize {
+        // Suppress unused var warning
+        _ = fs;
+        _ = node;
+        _ = bytes;
         return 0;
     }
 
     /// See vfs.FileSystem.open
     fn open(fs: *const vfs.FileSystem, dir: *const vfs.DirNode, name: []const u8, flags: vfs.OpenFlags, args: vfs.OpenArgs) (Allocator.Error || vfs.Error)!*vfs.Node {
         var self = @fieldParentPtr(InitrdFS, "instance", fs.instance);
+        // Suppress unused var warning
+        _ = args;
+        _ = dir;
         switch (flags) {
             .CREATE_DIR, .CREATE_FILE, .CREATE_SYMLINK => return vfs.Error.InvalidFlags,
             .NO_CREATION => {
@@ -488,8 +495,6 @@ test "close a file" {
 
     var file1 = try vfs.openFile("/test1.txt", .NO_CREATION);
 
-    var file1_node = @ptrCast(*const vfs.Node, file1);
-
     try expectEqual(fs.opened_files.count(), 1);
 
     var file3_node = try vfs.open("/test3.txt", true, .NO_CREATION, .{});
@@ -627,7 +632,7 @@ fn expectEqualSlicesClone(comptime T: type, expected: []const T, actual: []const
 /// Arguments:
 ///     IN allocator: *Allocator - The allocator used for reading.
 ///
-fn rt_openReadClose(allocator: *Allocator) void {
+fn rt_openReadClose() void {
     const f1 = vfs.openFile("/ramdisk_test1.txt", .NO_CREATION) catch |e| {
         panic(@errorReturnTrace(), "FAILURE: Failed to open file: {}\n", .{e});
     };
@@ -668,7 +673,7 @@ fn runtimeTests(rd_fs: *InitrdFS) void {
     vfs.setRoot(rd_fs.root_node) catch |e| {
         panic(@errorReturnTrace(), "Ramdisk root node isn't a directory node: {}\n", .{e});
     };
-    rt_openReadClose(rd_fs.allocator);
+    rt_openReadClose();
     if (rd_fs.opened_files.count() != 0) {
         panic(@errorReturnTrace(), "FAILURE: Didn't close all files\n", .{});
     }
