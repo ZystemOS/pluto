@@ -1856,7 +1856,7 @@ pub fn Fat32FS(comptime StreamType: type) type {
 
                 // Format this as a string, can't be more than 6 characters
                 var trail_number_str: [6]u8 = undefined;
-                const trail_number_str_end = std.fmt.formatIntBuf(trail_number_str[0..], trail_number, 10, false, .{});
+                const trail_number_str_end = std.fmt.formatIntBuf(trail_number_str[0..], trail_number, 10, .lower, .{});
 
                 // Get the index to put the ~n
                 var number_trail_index = if (name_index > 7 - trail_number_str_end) 7 - trail_number_str_end else name_index;
