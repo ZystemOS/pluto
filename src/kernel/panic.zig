@@ -1,7 +1,6 @@
 const std = @import("std");
 const builtin = std.builtin;
 const arch = @import("arch.zig").internals;
-const multiboot = @import("multiboot.zig");
 const mem = @import("mem.zig");
 const build_options = @import("build_options");
 const ArrayList = std.ArrayList;

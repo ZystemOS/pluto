@@ -3,8 +3,7 @@ const builtin = std.builtin;
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 
 /// The current year to be used for calculating the 4 digit year, as the CMOS return the last two
 /// digits of the year.

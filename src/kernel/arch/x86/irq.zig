@@ -7,10 +7,9 @@ const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_irq);
 const build_options = @import("build_options");
 const panic = @import("../../panic.zig").panic;
-const mock_path = build_options.arch_mock_path;
-const idt = if (is_test) @import(mock_path ++ "idt_mock.zig") else @import("idt.zig");
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const pic = if (is_test) @import(mock_path ++ "pic_mock.zig") else @import("pic.zig");
+const idt = if (is_test) @import("../../../../test/mock/kernel/idt_mock.zig") else @import("idt.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
+const pic = if (is_test) @import("../../../../test/mock/kernel/pic_mock.zig") else @import("pic.zig");
 const interrupts = @import("interrupts.zig");
 
 /// The error set for the IRQ. This will be from installing a IRQ handler.

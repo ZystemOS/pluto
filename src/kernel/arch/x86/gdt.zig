@@ -6,8 +6,7 @@ const builtin = std.builtin;
 const is_test = builtin.is_test;
 const panic = @import("../../panic.zig").panic;
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 
 /// The access bits for a GDT entry.
 const AccessBits = packed struct {
