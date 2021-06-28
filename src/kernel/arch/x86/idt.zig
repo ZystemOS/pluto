@@ -247,7 +247,6 @@ test "openInterruptGate" {
     try expectError(IdtError.IdtEntryExists, openInterruptGate(index, testHandler0));
 
     const test_fn_0_addr = @ptrToInt(testHandler0);
-    const test_fn_1_addr = @ptrToInt(testHandler1);
 
     const expected_entry0 = IdtEntry{
         .base_low = @truncate(u16, test_fn_0_addr),

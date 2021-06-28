@@ -134,10 +134,14 @@ pub fn haltNoInterrupts() noreturn {
 }
 
 pub fn initSerial(boot_payload: BootPayload) Serial {
+    // Suppress unused variable warnings
+    _ = boot_payload;
     return .{ .write = undefined };
 }
 
 pub fn initTTY(boot_payload: BootPayload) TTY {
+    // Suppress unused variable warnings
+    _ = boot_payload;
     return .{
         .print = undefined,
         .setCursor = undefined,
@@ -148,6 +152,8 @@ pub fn initTTY(boot_payload: BootPayload) TTY {
 }
 
 pub fn initMem(payload: BootPayload) Allocator.Error!mem.MemProfile {
+    // Suppress unused variable warnings
+    _ = payload;
     return MemProfile{
         .vaddr_end = @ptrCast([*]u8, &KERNEL_VADDR_END),
         .vaddr_start = @ptrCast([*]u8, &KERNEL_VADDR_START),
@@ -162,13 +168,22 @@ pub fn initMem(payload: BootPayload) Allocator.Error!mem.MemProfile {
     };
 }
 
-pub fn initTask(t: *Task, entry_point: usize, allocator: *Allocator) Allocator.Error!void {}
+pub fn initTask(t: *Task, entry_point: usize, allocator: *Allocator) Allocator.Error!void {
+    // Suppress unused variable warnings
+    _ = t;
+    _ = entry_point;
+    _ = allocator;
+}
 
 pub fn initKeyboard(allocator: *Allocator) Allocator.Error!?*Keyboard {
+    // Suppress unused variable warnings
+    _ = allocator;
     return null;
 }
 
 pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
+    // Suppress unused variable warnings
+    _ = allocator;
     return &[_]Device{};
 }
 
@@ -188,6 +203,8 @@ pub fn getDateTime() DateTime {
 }
 
 pub fn init(mem_profile: *const MemProfile) void {
+    // Suppress unused variable warnings
+    _ = mem_profile;
     // I'll get back to this as this doesn't effect the current testing.
     // When I come on to the mem.zig testing, I'll fix :)
     //return mock_framework.performAction("init", void, mem_profile);

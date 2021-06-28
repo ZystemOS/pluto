@@ -165,7 +165,7 @@ fn rtcHandler(ctx: *arch.CpuState) usize {
 
     // Need to read status register C
     // Might need to disable the NMI bit, set to true
-    const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
+    _ = cmos.readStatusRegister(cmos.StatusRegister.C, false);
 
     return ret_esp;
 }
@@ -289,7 +289,7 @@ pub fn init() void {
     enableInterrupts();
 
     // Read status register C to clear any interrupts that may have happened during set up
-    const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
+    _ = cmos.readStatusRegister(cmos.StatusRegister.C, false);
 
     switch (build_options.test_mode) {
         .Initialisation => runtimeTests(),

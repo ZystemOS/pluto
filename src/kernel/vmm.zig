@@ -927,6 +927,7 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
     // Suppress unused var warning
     _ = attrs;
     _ = allocator;
+    if (vend - vstart != pend - pstart) return MapperError.AddressMismatch;
     try std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
     var vaddr = vstart;
     var allocations = test_allocations.?;

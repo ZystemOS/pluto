@@ -170,7 +170,7 @@ fn test_fn2() void {}
 
 var test_pid_counter: u7 = 1;
 
-fn createTestTask(entry_point: EntryPoint, allocator: *Allocator, kernel: bool) Allocator.Error!*Task {
+fn createTestTask(allocator: *Allocator) Allocator.Error!*Task {
     var t = try allocator.create(Task);
     errdefer allocator.destroy(t);
     t.pid = test_pid_counter;
