@@ -891,6 +891,7 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
     // Suppress unused var warning
     _ = attrs;
     _ = allocator;
+    if (vend - vstart != pend - pstart) return MapperError.AddressMismatch;
     std.testing.expectEqual(@as(u8, 39), payload) catch unreachable;
     var vaddr = vstart;
     var allocations = test_allocations.?;

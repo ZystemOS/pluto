@@ -368,7 +368,7 @@ pub fn init() void {
 
     // Set up counter 0 at 10000hz in a square wave mode counting in binary
     const freq: u32 = 10000;
-    setupCounter(CounterSelect.Counter0, freq, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY) catch |e| {
+    setupCounter(CounterSelect.Counter0, freq, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY) catch {
         panic(@errorReturnTrace(), "Invalid frequency: {}\n", .{freq});
     };
 
@@ -431,18 +431,10 @@ test "setupCounter lowest frequency" {
     defer arch.freeTest();
 
     const counter = CounterSelect.Counter0;
-    const port = counter.getRegister();
 
     var freq: u32 = 0;
 
-    // Reload value will be 0 (0x10000), the slowest speed for frequency less than 19
-    const expected_reload_value: u16 = 0;
-
-    // Slowest frequency the PIT can run at
-    const expected_freq: u32 = 19;
-
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
-    const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
 
     while (freq <= 18) : (freq += 1) {
         // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
@@ -468,19 +460,11 @@ test "setupCounter highest frequency" {
     defer arch.freeTest();
 
     const counter = CounterSelect.Counter0;
-    const port = counter.getRegister();
 
     // Set the frequency above the maximum
     const freq = MAX_FREQUENCY + 10;
 
-    // Reload value will be 1, the fastest speed for frequency greater than MAX_FREQUENCY
-    const expected_reload_value = 1;
-
-    // Slowest frequency the PIT can run at
-    const expected_freq = MAX_FREQUENCY;
-
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
-    const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
 
     // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
 

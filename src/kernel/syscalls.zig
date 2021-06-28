@@ -98,6 +98,12 @@ pub fn handle(syscall: Syscall, arg1: usize, arg2: usize, arg3: usize, arg4: usi
 }
 
 pub fn handleTest1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    // Suppress unused variable warnings
+    _ = arg1;
+    _ = arg2;
+    _ = arg3;
+    _ = arg4;
+    _ = arg5;
     return 0;
 }
 
@@ -106,6 +112,12 @@ pub fn handleTest2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usi
 }
 
 pub fn handleTest3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    // Suppress unused variable warnings
+    _ = arg1;
+    _ = arg2;
+    _ = arg3;
+    _ = arg4;
+    _ = arg5;
     return std.mem.Allocator.Error.OutOfMemory;
 }
 
