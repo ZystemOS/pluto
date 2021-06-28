@@ -1,7 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
-const arch = @import("arch.zig").internals;
+const arch = @import("arch_mock.zig");
 const mock_framework = @import("mock_framework.zig");
 
 pub const initTest = mock_framework.initTest;

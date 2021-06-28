@@ -6,7 +6,6 @@ const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const tty = @import("tty.zig");
-const vga = @import("vga.zig");
 const log_root = @import("log.zig");
 const pmm = @import("pmm.zig");
 const serial = @import("serial.zig");
