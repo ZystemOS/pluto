@@ -1,6 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.builder);
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const rt = @import("test/runtime_test.zig");
 const RuntimeStep = rt.RuntimeStep;
 const Allocator = std.mem.Allocator;
@@ -73,8 +73,8 @@ pub fn build(b: *Builder) !void {
     const linker_script_path = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "link.ld" });
     const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
     const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso" });
-    const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
-    const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
+    const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ iso_dir_path, "boot" });
+    const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ iso_dir_path, "modules" });
     const ramdisk_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "initrd.ramdisk" });
     const test_fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ "test", "fat32", "test_fat32.img" });
     const boot_drive_image_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "boot_drive.img" });

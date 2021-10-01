@@ -1,6 +1,6 @@
 const std = @import("std");
 const maxInt = std.math.maxInt;
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
@@ -10,8 +10,8 @@ const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
 const panic = @import("../../../panic.zig").panic;
-const irq = @import("irq.zig");
-const pic = @import("pic.zig");
+const irq_common = @import("../common/irq.zig");
+const pic_common = @import("../common/pic.zig");
 
 /// The enum for selecting the counter
 const CounterSelect = enum {
@@ -198,7 +198,7 @@ var time_under_1_ns: u32 = undefined;
 /// Arguments:
 ///     IN cmd: u8 - The command to send to the PIT.
 ///
-fn sendCommand(cmd: u8) callconv(.Inline) void {
+inline fn sendCommand(cmd: u8) void {
     arch.out(COMMAND_REGISTER, cmd);
 }
 
@@ -211,7 +211,7 @@ fn sendCommand(cmd: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The mode the counter is operating in. Use the masks above to get each part.
 ///
-fn readBackCommand(counter: CounterSelect) callconv(.Inline) u8 {
+inline fn readBackCommand(counter: CounterSelect) u8 {
     sendCommand(0xC2);
     return 0x3F & arch.in(u8, counter.getRegister());
 }
@@ -223,7 +223,7 @@ fn readBackCommand(counter: CounterSelect) callconv(.Inline) u8 {
 ///     IN counter: CounterSelect - The counter port to send the data to.
 ///     IN data: u8               - The data to send.
 ///
-fn sendDataToCounter(counter: CounterSelect, data: u8) callconv(.Inline) void {
+inline fn sendDataToCounter(counter: CounterSelect, data: u8) void {
     arch.out(counter.getRegister(), data);
 }
 
@@ -375,12 +375,12 @@ pub fn init() void {
     log.debug("Set frequency at: {}Hz, real frequency: {}Hz\n", .{ freq, getFrequency() });
 
     // Installs 'pitHandler' to IRQ0 (pic.IRQ_PIT)
-    irq.registerIrq(pic.IRQ_PIT, pitHandler) catch |err| switch (err) {
+    arch.irq_common.registerIrq(pic_common.IRQ_PIT, pitHandler) catch |err| switch (err) {
         error.IrqExists => {
-            panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} exists", .{pic.IRQ_PIT});
+            panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} exists", .{pic_common.IRQ_PIT});
         },
         error.InvalidIrq => {
-            panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} is invalid", .{pic.IRQ_PIT});
+            panic(@errorReturnTrace(), "IRQ for PIT, IRQ number: {} is invalid", .{pic_common.IRQ_PIT});
         },
     };
 
@@ -601,13 +601,13 @@ fn rt_initCounter_0() void {
 
     var irq_exists = false;
 
-    irq.registerIrq(pic.IRQ_PIT, pitHandler) catch |err| switch (err) {
+    irq_common.registerIrq(pic_common.IRQ_PIT, pitHandler) catch |err| switch (err) {
         error.IrqExists => {
             // We should get this error
             irq_exists = true;
         },
         error.InvalidIrq => {
-            panic(@errorReturnTrace(), "FAILURE: IRQ for PIT, IRQ number: {} is invalid", .{pic.IRQ_PIT});
+            panic(@errorReturnTrace(), "FAILURE: IRQ for PIT, IRQ number: {} is invalid", .{pic_common.IRQ_PIT});
         },
     };
 

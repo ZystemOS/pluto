@@ -1,7 +1,7 @@
 // Can't do: TODO: https://github.com/SamTebbs33/pluto/issues/77
 //const src_gdt = @import("arch").gdt;
-const builtin = @import("builtin");
-const src_gdt = switch (builtin.arch) {
+const builtin = std.builtin;
+const src_gdt = switch (builtin.cpu.arch) {
     .i386 => @import("../../../src/kernel/arch/x86/32bit/gdt.zig"),
     .x86_64 => @import("../../../src/kernel/arch/x86/64bit/gdt.zig"),
     else => unreachable,

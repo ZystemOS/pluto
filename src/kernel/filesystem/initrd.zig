@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
@@ -67,7 +67,7 @@ pub const InitrdFS = struct {
         var self = @fieldParentPtr(InitrdFS, "instance", fs.instance);
         // As close can't error, if provided with a invalid Node that isn't opened or try to close
         // the same file twice, will just do nothing.
-        if (self.opened_files.remove(node)) |entry_node| {
+        if (self.opened_files.fetchRemove(node)) |entry_node| {
             self.allocator.destroy(node);
         }
     }

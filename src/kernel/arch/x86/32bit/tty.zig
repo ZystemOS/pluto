@@ -1,6 +1,6 @@
 const std = @import("std");
 const fmt = std.fmt;
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;

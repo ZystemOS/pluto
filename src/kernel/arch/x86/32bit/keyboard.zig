@@ -1,11 +1,10 @@
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const build_options = @import("build_options");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const log = std.log.scoped(.x86_keyboard);
-const irq = @import("irq.zig");
-const pic = @import("pic.zig");
+const pic_common = @import("../common/pic.zig");
 const arch = if (builtin.is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
 const panic = @import("../../../panic.zig").panic;
 const kb = @import("../../../keyboard.zig");
@@ -183,7 +182,7 @@ fn onKeyEvent(ctx: *arch.CpuState) usize {
 ///     OutOfMemory - There isn't enough memory to allocate the keyboard instance
 ///
 pub fn init(allocator: *Allocator) Allocator.Error!*Keyboard {
-    irq.registerIrq(pic.IRQ_KEYBOARD, onKeyEvent) catch |e| {
+    arch.irq_common.registerIrq(pic_common.IRQ_KEYBOARD, onKeyEvent) catch |e| {
         panic(@errorReturnTrace(), "Failed to register keyboard IRQ: {}\n", .{e});
     };
     keyboard = try allocator.create(Keyboard);

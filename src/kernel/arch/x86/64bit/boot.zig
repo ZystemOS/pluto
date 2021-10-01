@@ -18,7 +18,7 @@ const Header = packed struct {
 const stack_size: usize = 16 * 1024;
 
 /// The kernels stack.
-export var kernel_stack: [stack_size]u8 align(64) linksection(".bss.stack") = undefined;
+export var kernel_stack: [stack_size]u8 align(64) linksection(".stack") = [_]u8{0} ** stack_size;
 
 /// The Stivale2 header.
 export var stivale_header align(4) linksection(".stivale2hdr") = Header{

@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
@@ -8,9 +8,9 @@ const log = std.log.scoped(.x86_rtc);
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const pic = @import("pic.zig");
+const pic_common = @import("../common/pic.zig");
 const pit = @import("pit.zig");
-const irq = @import("irq.zig");
+const irq_common = @import("../common/irq.zig");
 const cmos = if (is_test) @import(mock_path ++ "cmos_mock.zig") else @import("cmos.zig");
 const panic = @import("../../../panic.zig").panic;
 const scheduler = @import("../../../scheduler.zig");
@@ -270,12 +270,12 @@ pub fn init() void {
     defer log.info("Done\n", .{});
 
     // Register the interrupt handler
-    irq.registerIrq(pic.IRQ_REAL_TIME_CLOCK, rtcHandler) catch |err| switch (err) {
+    arch.irq_common.registerIrq(pic_common.IRQ_REAL_TIME_CLOCK, rtcHandler) catch |err| switch (err) {
         error.IrqExists => {
-            panic(@errorReturnTrace(), "IRQ for RTC, IRQ number: {} exists", .{pic.IRQ_REAL_TIME_CLOCK});
+            panic(@errorReturnTrace(), "IRQ for RTC, IRQ number: {} exists", .{pic_common.IRQ_REAL_TIME_CLOCK});
         },
         error.InvalidIrq => {
-            panic(@errorReturnTrace(), "IRQ for RTC, IRQ number: {} is invalid", .{pic.IRQ_REAL_TIME_CLOCK});
+            panic(@errorReturnTrace(), "IRQ for RTC, IRQ number: {} is invalid", .{pic_common.IRQ_REAL_TIME_CLOCK});
         },
     };
 
@@ -701,13 +701,13 @@ test "enableInterrupts" {
 ///
 fn rt_init() void {
     var irq_exists = false;
-    irq.registerIrq(pic.IRQ_REAL_TIME_CLOCK, rtcHandler) catch |err| switch (err) {
+    irq_common.registerIrq(pic_common.IRQ_REAL_TIME_CLOCK, rtcHandler) catch |err| switch (err) {
         error.IrqExists => {
             // We should get this error
             irq_exists = true;
         },
         error.InvalidIrq => {
-            panic(@errorReturnTrace(), "FAILURE: IRQ for RTC, IRQ number: {} is invalid\n", .{pic.IRQ_REAL_TIME_CLOCK});
+            panic(@errorReturnTrace(), "FAILURE: IRQ for RTC, IRQ number: {} is invalid\n", .{pic_common.IRQ_REAL_TIME_CLOCK});
         },
     };
 

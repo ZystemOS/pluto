@@ -1,6 +1,6 @@
 const std = @import("std");
 const expectError = std.testing.expectError;
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const fs_common = @import("filesystem_common.zig");
 const mbr_driver = @import("mbr.zig");
 

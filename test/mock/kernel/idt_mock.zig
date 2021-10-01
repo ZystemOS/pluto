@@ -1,5 +1,5 @@
-const builtin = @import("builtin");
-const src_idt = switch (builtin.arch) {
+const builtin = std.builtin;
+const src_idt = switch (builtin.cpu.arch) {
     .i386 => @import("../../../src/kernel/arch/x86/32bit/idt.zig"),
     .x86_64 => @import("../../../src/kernel/arch/x86/64bit/idt.zig"),
     else => unreachable,

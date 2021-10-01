@@ -1,13 +1,12 @@
 const std = @import("std");
-const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
-const log = std.log.scoped(.x86_pic);
-const builtin = @import("builtin");
+const log = std.log.scoped(.pic);
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const panic = if (is_test) @import(mock_path ++ "panic_mock.zig").panic else @import("../../../panic.zig").panic;
+const panic = @import("../../../panic.zig").panic;
 
 // ----------
 // Port address for the PIC master and slave registers.
@@ -251,7 +250,7 @@ var spurious_irq_counter: u32 = 0;
 /// Arguments:
 ///     IN cmd: u8 - The command to send.
 ///
-fn sendCommandMaster(cmd: u8) callconv(.Inline) void {
+inline fn sendCommandMaster(cmd: u8) void {
     arch.out(MASTER_COMMAND_REG, cmd);
 }
 
@@ -261,7 +260,7 @@ fn sendCommandMaster(cmd: u8) callconv(.Inline) void {
 /// Arguments:
 ///     IN cmd: u8 - The command to send.
 ///
-fn sendCommandSlave(cmd: u8) callconv(.Inline) void {
+inline fn sendCommandSlave(cmd: u8) void {
     arch.out(SLAVE_COMMAND_REG, cmd);
 }
 
@@ -271,7 +270,7 @@ fn sendCommandSlave(cmd: u8) callconv(.Inline) void {
 /// Arguments:
 ///     IN data: u8 - The data to send.
 ///
-fn sendDataMaster(data: u8) callconv(.Inline) void {
+inline fn sendDataMaster(data: u8) void {
     arch.out(MASTER_DATA_REG, data);
 }
 
@@ -281,7 +280,7 @@ fn sendDataMaster(data: u8) callconv(.Inline) void {
 /// Arguments:
 ///     IN data: u8 - The data to send.
 ///
-fn sendDataSlave(data: u8) callconv(.Inline) void {
+inline fn sendDataSlave(data: u8) void {
     arch.out(SLAVE_DATA_REG, data);
 }
 
@@ -291,7 +290,7 @@ fn sendDataSlave(data: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The data that is stored in the master data register.
 ///
-fn readDataMaster() callconv(.Inline) u8 {
+inline fn readDataMaster() u8 {
     return arch.in(u8, MASTER_DATA_REG);
 }
 
@@ -301,7 +300,7 @@ fn readDataMaster() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the salve data register.
 ///
-fn readDataSlave() callconv(.Inline) u8 {
+inline fn readDataSlave() u8 {
     return arch.in(u8, SLAVE_DATA_REG);
 }
 
@@ -311,7 +310,7 @@ fn readDataSlave() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the master IRR.
 ///
-fn readMasterIrr() callconv(.Inline) u8 {
+inline fn readMasterIrr() u8 {
     sendCommandMaster(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_IRR);
     return arch.in(u8, MASTER_STATUS_REG);
 }
@@ -322,7 +321,7 @@ fn readMasterIrr() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the slave IRR.
 ///
-fn readSlaveIrr() callconv(.Inline) u8 {
+inline fn readSlaveIrr() u8 {
     sendCommandSlave(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_IRR);
     return arch.in(u8, SLAVE_STATUS_REG);
 }
@@ -333,7 +332,7 @@ fn readSlaveIrr() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the master ISR.
 ///
-fn readMasterIsr() callconv(.Inline) u8 {
+inline fn readMasterIsr() u8 {
     sendCommandMaster(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_ISR);
     return arch.in(u8, MASTER_STATUS_REG);
 }
@@ -344,7 +343,7 @@ fn readMasterIsr() callconv(.Inline) u8 {
 /// Return: u8
 ///     The data that is stored in the slave ISR.
 ///
-fn readSlaveIsr() callconv(.Inline) u8 {
+inline fn readSlaveIsr() u8 {
     sendCommandSlave(OCW3_DEFAULT | OCW3_ACT_ON_READ | OCW3_READ_ISR);
     return arch.in(u8, SLAVE_STATUS_REG);
 }
@@ -487,7 +486,6 @@ test "sendCommandMaster" {
 }
 
 test "sendCommandSlave" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -499,7 +497,6 @@ test "sendCommandSlave" {
 }
 
 test "sendDataMaster" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -511,7 +508,6 @@ test "sendDataMaster" {
 }
 
 test "sendDataSlave" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -523,7 +519,6 @@ test "sendDataSlave" {
 }
 
 test "readDataMaster" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -533,7 +528,6 @@ test "readDataMaster" {
 }
 
 test "readDataSlave" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -543,7 +537,6 @@ test "readDataSlave" {
 }
 
 test "readMasterIrr" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -554,7 +547,6 @@ test "readMasterIrr" {
 }
 
 test "readSlaveIrr" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -565,7 +557,6 @@ test "readSlaveIrr" {
 }
 
 test "readMasterIsr" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -576,7 +567,6 @@ test "readMasterIsr" {
 }
 
 test "readSlaveIsr" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -587,7 +577,6 @@ test "readSlaveIsr" {
 }
 
 test "sendEndOfInterrupt master only" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -600,7 +589,6 @@ test "sendEndOfInterrupt master only" {
 }
 
 test "sendEndOfInterrupt master and slave" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -614,7 +602,6 @@ test "sendEndOfInterrupt master and slave" {
 }
 
 test "spuriousIrq not spurious IRQ number" {
-    // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
 
     var i: u8 = 0;
@@ -624,15 +611,12 @@ test "spuriousIrq not spurious IRQ number" {
         }
     }
 
-    // Post testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
 
-    // Clean up
     spurious_irq_counter = 0;
 }
 
 test "spuriousIrq spurious master IRQ number not spurious" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -640,21 +624,14 @@ test "spuriousIrq spurious master IRQ number not spurious" {
     // Return 0x80 from readMasterIsr() which will mean this was a real IRQ
     arch.addTestParams("in", .{ MASTER_STATUS_REG, @as(u8, 0x80) });
 
-    // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
-
-    // Call function
     expectEqual(false, spuriousIrq(7));
-
-    // Post testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
 
-    // Clean up
     spurious_irq_counter = 0;
 }
 
 test "spuriousIrq spurious master IRQ number spurious" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -662,21 +639,14 @@ test "spuriousIrq spurious master IRQ number spurious" {
     // Return 0x0 from readMasterIsr() which will mean this was a spurious IRQ
     arch.addTestParams("in", .{ MASTER_STATUS_REG, @as(u8, 0x0) });
 
-    // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
-
-    // Call function
     expectEqual(true, spuriousIrq(7));
-
-    // Post testing
     expectEqual(@as(u32, 1), spurious_irq_counter);
 
-    // Clean up
     spurious_irq_counter = 0;
 }
 
 test "spuriousIrq spurious slave IRQ number not spurious" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -684,21 +654,13 @@ test "spuriousIrq spurious slave IRQ number not spurious" {
     // Return 0x80 from readSlaveIsr() which will mean this was a real IRQ
     arch.addTestParams("in", .{ SLAVE_STATUS_REG, @as(u8, 0x80) });
 
-    // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
-
-    // Call function
     expectEqual(false, spuriousIrq(15));
-
-    // Post testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
-
-    // Clean up
     spurious_irq_counter = 0;
 }
 
 test "spuriousIrq spurious slave IRQ number spurious" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -708,21 +670,14 @@ test "spuriousIrq spurious slave IRQ number spurious" {
     // A EOI will be sent for a spurious IRQ 15
     arch.addTestParams("out", .{ MASTER_COMMAND_REG, OCW2_END_OF_INTERRUPT });
 
-    // Pre testing
     expectEqual(@as(u32, 0), spurious_irq_counter);
-
-    // Call function
     expectEqual(true, spuriousIrq(15));
-
-    // Post testing
     expectEqual(@as(u32, 1), spurious_irq_counter);
 
-    // Clean up
     spurious_irq_counter = 0;
 }
 
 test "setMask master IRQ masked" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -735,7 +690,6 @@ test "setMask master IRQ masked" {
 }
 
 test "setMask master IRQ unmasked" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -748,7 +702,6 @@ test "setMask master IRQ unmasked" {
 }
 
 test "clearMask master IRQ masked" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -761,7 +714,6 @@ test "clearMask master IRQ masked" {
 }
 
 test "clearMask master IRQ unmasked" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 
@@ -774,7 +726,6 @@ test "clearMask master IRQ unmasked" {
 }
 
 test "init" {
-    // Set up
     arch.initTest();
     defer arch.freeTest();
 

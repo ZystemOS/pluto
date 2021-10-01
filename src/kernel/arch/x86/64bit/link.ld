@@ -6,8 +6,7 @@ KERNEL_PHYSADDR_START = 1M;
 KERNEL_ADDR_OFFSET = 0xFFFFFFFF80000000;
 KERNEL_VADDR_START = KERNEL_ADDR_OFFSET + KERNEL_PHYSADDR_START;
 
-SECTIONS
-{
+SECTIONS {
     . = KERNEL_VADDR_START;
 
     .stivale2hdr ALIGN(4K) : {
@@ -24,7 +23,6 @@ SECTIONS
     }
 
     .rodata ALIGN(4K) : {
-       
         *(.rodata)
         *(.rodata*)
     }
@@ -40,9 +38,10 @@ SECTIONS
         KEEP(*(.bss*))
     }
 
-    .bss.stack ALIGN(4K) : {
+    .stack ALIGN(4K) : {
         KERNEL_STACK_START = .;
-        KEEP(*(.bss.stack))
+        *(.stack)
+        *(.stack*)
         KERNEL_STACK_END = .;
     }
 

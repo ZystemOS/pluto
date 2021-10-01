@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const log = std.log.scoped(.x86_64_paging);
 const vmm = @import("../../../vmm.zig");
 const mem = @import("../../../mem.zig");
 
@@ -95,7 +96,7 @@ pub var kernel_pml4: PageMapLevel4 align(PAGE_SIZE_4KB) = .{
 /// Return: u64
 ///     The page map level 4 address, bits 47:39 (inclusive).
 ///
-fn virtToPML4EntryIdx(virt: u64) callconv(.Inline) u64 {
+inline fn virtToPML4EntryIdx(virt: u64) u64 {
     return virt >> 39 & 0x1FF;
 }
 
@@ -108,7 +109,7 @@ fn virtToPML4EntryIdx(virt: u64) callconv(.Inline) u64 {
 /// Return: u64
 ///     The page directory pointer table address, bits 38:30 (inclusive).
 ///
-fn virtToPDPTEntryIdx(virt: u64) callconv(.Inline) u64 {
+inline fn virtToPDPTEntryIdx(virt: u64) u64 {
     return virt >> 30 & 0x1FF;
 }
 
@@ -121,7 +122,7 @@ fn virtToPDPTEntryIdx(virt: u64) callconv(.Inline) u64 {
 /// Return: u64
 ///     The page directory address, bits 29:21 (inclusive).
 ///
-fn virtToPDEntryIdx(virt: u64) callconv(.Inline) u64 {
+inline fn virtToPDEntryIdx(virt: u64) u64 {
     return virt >> 21 & 0x1FF;
 }
 
@@ -134,7 +135,7 @@ fn virtToPDEntryIdx(virt: u64) callconv(.Inline) u64 {
 /// Return: u64
 ///     The page table address, bits 20:12 (inclusive).
 ///
-fn virtToPTEntryIdx(virt: u64) callconv(.Inline) u64 {
+inline fn virtToPTEntryIdx(virt: u64) u64 {
     return virt >> 12 & 0x1FF;
 }
 
@@ -148,7 +149,7 @@ fn virtToPTEntryIdx(virt: u64) callconv(.Inline) u64 {
 /// Return: u64
 ///     The physical address. This will point to the next page entry in the chain.
 ///
-fn getFrame(entry: u64) callconv(.Inline) u64 {
+inline fn getFrame(entry: u64) u64 {
     return entry & FRAME_MASK;
 }
 
@@ -161,7 +162,7 @@ fn getFrame(entry: u64) callconv(.Inline) u64 {
 ///     IN entry: *u64    - The page entry to set the frame to.
 ///     IN phys_addr: u64 - The address to set the entry.
 ///
-fn setFrame(entry: *u64, phys_addr: u64) callconv(.Inline) void {
+inline fn setFrame(entry: *u64, phys_addr: u64) void {
     std.debug.assert(std.mem.isAligned(phys_addr, PAGE_SIZE_4KB));
     entry.* |= phys_addr & FRAME_MASK;
 }
@@ -173,7 +174,7 @@ fn setFrame(entry: *u64, phys_addr: u64) callconv(.Inline) void {
 ///     entry: *u64 - The entry to modify.
 ///     attr: u64   - The bits corresponding to the attribute to set.
 ///
-fn setAttribute(entry: *align(1) u64, attr: u64) callconv(.Inline) void {
+inline fn setAttribute(entry: *align(1) u64, attr: u64) void {
     entry.* |= attr;
 }
 
@@ -184,7 +185,7 @@ fn setAttribute(entry: *align(1) u64, attr: u64) callconv(.Inline) void {
 ///     entry: *u64 - The entry to modify.
 ///     attr: u64   - The bits corresponding to the attribute to clear.
 ///
-fn clearAttribute(entry: *align(1) u64, attr: u64) callconv(.Inline) void {
+inline fn clearAttribute(entry: *align(1) u64, attr: u64) void {
     entry.* &= ~attr;
 }
 
@@ -198,7 +199,7 @@ fn clearAttribute(entry: *align(1) u64, attr: u64) callconv(.Inline) void {
 /// Return: bool
 ///     The entry has the attribute.
 ///
-fn hasAttribute(entry: u64, attr: u64) callconv(.Inline) bool {
+inline fn hasAttribute(entry: u64, attr: u64) bool {
     return entry & attr == attr;
 }
 
@@ -532,6 +533,19 @@ pub fn unmap(virt_start: u64, virt_end: u64, allocator: *Allocator, page_table: 
             pml4_entry.* = 0;
         }
     }
+}
+
+///
+/// Initialise x86_64 paging by writing the physical address of the page table to the CR3 register.
+///
+pub fn init() void {
+    log.info("Init\n", .{});
+    defer log.info("Done\n", .{});
+    const dir_physaddr = @ptrToInt(mem.virtToPhys(&kernel_pml4));
+    asm volatile ("mov %[addr], %%cr3"
+        :
+        : [addr] "{eax}" (dir_physaddr)
+    );
 }
 
 ///

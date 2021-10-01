@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const log = std.log.scoped(.x86_vga);
@@ -121,7 +121,7 @@ var cursor_scanline_end: u8 = undefined;
 ///     IN index: u8 - The index to send to the port address to select the register to write data
 ///                    to.
 ///
-fn sendPort(index: u8) callconv(.Inline) void {
+inline fn sendPort(index: u8) void {
     arch.out(PORT_ADDRESS, index);
 }
 
@@ -131,7 +131,7 @@ fn sendPort(index: u8) callconv(.Inline) void {
 /// Arguments:
 ///     IN data: u8 - The data to send to the selected register.
 ///
-fn sendData(data: u8) callconv(.Inline) void {
+inline fn sendData(data: u8) void {
     arch.out(PORT_DATA, data);
 }
 
@@ -141,7 +141,7 @@ fn sendData(data: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The data in the selected register.
 ///
-fn getData() callconv(.Inline) u8 {
+inline fn getData() u8 {
     return arch.in(u8, PORT_DATA);
 }
 ///
@@ -152,7 +152,7 @@ fn getData() callconv(.Inline) u8 {
 //                     data to.
 ///     IN data: u8 - The data to send to the selected register.
 ///
-fn sendPortData(index: u8, data: u8) callconv(.Inline) void {
+inline fn sendPortData(index: u8, data: u8) void {
     sendPort(index);
     sendData(data);
 }
@@ -167,7 +167,7 @@ fn sendPortData(index: u8, data: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The data in the selected register.
 ///
-fn getPortData(index: u8) callconv(.Inline) u8 {
+inline fn getPortData(index: u8) u8 {
     sendPort(index);
     return getData();
 }
