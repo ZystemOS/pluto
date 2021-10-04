@@ -487,7 +487,7 @@ pub const Fat32 = struct {
                     else => @compileError("Unexpected field type: " ++ @typeName(info.child)),
                 },
                 .Int => try fat32_header_stream.writer().writeIntLittle(item.field_type, @field(fat32_header, item.name)),
-                else => @compileError("Unexpected field type: " ++ @typeName(info.child)),
+                else => @compileError("Unexpected field type: " ++ @typeName(@typeInfo(item.field_type))),
             }
         }
 
