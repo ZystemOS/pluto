@@ -114,12 +114,12 @@ pub fn registerSyscall(syscall: usize, handler: Handler) Error!void {
 inline fn syscall0(syscall: usize) syscalls.Error!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
-        : [syscall] "{eax}" (syscall)
+        : [ret] "={eax}" (-> usize),
+        : [syscall] "{eax}" (syscall),
         : "ebx"
     );
     const err = asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     );
     if (err != 0) {
         return syscalls.fromErrorCode(err);
@@ -143,12 +143,12 @@ inline fn syscall0(syscall: usize) syscalls.Error!usize {
 inline fn syscall1(syscall: usize, arg: usize) syscalls.Error!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
-          [arg1] "{ebx}" (arg)
+          [arg1] "{ebx}" (arg),
     );
     const err = asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     );
     if (err != 0) {
         return syscalls.fromErrorCode(err);
@@ -173,13 +173,13 @@ inline fn syscall1(syscall: usize, arg: usize) syscalls.Error!usize {
 inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) syscalls.Error!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
-          [arg2] "{ecx}" (arg2)
+          [arg2] "{ecx}" (arg2),
     );
     const err = asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     );
     if (err != 0) {
         return syscalls.fromErrorCode(err);
@@ -205,14 +205,14 @@ inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) syscalls.Error!usiz
 inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) syscalls.Error!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
-          [arg3] "{edx}" (arg3)
+          [arg3] "{edx}" (arg3),
     );
     const err = asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     );
     if (err != 0) {
         return syscalls.fromErrorCode(err);
@@ -239,15 +239,15 @@ inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) syscal
 inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize) syscalls.Error!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
-          [arg4] "{esi}" (arg4)
+          [arg4] "{esi}" (arg4),
     );
     const err = asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     );
     if (err != 0) {
         return syscalls.fromErrorCode(err);
@@ -275,16 +275,16 @@ inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: 
 inline fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
           [arg4] "{esi}" (arg4),
-          [arg5] "{edi}" (arg5)
+          [arg5] "{edi}" (arg5),
     );
     const err = asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     );
     if (err != 0) {
         return syscalls.fromErrorCode(err);
@@ -410,7 +410,6 @@ fn testHandler5(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
 
 fn testHandler6(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
     // Suppress unused variable warnings
-    _ = ctx;
     _ = arg1;
     _ = arg2;
     _ = arg3;
