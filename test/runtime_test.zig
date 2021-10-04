@@ -206,7 +206,7 @@ pub const RuntimeStep = struct {
         try self.os_proc.spawn();
 
         // Start up the read thread
-        var thread = try Thread.spawn(read_logs, self);
+        var thread = try Thread.spawn(Thread.SpawnConfig{}, read_logs, .{self});
 
         // Call the testing function
         const res = self.test_func(self);
@@ -215,7 +215,7 @@ pub const RuntimeStep = struct {
         _ = try self.os_proc.kill();
 
         // Join the thread
-        thread.wait();
+        thread.join();
 
         // Free the rest of the queue
         while (self.msg_queue.get()) |node| {
