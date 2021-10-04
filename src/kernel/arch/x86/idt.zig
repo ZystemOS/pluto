@@ -183,7 +183,7 @@ pub fn init() void {
 
     idt_ptr.base = @ptrToInt(&idt_entries);
 
-    arch.lidt(&idt_ptr) catch |e| panic(@errorReturnTrace(), "Failed to set the IDT: {}", .{e});
+    arch.lidt(&idt_ptr);
 
     switch (build_options.test_mode) {
         .Initialisation => runtimeTests(),

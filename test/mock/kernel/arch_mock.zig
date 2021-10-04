@@ -93,8 +93,8 @@ pub fn ioWait() void {
     return mock_framework.performAction("ioWait", void, .{});
 }
 
-pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) anyerror!void {
-    return mock_framework.performAction("lgdt", anyerror!void, .{gdt_ptr});
+pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
+    return mock_framework.performAction("lgdt", void, .{gdt_ptr});
 }
 
 pub fn sgdt() gdt.GdtPtr {
@@ -105,8 +105,8 @@ pub fn ltr(offset: u16) void {
     return mock_framework.performAction("ltr", void, .{offset});
 }
 
-pub fn lidt(idt_ptr: *const idt.IdtPtr) anyerror!void {
-    return mock_framework.performAction("lidt", anyerror!void, .{idt_ptr});
+pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
+    return mock_framework.performAction("lidt", void, .{idt_ptr});
 }
 
 pub fn sidt() idt.IdtPtr {
