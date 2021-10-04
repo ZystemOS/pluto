@@ -61,7 +61,9 @@ pub fn build(b: *Builder) !void {
     const exec = b.addExecutable("pluto.elf", main_src);
     const exec_output_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "pluto.elf" });
     exec.setOutputDir(b.install_path);
-    exec.addBuildOption(TestMode, "test_mode", test_mode);
+    const exec_options = b.addOptions();
+    exec.addOptions("build_options", exec_options);
+    exec_options.addOption(TestMode, "test_mode", test_mode);
     exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath(std.build.FileSource{ .path = linker_script_path });
     exec.setTarget(target);
@@ -109,9 +111,11 @@ pub fn build(b: *Builder) !void {
     const unit_tests = b.addTest(main_src);
     unit_tests.setBuildMode(build_mode);
     unit_tests.setMainPkgPath(".");
-    unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
-    unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
-    unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
+    const unit_test_options = b.addOptions();
+    unit_tests.addOptions("build_options", unit_test_options);
+    unit_test_options.addOption(TestMode, "test_mode", test_mode);
+    unit_test_options.addOption([]const u8, "mock_path", mock_path);
+    unit_test_options.addOption([]const u8, "arch_mock_path", arch_mock_path);
     unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
 
     if (builtin.os.tag != .windows) {
