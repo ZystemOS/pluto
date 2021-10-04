@@ -319,7 +319,7 @@ fn traversePath(path: []const u8, follow_symlinks: bool, flags: OpenFlags, args:
 
         const Self = @This();
 
-        fn func(split: *std.mem.SplitIterator, node: *Node, follow_links: bool, rec_flags: OpenFlags) (Allocator.Error || Error)!Self {
+        fn func(split: *std.mem.SplitIterator(u8), node: *Node, follow_links: bool, rec_flags: OpenFlags) (Allocator.Error || Error)!Self {
             // Get segment string. This will not be unreachable as we've made sure the spliterator has more segments left
             const seg = split.next() orelse unreachable;
             if (split.rest().len == 0) {
@@ -347,7 +347,7 @@ fn traversePath(path: []const u8, follow_symlinks: bool, flags: OpenFlags, args:
     };
 
     // Split path but skip the first separator character
-    var split = std.mem.split(path[1..], &[_]u8{SEPARATOR});
+    var split = std.mem.split(u8, path[1..], &[_]u8{SEPARATOR});
     // Traverse directories while we're not at the last segment
     const result = try TraversalParent.func(&split, root, follow_symlinks, .NO_CREATION);
 
