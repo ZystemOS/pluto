@@ -194,9 +194,9 @@ pub fn init() void {
 fn testHandler0() callconv(.Naked) void {}
 fn testHandler1() callconv(.Naked) void {}
 
-fn mock_lidt(ptr: *const IdtPtr) anyerror!void {
-    try expectEqual(TABLE_SIZE, ptr.limit);
-    try expectEqual(@ptrToInt(&idt_entries[0]), ptr.base);
+fn mock_lidt(ptr: *const IdtPtr) void {
+    expectEqual(TABLE_SIZE, ptr.limit) catch unreachable;
+    expectEqual(@ptrToInt(&idt_entries[0]), ptr.base) catch unreachable;
 }
 
 test "IDT entries" {
