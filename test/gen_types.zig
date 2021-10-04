@@ -50,6 +50,7 @@ const types = .{
     .{ "*Allocator", "PTR_ALLOCATOR", "", "std.mem", "Allocator" },
 
     .{ "IdtError!void", "ERROR_IDTERROR_RET_VOID", "idt_mock", "", "IdtError" },
+    .{ "anyerror!void", "ERROR_ANYERROR_RET_VOID", "", "", "" },
 
     .{ "fn () callconv(.C) void", "FN_CCC_OVOID", "", "", "" },
     .{ "fn () callconv(.Naked) void", "FN_CCNAKED_OVOID", "", "", "" },

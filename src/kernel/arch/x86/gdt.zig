@@ -414,7 +414,7 @@ pub fn init() void {
     gdt_ptr.base = @ptrToInt(&gdt_entries[0]);
 
     // Load the GDT
-    arch.lgdt(&gdt_ptr);
+    arch.lgdt(&gdt_ptr) catch |e| panic(@errorReturnTrace(), "Failed to set the GDT: {}", .{e});
 
     // Load the TSS
     arch.ltr(TSS_OFFSET);
