@@ -289,7 +289,7 @@ fn unmapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, allocator:
             if (dir == &kernel_directory) {
                 asm volatile ("invlpg (%[addr])"
                     :
-                    : [addr] "r" (addr)
+                    : [addr] "r" (addr),
                     : "memory"
                 );
             }
@@ -343,7 +343,7 @@ fn mapTableEntry(dir: *const Directory, entry: *align(1) TableEntry, virt_addr: 
     if (dir == &kernel_directory) {
         asm volatile ("invlpg (%[addr])"
             :
-            : [addr] "r" (virt_addr)
+            : [addr] "r" (virt_addr),
             : "memory"
         );
     }
