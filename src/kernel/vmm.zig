@@ -1099,7 +1099,6 @@ fn rt_copyData(vmm: *VirtualMemoryManager(arch.VmmPayload)) void {
     }
     // Make sure that the data at the allocated address is correct
     // Since vmm2 is a mirror of vmm, this address should be mapped by the CPU's MMU
-    const dest_buff2 = @intToPtr([*]u8, addr2)[0..buff3.len];
     if (!std.mem.eql(u8, buff3[0..buff3.len], dest_buff)) {
         panic(@errorReturnTrace(), "Third lot of data copied doesn't have the expected values\n", .{});
     }

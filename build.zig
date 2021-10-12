@@ -88,7 +88,7 @@ pub fn build(b: *Builder) !void {
         inline for (&[_][]const u8{ "user_program_data", "user_program" }) |user_program| {
             // Add some test files for the user mode runtime tests
             const user_program_step = b.addExecutable(user_program ++ ".elf", null);
-            user_program_step.setLinkerScriptPath("test/user_program.ld");
+            user_program_step.setLinkerScriptPath(.{ .path = "test/user_program.ld" });
             user_program_step.addAssemblyFile("test/" ++ user_program ++ ".s");
             user_program_step.setOutputDir(b.install_path);
             user_program_step.setTarget(target);

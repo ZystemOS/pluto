@@ -3,7 +3,7 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const assert = std.debug.assert;
 const log = std.log.scoped(.scheduler);
-const builtin = std.builtin;
+const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
@@ -369,10 +369,8 @@ fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void 
         const code_len = user_program_file.read(code[0..code.len]) catch |e| {
             panic(@errorReturnTrace(), "Failed to read {s}: {}\n", .{ user_program, e });
         };
-        const program_elf = elf.Elf.init(code[0..code_len], builtin.arch, allocator) catch |e| panic(@errorReturnTrace(), "Failed to load {s}: {}\n", .{ user_program, e });
+        const program_elf = elf.Elf.init(code[0..code_len], builtin.cpu.arch, allocator) catch |e| panic(@errorReturnTrace(), "Failed to load {s}: {}\n", .{ user_program, e });
         defer program_elf.deinit();
-
-        const current_physical_blocks = pmm.blocksFree();
 
         var user_task = task.Task.createFromElf(program_elf, false, task_vmm, allocator) catch |e| {
             panic(@errorReturnTrace(), "Failed to create task for {s}: {}\n", .{ user_program, e });

@@ -665,9 +665,6 @@ test "toEndian" {
 }
 
 test "toArch" {
-    const known_architectures = [_]Architecture{ .Sparc, .x86, .MIPS, .PowerPC, .PowerPC_64, .ARM, .AMD_64, .Aarch64, .RISC_V };
-    const known_archs = [known_architectures.len]Arch{ .sparc, .i386, .mips, .powerpc, .powerpc64, .arm, .x86_64, .aarch64, .riscv32 };
-
     inline for (@typeInfo(Architecture).Enum.fields) |field| {
         const architecture = @field(Architecture, field.name);
 
@@ -696,8 +693,6 @@ test "toArch" {
 }
 
 test "hasData" {
-    const no_data = [_]SectionType{ .Unused, .ProgramSpace, .Reserved };
-
     inline for (@typeInfo(SectionType).Enum.fields) |field| {
         const sec_type = @field(SectionType, field.name);
         const should_not_have_data = sec_type == .Unused or sec_type == .ProgramSpace or sec_type == .Reserved;
