@@ -425,16 +425,16 @@ pub fn unmap(virtual_start: usize, virtual_end: usize, allocator: *Allocator, di
 fn pageFault(state: *arch.CpuState) u32 {
     log.info("State: {X}\n", .{state});
     var cr0 = asm volatile ("mov %%cr0, %[cr0]"
-        : [cr0] "=r" (-> u32)
+        : [cr0] "=r" (-> u32),
     );
     var cr2 = asm volatile ("mov %%cr2, %[cr2]"
-        : [cr2] "=r" (-> u32)
+        : [cr2] "=r" (-> u32),
     );
     var cr3 = asm volatile ("mov %%cr3, %[cr3]"
-        : [cr3] "=r" (-> u32)
+        : [cr3] "=r" (-> u32),
     );
     var cr4 = asm volatile ("mov %%cr4, %[cr4]"
-        : [cr4] "=r" (-> u32)
+        : [cr4] "=r" (-> u32),
     );
     log.info("CR0: 0x{X}, CR2: 0x{X}, CR3: 0x{X}, CR4: 0x{X}\n", .{ cr0, cr2, cr3, cr4 });
     @panic("Page fault");
@@ -456,7 +456,7 @@ pub fn init(mem_profile: *const MemProfile) void {
     const dir_physaddr = @ptrToInt(mem.virtToPhys(&kernel_directory));
     asm volatile ("mov %[addr], %%cr3"
         :
-        : [addr] "{eax}" (dir_physaddr)
+        : [addr] "{eax}" (dir_physaddr),
     );
     const v_end = std.mem.alignForward(@ptrToInt(mem_profile.vaddr_end), PAGE_SIZE_4KB);
     switch (build_options.test_mode) {
