@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = std.builtin;
+const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
 

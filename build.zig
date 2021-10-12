@@ -1,6 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.builder);
-const builtin = std.builtin;
+const builtin = @import("builtin");
 const rt = @import("test/runtime_test.zig");
 const RuntimeStep = rt.RuntimeStep;
 const Allocator = std.mem.Allocator;
@@ -10,7 +10,7 @@ const Target = std.Target;
 const CrossTarget = std.zig.CrossTarget;
 const fs = std.fs;
 const File = fs.File;
-const Mode = builtin.Mode;
+const Mode = std.builtin.Mode;
 const TestMode = rt.TestMode;
 const ArrayList = std.ArrayList;
 const Fat32 = @import("mkfat32.zig").Fat32;

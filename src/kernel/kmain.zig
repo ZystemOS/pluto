@@ -1,6 +1,6 @@
 const std = @import("std");
 const kmain_log = std.log.scoped(.kmain);
-const builtin = std.builtin;
+const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
@@ -41,7 +41,7 @@ export var KERNEL_PHYSADDR_START: u32 = if (builtin.is_test) 0x100000 else undef
 export var KERNEL_PHYSADDR_END: u32 = if (builtin.is_test) 0x14E000 else undefined;
 
 // Just call the panic function, as this need to be in the root source file
-pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {
+pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace) noreturn {
     @setCold(true);
     panic_root.panic(error_return_trace, "{s}", .{msg});
 }
