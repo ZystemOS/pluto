@@ -27,8 +27,8 @@ jobs:
 
     - name: Build zig fork
       run: |
-        mkdir build
-        cd build
+        mkdir -p zig/build
+        cd zig/build
         cmake .. -GNinja
         ninja install
 
@@ -38,19 +38,19 @@ jobs:
         sudo apt-get install qemu qemu-system --fix-missing
 
     - name: Check formatting
-      run: build/zig fmt --check src
+      run: zig/build/zig fmt --check src
 
     - name: Build kernel
-      run: build/zig build ${{ matrix.build_mode }}
+      run: zig/build/zig build ${{ matrix.build_mode }}
 
     - name: Run unit tests
-      run: build/zig build test ${{ matrix.build_mode }}
+      run: zig/build/zig build test ${{ matrix.build_mode }}
 
     - name: Run runtime test - Initialisation
-      run: build/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
+      run: zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
 
     - name: Run runtime test - Panic
-      run: build/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
+      run: zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
 
     - name: Run runtime test - Scheduler
-      run: build/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
+      run: zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
