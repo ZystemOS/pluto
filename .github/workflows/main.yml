@@ -15,27 +15,43 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    
-    - name: Download zig
+
+    - name: Install LLVM 13
       run: |
-        export PYTHONIOENCODING=utf8
-        # Lock the master commit that we download, because of blocking issues
-        wget https://ziglang.org/builds/zig-linux-x86_64-0.8.0-dev.2133+ad33e3483.tar.xz
-        sudo apt-get install mtools
-        tar -xvf zig*
+        deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-13 main
+        deb-src http://apt.llvm.org/bionic/ llvm-toolchain-bionic-13 main
+        sudo apt-get update
+        sudo apt-get install llvm-13 clang-13 lld-13
+
+    - name: Clone zig fork
+      run: git clone https://github.com/ZystemOS/zig
+
+    - name: Build zig fork
+      run: |
+        mkdir build
+        cd build
+        cmake .. -GNinja
+        ninja install
+
     - name: Install qemu
       run: |
         sudo apt-get update
         sudo apt-get install qemu qemu-system --fix-missing
+
     - name: Check formatting
-      run: zig*/zig fmt --check src
+      run: build/zig fmt --check src
+
     - name: Build kernel
-      run: zig*/zig build ${{ matrix.build_mode }}
+      run: build/zig build ${{ matrix.build_mode }}
+
     - name: Run unit tests
-      run: zig*/zig build test ${{ matrix.build_mode }}
+      run: build/zig build test ${{ matrix.build_mode }}
+
     - name: Run runtime test - Initialisation
-      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
+      run: build/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
+
     - name: Run runtime test - Panic
-      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
+      run: build/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
+
     - name: Run runtime test - Scheduler
-      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
+      run: build/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
