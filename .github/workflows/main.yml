@@ -21,27 +21,21 @@ jobs:
       run: |
         apt-get update
         apt-get install -y qemu qemu-system --fix-missing
-    - name: abc
-      run: |
-        pwd
-        ls ../..
-        ls ../../..
-        ls ../../../..
 
     - name: Check formatting
-      run: zig/build/zig fmt --check src
+      run: ../../../zig/build/zig fmt --check src
 
     - name: Build kernel
-      run: zig/build/zig build ${{ matrix.build_mode }}
+      run: ../../../zig/build/zig build ${{ matrix.build_mode }}
 
     - name: Run unit tests
-      run: zig/build/zig build test ${{ matrix.build_mode }}
+      run: ../../../zig/build/zig build test ${{ matrix.build_mode }}
 
     - name: Run runtime test - Initialisation
-      run: zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
+      run: ../../../zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
 
     - name: Run runtime test - Panic
-      run: zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
+      run: ../../../zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
 
     - name: Run runtime test - Scheduler
-      run: zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
+      run: ../../../zig/build/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
