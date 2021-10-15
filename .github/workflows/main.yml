@@ -21,6 +21,12 @@ jobs:
       run: |
         apt-get update
         apt-get install -y qemu qemu-system --fix-missing
+    - name: abc
+      run: |
+        pwd
+        ls ../..
+        ls ../../..
+        ls ../../../..
 
     - name: Check formatting
       run: zig/build/zig fmt --check src
