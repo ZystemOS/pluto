@@ -29,8 +29,8 @@ jobs:
       run: |
         mkdir -p zig/build
         cd zig/build
-        cmake .. -GNinja
-        ninja install
+        cmake .. -DCMAKE_C_COMPILER=clang-13 -DCMAKE_CXX_COMPILER=clang++-13
+        make install
 
     - name: Install qemu
       run: |
