@@ -3,13 +3,13 @@ const testing = std.testing;
 const expectEqual = testing.expectEqual;
 const expect = testing.expect;
 const log = std.log.scoped(.x86_paging);
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const panic = @import("../../../panic.zig").panic;
 const build_options = @import("build_options");
 const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const isr = @import("isr.zig");
+const isr = arch.isr_common;
 const MemProfile = @import("../../../mem.zig").MemProfile;
 const tty = @import("../../../tty.zig");
 const mem = @import("../../../mem.zig");
@@ -133,7 +133,7 @@ pub var kernel_directory: Directory align(@truncate(u29, PAGE_SIZE_4KB)) = Direc
 /// Return: usize
 ///     The index into an array of directory entries.
 ///
-fn virtToDirEntryIdx(virt: usize) callconv(.Inline) usize {
+inline fn virtToDirEntryIdx(virt: usize) usize {
     return virt / PAGE_SIZE_4MB;
 }
 
@@ -146,7 +146,7 @@ fn virtToDirEntryIdx(virt: usize) callconv(.Inline) usize {
 /// Return: usize
 ///     The index into an array of table entries.
 ///
-fn virtToTableEntryIdx(virt: usize) callconv(.Inline) usize {
+inline fn virtToTableEntryIdx(virt: usize) usize {
     return (virt / PAGE_SIZE_4KB) % ENTRIES_PER_TABLE;
 }
 
@@ -157,7 +157,7 @@ fn virtToTableEntryIdx(virt: usize) callconv(.Inline) usize {
 ///     val: *align(1) u32 - The entry to modify
 ///     attr: u32 - The bits corresponding to the attribute to set
 ///
-fn setAttribute(val: *align(1) u32, attr: u32) callconv(.Inline) void {
+inline fn setAttribute(val: *align(1) u32, attr: u32) void {
     val.* |= attr;
 }
 
@@ -168,7 +168,7 @@ fn setAttribute(val: *align(1) u32, attr: u32) callconv(.Inline) void {
 ///     val: *align(1) u32 - The entry to modify
 ///     attr: u32 - The bits corresponding to the attribute to clear
 ///
-fn clearAttribute(val: *align(1) u32, attr: u32) callconv(.Inline) void {
+inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
     val.* &= ~attr;
 }
 
@@ -433,7 +433,7 @@ pub fn init(mem_profile: *const MemProfile) void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 
-    isr.registerIsr(isr.PAGE_FAULT, if (build_options.test_mode == .Initialisation) rt_pageFault else pageFault) catch |e| {
+    isr.registerIsr(@enumToInt(isr.ExceptionCodes.PageFault), if (build_options.test_mode == .Initialisation) rt_pageFault else pageFault) catch |e| {
         panic(@errorReturnTrace(), "Failed to register page fault ISR: {}\n", .{e});
     };
     const dir_physaddr = @ptrToInt(mem.virtToPhys(&kernel_directory));

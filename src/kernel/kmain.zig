@@ -1,6 +1,6 @@
 const std = @import("std");
 const kmain_log = std.log.scoped(.kmain);
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
@@ -22,7 +22,7 @@ const Allocator = std.mem.Allocator;
 
 comptime {
     if (!is_test) {
-        switch (builtin.arch) {
+        switch (builtin.cpu.arch) {
             .i386 => _ = @import("arch/x86/32bit/boot.zig"),
             .x86_64 => _ = @import("arch/x86/64bit/boot.zig"),
             else => {},
@@ -79,7 +79,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel VMM: {}\n", .{e});
     };
 
-    kmain_log.info("Init arch " ++ @tagName(builtin.arch) ++ "\n", .{});
+    kmain_log.info("Init arch " ++ @tagName(builtin.cpu.arch) ++ "\n", .{});
     arch.init(&mem_profile);
     kmain_log.info("Arch init done\n", .{});
 

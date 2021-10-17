@@ -1,14 +1,12 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.x86_arch);
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const cmos = @import("cmos.zig");
-const gdt = @import("gdt.zig");
-const idt = @import("idt.zig");
+const gdt_32 = @import("gdt.zig");
+const idt_32 = @import("idt.zig");
 const irq = @import("irq.zig");
-const isr = @import("isr.zig");
 const paging = @import("paging.zig");
-const pic = @import("pic.zig");
 const pci = @import("pci.zig");
 const pit = @import("pit.zig");
 const rtc = @import("rtc.zig");
@@ -24,6 +22,7 @@ const TTY = @import("../../../tty.zig").TTY;
 const Keyboard = @import("../../../keyboard.zig").Keyboard;
 const Task = @import("../../../task.zig").Task;
 const MemProfile = mem.MemProfile;
+const interrupts = @import("interrupts.zig");
 
 usingnamespace @import("../common/arch.zig");
 
@@ -59,7 +58,7 @@ extern var KERNEL_STACK_END: *u32;
 
 /// The interrupt context that is given to a interrupt handler. It contains most of the registers
 /// and the interrupt number and error code (if there is one).
-pub const CpuState = packed struct {
+pub const CpuState32 = packed struct {
     // Page directory
     cr3: usize,
     // Extra segments
@@ -81,7 +80,9 @@ pub const CpuState = packed struct {
     eax: u32,
 
     // Interrupt number and error code
-    int_num: u32,
+    // These will be 32 bits and need to use usize to satisfy the type system for passing the
+    // interrupt number around.
+    int_num: usize,
     error_code: u32,
 
     // Instruction pointer, code segment and flags
@@ -91,6 +92,10 @@ pub const CpuState = packed struct {
     user_esp: u32,
     user_ss: u32,
 };
+
+comptime {
+    std.debug.assert(@sizeOf(CpuState32) == 80);
+}
 
 /// x86's boot payload is the multiboot info passed by grub
 pub const BootPayload = *multiboot.multiboot_info_t;
@@ -109,39 +114,6 @@ pub const VMM_MAPPER: vmm.Mapper(VmmPayload) = vmm.Mapper(VmmPayload){ .mapFn = 
 
 /// The size of each allocatable block of memory, normally set to the page size.
 pub const MEMORY_BLOCK_SIZE: usize = paging.PAGE_SIZE_4KB;
-
-///
-/// Load the GDT and refreshing the code segment with the code segment offset of the kernel as we
-/// are still in kernel land. Also loads the kernel data segment into all the other segment
-/// registers.
-///
-/// Arguments:
-///     IN gdt_ptr: *gdt.GdtPtr - The address to the GDT.
-///
-pub fn lgdt(gdt_ptr: *const gdt.GdtPtr) void {
-    // Load the GDT into the CPU
-    asm volatile ("lgdt (%%eax)"
-        :
-        : [gdt_ptr] "{eax}" (gdt_ptr)
-    );
-
-    // Load the kernel data segment, index into the GDT
-    asm volatile ("mov %%bx, %%ds"
-        :
-        : [KERNEL_DATA_OFFSET] "{bx}" (gdt.KERNEL_DATA_OFFSET)
-    );
-
-    asm volatile ("mov %%bx, %%es");
-    asm volatile ("mov %%bx, %%fs");
-    asm volatile ("mov %%bx, %%gs");
-    asm volatile ("mov %%bx, %%ss");
-
-    // Load the kernel code segment into the CS register
-    asm volatile (
-        \\ljmp $0x08, $1f
-        \\1:
-    );
-}
 
 ///
 /// Initialise the TTY and construct a TTY instance
@@ -333,9 +305,9 @@ pub fn initKeyboard(allocator: *Allocator) Allocator.Error!*Keyboard {
 ///     OutOfMemory - Unable to allocate space for the stack.
 ///
 pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocator.Error!void {
-    const data_offset = if (task.kernel) gdt.KERNEL_DATA_OFFSET else gdt.USER_DATA_OFFSET | 0b11;
+    const data_offset = if (task.kernel) gdt_common.KERNEL_DATA_OFFSET else gdt_common.USER_DATA_OFFSET | 0b11;
     // Setting the bottom two bits of the code offset designates that this is a ring 3 task
-    const code_offset = if (task.kernel) gdt.KERNEL_CODE_OFFSET else gdt.USER_CODE_OFFSET | 0b11;
+    const code_offset = if (task.kernel) gdt_common.KERNEL_CODE_OFFSET else gdt_common.USER_CODE_OFFSET | 0b11;
     // Ring switches push and pop two extra values on interrupt: user_esp and user_ss
     const kernel_stack_bottom = if (task.kernel) task.kernel_stack.len - 18 else task.kernel_stack.len - 20;
 
@@ -419,12 +391,16 @@ pub fn getDateTime() DateTime {
 ///                                         paging.
 ///
 pub fn init(mem_profile: *const MemProfile) void {
-    gdt.init();
-    idt.init();
+    gdt_common.init(gdt_32.Tss, &gdt_32.tss_entry);
+    idt_common.init(idt_32.IdtEntry, &idt_32.table);
 
-    pic.init();
-    isr.init();
-    irq.init();
+    // This line is needed to reference the getInterruptStub() function
+    // Why is this?
+    _ = interrupts;
+
+    pic_common.init();
+    isr_common.init(idt_32.IdtEntry, &idt_32.table);
+    irq_common.init(idt_32.IdtEntry, &idt_32.table);
 
     paging.init(mem_profile);
 

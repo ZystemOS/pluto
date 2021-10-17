@@ -1,6 +1,6 @@
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const is_test = builtin.is_test;
 const std = @import("std");
 const log = std.log.scoped(.vmm);
@@ -209,10 +209,10 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             var it = self.allocations.iterator();
             while (it.next()) |entry| {
                 var list = std.ArrayList(usize).init(self.allocator);
-                for (entry.value.physical.items) |block| {
+                for (entry.value_ptr.*.physical.items) |block| {
                     _ = try list.append(block);
                 }
-                _ = try clone.allocations.put(entry.key, Allocation{ .physical = list });
+                _ = try clone.allocations.put(entry.key_ptr.*, Allocation{ .physical = list });
             }
             return clone;
         }
@@ -248,9 +248,9 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         pub fn virtToPhys(self: *const Self, virt: usize) VmmError!usize {
             var it = self.allocations.iterator();
             while (it.next()) |entry| {
-                const vaddr = entry.key;
+                const vaddr = entry.key_ptr.*;
 
-                const allocation = entry.value;
+                const allocation = entry.value_ptr.*;
                 // If this allocation range covers the virtual address then figure out the corresponding physical block
                 if (vaddr <= virt and vaddr + (allocation.physical.items.len * BLOCK_SIZE) > virt) {
                     const block_number = (virt - vaddr) / BLOCK_SIZE;
@@ -277,8 +277,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         pub fn physToVirt(self: *const Self, phys: usize) VmmError!usize {
             var it = self.allocations.iterator();
             while (it.next()) |entry| {
-                const vaddr = entry.key;
-                const allocation = entry.value;
+                const vaddr = entry.key_ptr.*;
+                const allocation = entry.value_ptr.*;
 
                 for (allocation.physical.items) |block, i| {
                     if (block <= phys and block + BLOCK_SIZE > phys) {
@@ -450,8 +450,8 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             defer blocks.deinit();
             var it = other.allocations.iterator();
             while (it.next()) |allocation| {
-                const virtual = allocation.key;
-                const physical = allocation.value.physical.items;
+                const virtual = allocation.key_ptr.*;
+                const physical = allocation.value_ptr.*.physical.items;
                 if (start_addr >= virtual and virtual + physical.len * BLOCK_SIZE >= end_addr) {
                     const first_block_idx = (start_addr - virtual) / BLOCK_SIZE;
                     const last_block_idx = (end_addr - virtual) / BLOCK_SIZE;
@@ -537,7 +537,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                     panic(@errorReturnTrace(), "Failed to unmap VMM reserved memory from 0x{X} to 0x{X}: {}\n", .{ region_start, region_end, e });
                 };
                 // The allocation is freed so remove from the map
-                self.allocations.removeAssertDiscard(vaddr);
+                _ = self.allocations.remove(vaddr);
             } else {
                 return VmmError.NotAllocated;
             }

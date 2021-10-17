@@ -1,5 +1,5 @@
 const std = @import("std");
-const builtin = @import("builtin");
+const builtin = std.builtin;
 const testing = std.testing;
 const Allocator = std.mem.Allocator;
 

@@ -1,17 +1,23 @@
-const builtin = @import("builtin");
-const gdt = @import("gdt.zig");
-const idt = switch (builtin.arch) {
-    .i386 => @import("../32bit/idt.zig"),
-    .x86_64 => @import("../64bit/idt.zig"),
+const std = @import("std");
+const builtin = std.builtin;
+const serial = @import("serial.zig");
+const panic = @import("../../../panic.zig").panic;
+const Serial = @import("../../../serial.zig").Serial;
+
+// Expose the common implementations
+pub const gdt_common = @import("gdt.zig");
+pub const idt_common = @import("idt.zig");
+pub const isr_common = @import("isr.zig");
+pub const irq_common = @import("irq.zig");
+pub const pic_common = @import("pic.zig");
+
+pub const CpuState = switch (builtin.cpu.arch) {
+    .i386 => @import("../32bit/arch.zig").CpuState32,
+    .x86_64 => @import("../64bit/arch.zig").CpuState64,
     else => unreachable,
 };
 
-const serial = @import("serial.zig");
-const panic = @import("../../../panic.zig").panic;
-
-const Serial = @import("../../../serial.zig").Serial;
-
-const BootPayload = switch (builtin.arch) {
+const BootPayload = switch (builtin.cpu.arch) {
     .i386 => @import("../32bit/arch.zig").BootPayload,
     .x86_64 => @import("../64bit/arch.zig").BootPayload,
     else => unreachable,
@@ -159,13 +165,52 @@ pub fn out(port: u16, data: anytype) void {
 }
 
 ///
+/// Load the GDT and refreshing the code segment with the code segment offset of the kernel as we
+/// are still in kernel land. Also loads the kernel data segment into all the other segment
+/// registers.
+///
+/// Arguments:
+///     IN gdt_ptr: *gdt.GdtPtr - The address to the GDT.
+///
+pub fn lgdt(gdt_ptr: *const gdt_common.GdtPtr) void {
+    asm volatile (
+        \\lgdt %[gdt_ptr]
+        \\mov %[offset], %%ds
+        \\mov %[offset], %%es
+        \\mov %[offset], %%fs
+        \\mov %[offset], %%gs
+        \\mov %[offset], %%ss
+        :
+        : [gdt_ptr] "*p" (gdt_ptr),
+          [offset] "rm" (gdt_common.KERNEL_DATA_OFFSET)
+    );
+    if (builtin.cpu.arch == .x86_64) {
+        asm volatile (
+            \\push %[offset]
+            \\push $1f
+            \\lretq
+            \\1:
+            :
+            : [offset] "i" (gdt_common.KERNEL_CODE_OFFSET)
+        );
+    } else {
+        asm volatile (
+            \\ljmp %[offset], $1f
+            \\1:
+            :
+            : [offset] "i" (gdt_common.KERNEL_CODE_OFFSET)
+        );
+    }
+}
+
+///
 /// Get the previously loaded GDT from the CPU.
 ///
 /// Return: gdt.GdtPtr
 ///     The previously loaded GDT from the CPU.
 ///
-pub fn sgdt() gdt.GdtPtr {
-    var gdt_ptr = gdt.GdtPtr{ .limit = undefined, .base = undefined };
+pub fn sgdt() gdt_common.GdtPtr {
+    var gdt_ptr = gdt_common.GdtPtr{ .limit = undefined, .base = undefined };
     asm volatile ("sgdt %[tab]"
         : [tab] "=m" (gdt_ptr)
     );
@@ -189,23 +234,27 @@ pub fn ltr(offset: u16) void {
 /// Load the IDT into the CPU.
 ///
 /// Arguments:
-///     IN idt_ptr: *const idt.IdtPtr - The address of the iDT.
+///     IN comptime IdtEntry: type - The IDT entry type.
+///     IN idt_ptr: *const idt.IdtPtr(IdtEntry) - The address of the iDT.
 ///
-pub fn lidt(idt_ptr: *const idt.IdtPtr) void {
-    asm volatile ("lidt (%%eax)"
+pub fn lidt(comptime IdtEntry: type, idt_ptr: *const idt_common.IDT(IdtEntry).IdtPtr) void {
+    asm volatile ("lidt (%[idt_ptr])"
         :
-        : [idt_ptr] "{eax}" (idt_ptr)
+        : [idt_ptr] "r" (idt_ptr)
     );
 }
 
 ///
 /// Get the previously loaded IDT from the CPU.
 ///
-/// Return: idt.IdtPtr
+/// Arguments:
+///     IN comptime IdtEntry: type - The IDT entry type.
+///
+/// Return: idt.IdtPtr(IdtEntry)
 ///     The previously loaded IDT from the CPU.
 ///
-pub fn sidt() idt.IdtPtr {
-    var idt_ptr = idt.IdtPtr{ .limit = undefined, .base = undefined };
+pub fn sidt(comptime IdtEntry: type) idt_common.IDT(IdtEntry).IdtPtr {
+    var idt_ptr = idt_common.IDT(IdtEntry).IdtPtr{ .limit = undefined, .base = undefined };
     asm volatile ("sidt %[tab]"
         : [tab] "=m" (idt_ptr)
     );
