@@ -174,6 +174,12 @@ pub const FileSystem = struct {
     /// The function for retrieving the root node
     getRootNode: GetRootNode,
 
+    initDirIterator: fn (dir: *const DirNode) void,
+
+    deinitDirIterator: fn (dir: *const DirNode) void,
+
+    listDirIterator: fn (dir: *const DirNode, i: usize) ?*const Node,
+
     /// Points to a usize field within the underlying filesystem so that the close, read, write and open functions can access its low-level implementation using @fieldParentPtr. For example, this could point to a usize field within a FAT32 filesystem data structure, which stores all the data and state that is needed in order to interact with a physical disk
     /// The value of instance is reserved for future use and so should be left as 0
     instance: *usize,
@@ -209,6 +215,27 @@ pub const DirNode = struct {
     /// The directory that this directory is mounted to, else null
     mount: ?*const DirNode,
 
+    const DirIterator = struct {
+        dir: *const DirNode,
+        i: usize,
+
+        const Self = @This();
+
+        pub fn init(node: *const DirNode) DirIterator {
+            node.fs.initDirIterator(node);
+            return DirIterator{ .dir = node, .i = 0 };
+        }
+
+        pub fn next(self: *Self) ?*const Node {
+            self.i += 1;
+            return self.dir.fs.listDirIterator(dir, self.i - 1);
+        }
+
+        pub fn deinit(self: *Self) void {
+            return self.dir.fs.deinitDirIterator(self.dir);
+        }
+    };
+
     /// See the documentation for FileSystem.Open
     pub fn open(self: *const DirNode, name: []const u8, flags: OpenFlags, args: OpenArgs) (Allocator.Error || Error)!*Node {
         var fs = self.fs;
@@ -232,6 +259,10 @@ pub const DirNode = struct {
             return;
         }
         return fs.close(fs, cast_node);
+    }
+
+    pub fn list(self: *const DirNode) DirIterator {
+        return DirIterator.init(self.mount orelse self);
     }
 };
 
@@ -716,6 +747,17 @@ const TestFS = struct {
         }
         return Error.NoSuchFileOrDir;
     }
+
+    pub fn initDirIterator(node: *const DirNode) void {}
+
+    pub fn deinitDirIterator(node: *const DirNode) void {}
+
+    pub fn listDirIterator(node: *const DirNode, i: usize) ?*const Node {
+        var test_fs = @fieldParentPtr(TestFS, "instance", node.fs.instance);
+        const tree_node = (try getTreeNode(test_fs, node)) orelse unreachable;
+        if (tree_node.children.items.len <= i) return null;
+        return tree_node.children.items[i].val;
+    }
 };
 
 fn testInitFs(allocator: Allocator) !*TestFS {
@@ -745,6 +787,9 @@ fn testInitFs(allocator: Allocator) !*TestFS {
         .write = TestFS.write,
         .instance = &testfs.instance,
         .getRootNode = TestFS.getRootNode,
+        .initDirIterator = TestFS.initDirIterator,
+        .deinitDirIterator = TestFS.deinitDirIterator,
+        .listDirIterator = TestFS.listDirIterator,
     };
     return testfs;
 }
@@ -1008,4 +1053,24 @@ test "write" {
     var str2 = "test456";
     _ = try test_file.write(str2);
     try testing.expect(std.mem.eql(u8, str2, f_data.* orelse unreachable));
+}
+
+test "list" {
+    var testfs = try testInitFs(testing.allocator);
+    defer testing.allocator.destroy(testfs);
+    defer testfs.deinit();
+    root = testfs.tree.val;
+
+    const child_1 = try openFile("/child1.txt", .CREATE_FILE);
+    const child_2 = try openFile("/child2.txt", .CREATE_FILE);
+    const child_3 = try openDir("/child3", .CREATE_DIR);
+
+    var iterator = root.Dir.list();
+    defer iterator.deinit();
+    testing.expectEqual(child_1, iterator.next());
+    testing.expectEqual(child_2, iterator.next());
+    testing.expectEqual(null, iterator.next());
+
+    iterator = child_3.list();
+    testing.expectEqual(null, iterator.next());
 }
