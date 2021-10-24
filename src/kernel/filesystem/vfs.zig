@@ -174,7 +174,7 @@ pub const FileSystem = struct {
     /// The function for retrieving the root node
     getRootNode: GetRootNode,
 
-    initDirIterator: fn (dir: *const DirNode) void,
+    initDirIterator: fn (dir: *const DirNode) std.mem.Allocator.Error!void,
 
     deinitDirIterator: fn (dir: *const DirNode) void,
 
@@ -221,8 +221,8 @@ pub const DirNode = struct {
 
         const Self = @This();
 
-        pub fn init(node: *const DirNode) DirIterator {
-            node.fs.initDirIterator(node);
+        pub fn init(node: *const DirNode) std.mem.Allocator.Error!DirIterator {
+            try node.fs.initDirIterator(node);
             return DirIterator{ .dir = node, .i = 0 };
         }
 
@@ -619,6 +619,7 @@ const TestFS = struct {
     fs: *FileSystem,
     allocator: Allocator,
     open_count: usize,
+    dir_iter_dummy_memory: std.AutoHashMap(*const DirNode, u8[1]),
     instance: usize,
 
     const Self = @This();
@@ -748,9 +749,17 @@ const TestFS = struct {
         return Error.NoSuchFileOrDir;
     }
 
-    pub fn initDirIterator(node: *const DirNode) void {}
+    pub fn initDirIterator(node: *const DirNode) std.mem.Allocator.Error!void {
+        // Allocate some dummy memory to test initialisation and deinitialisation
+        var test_fs = @fieldParentPtr(TestFS, "instance", node.fs.instance);
+        if (test_fs.dir_iter_dummy_memory.get(node) == null) try test_fs.dir_iter_dummy_memory.put(node, test_fs.allocator.alloc(u8, 1));
+    }
 
-    pub fn deinitDirIterator(node: *const DirNode) void {}
+    pub fn deinitDirIterator(node: *const DirNode) void {
+        // De-allocate the dummy memory allocated to test initialisation and deinitialisation
+        var test_fs = @fieldParentPtr(TestFS, "instance", node.fs.instance);
+        test_fs.allocator.free(test_fs.dir_iter_dummy_memory.get(node) orelse unreachable);
+    }
 
     pub fn listDirIterator(node: *const DirNode, i: usize) ?*const Node {
         var test_fs = @fieldParentPtr(TestFS, "instance", node.fs.instance);
@@ -1071,6 +1080,7 @@ test "list" {
     testing.expectEqual(child_2, iterator.next());
     testing.expectEqual(null, iterator.next());
 
-    iterator = child_3.list();
-    testing.expectEqual(null, iterator.next());
+    var iterator2 = child_3.list();
+    defer iterator2.deinit();
+    testing.expectEqual(null, iterator2.next());
 }
