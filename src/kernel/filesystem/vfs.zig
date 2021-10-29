@@ -1070,17 +1070,33 @@ test "list" {
     defer testfs.deinit();
     root = testfs.tree.val;
 
-    const child_1 = try openFile("/child1.txt", .CREATE_FILE);
-    const child_2 = try openFile("/child2.txt", .CREATE_FILE);
-    const child_3 = try openDir("/child3", .CREATE_DIR);
+    const child_1_name = "child1.txt";
+    const child_2_name = "child2.txt";
+    const child_3_name = "child3";
+    const child_3_1_name = "child3_1.txt";
+    const child_3_2_name = "child3_2.txt";
+
+    const child_1 = try openFile("/" ++ child_1_name, .CREATE_FILE);
+    const child_2 = try openFile("/" ++ child_2_name, .CREATE_FILE);
+    const child_3 = try openDir("/" ++ child_3_name, .CREATE_DIR);
 
     var iterator = root.Dir.list();
     defer iterator.deinit();
-    testing.expectEqual(child_1, iterator.next());
-    testing.expectEqual(child_2, iterator.next());
-    testing.expectEqual(null, iterator.next());
+    testing.expectEqualSlices(child_1_name, iterator.next());
+    testing.expectEqualSlices(child_2_name, iterator.next());
+    testing.expectEqualSlices(child_3_name, iterator.next());
+    testing.expectEqualSlices(null, iterator.next());
 
     var iterator2 = child_3.list();
     defer iterator2.deinit();
-    testing.expectEqual(null, iterator2.next());
+    testing.expectEqualSlices(null, iterator2.next());
+
+    const child_3_1 = try openDir("/" ++ child_3_name ++ "/" ++ child_3_1_name, .CREATE_DIR);
+    testing.expectEqualSlices(child_3_1_name, iterator2.next());
+    testing.expectEqualSlices(null, iterator2.next());
+
+    const child_3_2 = try openDir("/" ++ child_3_name ++ "/" ++ child_3_2_name, .CREATE_DIR);
+    testing.expectEqualSlices(child_3_1_name, iterator2.next());
+    testing.expectEqualSlices(child_3_2_name, iterator2.next());
+    testing.expectEqualSlices(null, iterator2.next());
 }
