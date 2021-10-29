@@ -178,7 +178,7 @@ pub const FileSystem = struct {
 
     deinitDirIterator: fn (dir: *const DirNode) void,
 
-    listDirIterator: fn (dir: *const DirNode, i: usize) ?*const Node,
+    listDirIterator: fn (dir: *const DirNode, i: usize) ?[]const u8,
 
     /// Points to a usize field within the underlying filesystem so that the close, read, write and open functions can access its low-level implementation using @fieldParentPtr. For example, this could point to a usize field within a FAT32 filesystem data structure, which stores all the data and state that is needed in order to interact with a physical disk
     /// The value of instance is reserved for future use and so should be left as 0
@@ -226,7 +226,7 @@ pub const DirNode = struct {
             return DirIterator{ .dir = node, .i = 0 };
         }
 
-        pub fn next(self: *Self) ?*const Node {
+        pub fn next(self: *Self) ?[]const u8 {
             self.i += 1;
             return self.dir.fs.listDirIterator(dir, self.i - 1);
         }
@@ -761,11 +761,11 @@ const TestFS = struct {
         test_fs.allocator.free(test_fs.dir_iter_dummy_memory.get(node) orelse unreachable);
     }
 
-    pub fn listDirIterator(node: *const DirNode, i: usize) ?*const Node {
+    pub fn listDirIterator(node: *const DirNode, i: usize) ?[]const u8 {
         var test_fs = @fieldParentPtr(TestFS, "instance", node.fs.instance);
         const tree_node = (try getTreeNode(test_fs, node)) orelse unreachable;
         if (tree_node.children.items.len <= i) return null;
-        return tree_node.children.items[i].val;
+        return tree_node.children.items[i].name;
     }
 };
 
