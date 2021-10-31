@@ -19,7 +19,8 @@ jobs:
     
     - name: Download mtools
       run: |
-        sudo apt-get install mtools
+        apt-get update
+        apt-get install mtools
     - name: Check formatting
       run: zig fmt --check src
     - name: Build kernel
