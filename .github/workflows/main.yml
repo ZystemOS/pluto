@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     name: Build mode ${{ matrix.build_mode }}
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-19.10
     strategy:
       matrix:
         build_mode: ["", -Drelease-fast, -Drelease-safe, -Drelease-small]
@@ -20,22 +20,22 @@ jobs:
       run: |
         export PYTHONIOENCODING=utf8
         # Lock the master commit that we download, because of blocking issues
-        wget https://ziglang.org/builds/zig-linux-x86_64-0.8.0-dev.2133+ad33e3483.tar.xz
+        wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm="$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=1Q-BhpU44lmLCkeK-3YpiW2grv8pCaX3Z" -O - | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')"&id=1Q-BhpU44lmLCkeK-3YpiW2grv8pCaX3Z" -O zig.tar.xz
+        sudo apt-get update
         sudo apt-get install mtools
-        tar -xvf zig*
+        tar -xvf zig.tar.xz
     - name: Install qemu
       run: |
-        sudo apt-get update
         sudo apt-get install qemu qemu-system --fix-missing
     - name: Check formatting
-      run: zig*/zig fmt --check src
+      run: zig/zig fmt --check src
     - name: Build kernel
-      run: zig*/zig build ${{ matrix.build_mode }}
+      run: zig/zig build ${{ matrix.build_mode }}
     - name: Run unit tests
-      run: zig*/zig build test ${{ matrix.build_mode }}
+      run: zig/zig build test ${{ matrix.build_mode }}
     - name: Run runtime test - Initialisation
-      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
+      run: zig/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
     - name: Run runtime test - Panic
-      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
+      run: zig/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
     - name: Run runtime test - Scheduler
-      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
+      run: zig/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
