@@ -119,7 +119,7 @@ pub fn build(b: *Builder) !void {
     unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
 
     if (builtin.os.tag != .windows) {
-        unit_tests.enable_qemu = true;
+        b.enable_qemu = true;
     }
 
     // Run the mock gen
