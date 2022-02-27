@@ -440,7 +440,7 @@ pub const FreeListAllocator = struct {
         var free_list = &(try FreeListAllocator.init(start, size));
         var allocator = &free_list.allocator;
 
-        std.debug.warn("", .{});
+        std.debug.print("", .{});
 
         const alloc0 = try alloc(allocator, 64, 0, 0, @returnAddress());
         const alloc0_addr = @ptrToInt(alloc0.ptr);
@@ -452,7 +452,7 @@ pub const FreeListAllocator = struct {
         try testing.expectEqual(header.next_free, null);
         try testing.expectEqual(free_list.first_free, header);
 
-        std.debug.warn("", .{});
+        std.debug.print("", .{});
 
         // 64 bytes aligned to 4 bytes
         const alloc1 = try alloc(allocator, 64, 4, 0, @returnAddress());
@@ -551,7 +551,7 @@ pub const FreeListAllocator = struct {
     }
 
     test "resize" {
-        std.debug.warn("", .{});
+        std.debug.print("", .{});
         const size = 1024;
         var region = try testing.allocator.alloc(u8, size);
         defer testing.allocator.free(region);
