@@ -174,7 +174,7 @@ fn onKeyEvent(ctx: *arch.CpuState) usize {
 /// Initialise the PS/2 keyboard
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to use to create the keyboard instance
+///     IN allocator: Allocator - The allocator to use to create the keyboard instance
 ///
 /// Return: *Keyboard
 ///     The keyboard created
@@ -182,7 +182,7 @@ fn onKeyEvent(ctx: *arch.CpuState) usize {
 /// Error: std.mem.Allocator.Error
 ///     OutOfMemory - There isn't enough memory to allocate the keyboard instance
 ///
-pub fn init(allocator: *Allocator) Allocator.Error!*Keyboard {
+pub fn init(allocator: Allocator) Allocator.Error!*Keyboard {
     irq.registerIrq(pic.IRQ_KEYBOARD, onKeyEvent) catch |e| {
         panic(@errorReturnTrace(), "Failed to register keyboard IRQ: {}\n", .{e});
     };

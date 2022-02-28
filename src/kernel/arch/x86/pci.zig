@@ -317,7 +317,7 @@ pub const PciDeviceInfo = struct {
 /// Get a list of all the PCI device. The returned list will needed to be freed by the caller.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - An allocator used for creating the list.
+///     IN allocator: Allocator - An allocator used for creating the list.
 ///
 /// Return: []PciDeviceInfo
 ///     The list of PCI devices information.
@@ -325,7 +325,7 @@ pub const PciDeviceInfo = struct {
 /// Error: Allocator.Error
 ///     error.OutOfMemory - If there isn't enough memory to create the info list.
 ///
-pub fn getDevices(allocator: *Allocator) Allocator.Error![]PciDeviceInfo {
+pub fn getDevices(allocator: Allocator) Allocator.Error![]PciDeviceInfo {
     // Create an array list for the devices.
     var pci_device_infos = ArrayList(PciDeviceInfo).init(allocator);
     defer pci_device_infos.deinit();

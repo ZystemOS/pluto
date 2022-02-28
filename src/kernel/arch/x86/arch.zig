@@ -378,7 +378,7 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
     const mmap_addr = mb_info.mmap_addr;
     const num_mmap_entries = mb_info.mmap_length / @sizeOf(multiboot.multiboot_memory_map_t);
 
-    const allocator = &mem.fixed_buffer_allocator.allocator;
+    const allocator = mem.fixed_buffer_allocator.allocator();
     var reserved_physical_mem = std.ArrayList(mem.Range).init(allocator);
     var reserved_virtual_mem = std.ArrayList(mem.Map).init(allocator);
     const mem_map = @intToPtr([*]multiboot.multiboot_memory_map_t, mmap_addr)[0..num_mmap_entries];
@@ -492,7 +492,7 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
 /// x86 initialises the keyboard connected to the PS/2 port
 ///
 /// Arguments:
-///     IN allocator: *std.mem.Allocator - The allocator to use if necessary
+///     IN allocator: std.mem.Allocator - The allocator to use if necessary
 ///
 /// Return: *Keyboard
 ///     The initialised PS/2 keyboard
@@ -500,7 +500,7 @@ pub fn initMem(mb_info: BootPayload) Allocator.Error!MemProfile {
 /// Error: std.mem.Allocator.Error
 ///     OutOfMemory - There wasn't enough memory to allocate what was needed
 ///
-pub fn initKeyboard(allocator: *Allocator) Allocator.Error!*Keyboard {
+pub fn initKeyboard(allocator: Allocator) Allocator.Error!*Keyboard {
     return keyboard.init(allocator);
 }
 
@@ -514,12 +514,12 @@ pub fn initKeyboard(allocator: *Allocator) Allocator.Error!*Keyboard {
 ///                                the initial CpuState on the kernel stack.
 ///     IN entry_point: usize    - The pointer to the entry point of the function. Functions only
 ///                                supported is fn () noreturn
-///     IN allocator: *Allocator - The allocator use for allocating a stack.
+///     IN allocator: Allocator - The allocator use for allocating a stack.
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - Unable to allocate space for the stack.
 ///
-pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocator.Error!void {
+pub fn initTask(task: *Task, entry_point: usize, allocator: Allocator) Allocator.Error!void {
     const data_offset = if (task.kernel) gdt.KERNEL_DATA_OFFSET else gdt.USER_DATA_OFFSET | 0b11;
     // Setting the bottom two bits of the code offset designates that this is a ring 3 task
     const code_offset = if (task.kernel) gdt.KERNEL_CODE_OFFSET else gdt.USER_CODE_OFFSET | 0b11;
@@ -577,7 +577,7 @@ pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocato
 /// Get a list of hardware devices attached to the system.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - An allocator for getting the devices
+///     IN allocator: Allocator - An allocator for getting the devices
 ///
 /// Return: []Device
 ///     A list of hardware devices.
@@ -585,7 +585,7 @@ pub fn initTask(task: *Task, entry_point: usize, allocator: *Allocator) Allocato
 /// Error: Allocator.Error
 ///     OutOfMemory - Unable to allocate space the operation.
 ///
-pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
+pub fn getDevices(allocator: Allocator) Allocator.Error![]Device {
     return pci.getDevices(allocator);
 }
 

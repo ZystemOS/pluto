@@ -96,9 +96,9 @@ pub fn blocksFree() usize {
 ///
 /// Arguments:
 ///     IN mem: *const MemProfile - The system's memory profile.
-///     IN allocator: *Allocator - The allocator to use to allocate the bitmaps.
+///     IN allocator: Allocator - The allocator to use to allocate the bitmaps.
 ///
-pub fn init(mem_profile: *const MemProfile, allocator: *Allocator) void {
+pub fn init(mem_profile: *const MemProfile, allocator: Allocator) void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 
@@ -215,9 +215,9 @@ test "setAddr and isSet" {
 ///
 /// Arguments:
 ///     IN mem_profile: *const MemProfile - The memory profile to check for reserved memory regions.
-///     IN/OUT allocator: *Allocator - The allocator to use when needing to create intermediate structures used for testing
+///     IN/OUT allocator: Allocator - The allocator to use when needing to create intermediate structures used for testing
 ///
-fn runtimeTests(mem_profile: *const MemProfile, allocator: *Allocator) void {
+fn runtimeTests(mem_profile: *const MemProfile, allocator: Allocator) void {
     // Make sure that occupied memory can't be allocated
     var prev_alloc: usize = std.math.maxInt(usize);
     var alloc_list = std.ArrayList(usize).init(allocator);

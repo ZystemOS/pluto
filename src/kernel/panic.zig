@@ -31,12 +31,12 @@ const SymbolMap = struct {
     /// Initialise an empty symbol map.
     ///
     /// Arguments:
-    ///     IN allocator: *Allocator - The allocator to use to initialise the array list.
+    ///     IN allocator: Allocator - The allocator to use to initialise the array list.
     ///
     /// Return: SymbolMap
     ///     The symbol map.
     ///
-    pub fn init(allocator: *Allocator) SymbolMap {
+    pub fn init(allocator: Allocator) SymbolMap {
         return SymbolMap{
             .symbols = ArrayList(MapEntry).init(allocator),
         };
@@ -303,14 +303,14 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: any
 /// Arguments:
 ///     IN mem_profile: *const mem.MemProfile - The memory profile from which to get the loaded boot
 ///         modules.
-///     IN allocator: *Allocator - The allocator to use to store the symbol map.
+///     IN allocator: Allocator - The allocator to use to store the symbol map.
 ///
 /// Error: PanicError || Allocator.Error || std.fmt.ParseIntError
 ///     PanicError.InvalidSymbolFile - A terminating whitespace wasn't found before the end address.
 ///     Allocator.Error.OutOfMemory - If there wasn't enough memory.
 ///     std.fmt.ParseIntError - See parseMapEntry.
 ///
-pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) (PanicError || Allocator.Error || std.fmt.ParseIntError)!void {
+pub fn init(mem_profile: *const mem.MemProfile, allocator: Allocator) (PanicError || Allocator.Error || std.fmt.ParseIntError)!void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 

@@ -24,7 +24,7 @@ pub const TTY = struct {
 
 /// The current tty stream
 var tty: TTY = undefined;
-var allocator: *Allocator = undefined;
+var allocator: Allocator = undefined;
 
 ///
 /// A call back function for use in the formation of a string. This calls the architecture's print function.
@@ -100,10 +100,10 @@ pub fn clear() void {
 /// Initialise the TTY. The details of which are up to the architecture
 ///
 /// Arguments:
-///     IN alloc: *std.mem.Allocator - The allocator to use when requiring memory
+///     IN alloc: Allocator - The allocator to use when requiring memory
 ///     IN boot_payload: arch.BootPayload - The payload passed to the kernel on boot
 ///
-pub fn init(alloc: *Allocator, boot_payload: arch.BootPayload) void {
+pub fn init(alloc: Allocator, boot_payload: arch.BootPayload) void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
     tty = arch.initTTY(boot_payload);

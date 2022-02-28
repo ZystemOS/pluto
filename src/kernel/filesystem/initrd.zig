@@ -43,7 +43,7 @@ pub const InitrdFS = struct {
     fs: *vfs.FileSystem,
 
     /// The allocator used for allocating memory for opening files.
-    allocator: *Allocator,
+    allocator: Allocator,
 
     /// The list of files in the ram disk. These will be pointers into the raw ramdisk to save on
     /// allocations.
@@ -142,7 +142,7 @@ pub const InitrdFS = struct {
     ///
     /// Arguments:
     ///     IN stream: *std.io.FixedBufferStream([]u8) - The stream that contains the raw ramdisk data.
-    ///     IN allocator: *Allocator - The allocator used for initialising any memory needed.
+    ///     IN allocator: Allocator - The allocator used for initialising any memory needed.
     ///
     /// Return: *InitrdFS
     ///     A pointer to the ram disk file system.
@@ -157,7 +157,7 @@ pub const InitrdFS = struct {
     ///     error.OutOfMemory    - If there isn't enough memory for initialisation. Any memory
     ///                            allocated will be freed.
     ///
-    pub fn init(stream: *std.io.FixedBufferStream([]u8), allocator: *Allocator) (Error || error{EndOfStream} || Allocator.Error)!*InitrdFS {
+    pub fn init(stream: *std.io.FixedBufferStream([]u8), allocator: Allocator) (Error || error{EndOfStream} || Allocator.Error)!*InitrdFS {
         log.info("Init\n", .{});
         defer log.info("Done\n", .{});
 
@@ -244,7 +244,7 @@ pub const InitrdFS = struct {
 /// three files: test1.txt, test2.txt and test3.txt.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to alloc the raw ramdisk.
+///     IN allocator: Allocator - The allocator to alloc the raw ramdisk.
 ///
 /// Return: []u8
 ///     The bytes of the raw ramdisk in memory.
@@ -254,7 +254,7 @@ pub const InitrdFS = struct {
 ///     FixedBufferStream.WriterError - Writing to the fixed buffer stream failed
 ///     error.TestExpectedEqual - An equality test failed
 ///
-fn createInitrd(allocator: *Allocator) ![]u8 {
+fn createInitrd(allocator: Allocator) ![]u8 {
     // Create 3 valid ramdisk files in memory
     const file_names = [_][]const u8{ "test1.txt", "test2.txt", "test3.txt" };
     const file_contents = [_][]const u8{ "This is a test", "This is a test: part 2", "This is a test: the prequel" };
@@ -628,9 +628,6 @@ fn expectEqualSlicesClone(comptime T: type, expected: []const T, actual: []const
 
 ///
 /// Test that we can open, read and close a file
-///
-/// Arguments:
-///     IN allocator: *Allocator - The allocator used for reading.
 ///
 fn rt_openReadClose() void {
     const f1 = vfs.openFile("/ramdisk_test1.txt", .NO_CREATION) catch |e| {

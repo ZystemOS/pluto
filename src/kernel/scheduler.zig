@@ -105,12 +105,13 @@ pub fn pickNextTask(ctx: *arch.CpuState) usize {
 ///
 /// Arguments:
 ///     IN entry_point: EntryPoint - The entry point into the task. This must be a function.
+///     IN allocator: Allocator - The allocator to use
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - If there isn't enough memory for the a task/stack. Any memory allocated will
 ///                   be freed on return.
 ///
-pub fn scheduleTask(new_task: *Task, allocator: *Allocator) Allocator.Error!void {
+pub fn scheduleTask(new_task: *Task, allocator: Allocator) Allocator.Error!void {
     var task_node = try allocator.create(TailQueue(*Task).Node);
     task_node.* = .{ .data = new_task };
     tasks.prepend(task_node);
@@ -123,13 +124,13 @@ pub fn scheduleTask(new_task: *Task, allocator: *Allocator) Allocator.Error!void
 /// idle task for when there is no more tasks to run.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to use when needing to allocate memory.
+///     IN allocator: Allocator - The allocator to use when needing to allocate memory.
 ///     IN mem_profile: *const mem.MemProfile - The system's memory profile used for runtime testing.
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - There is no more memory. Any memory allocated will be freed on return.
 ///
-pub fn init(allocator: *Allocator, mem_profile: *const mem.MemProfile) Allocator.Error!void {
+pub fn init(allocator: Allocator, mem_profile: *const mem.MemProfile) Allocator.Error!void {
     // TODO: Maybe move the task init here?
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
@@ -170,7 +171,7 @@ fn test_fn2() void {}
 
 var test_pid_counter: u7 = 1;
 
-fn createTestTask(allocator: *Allocator) Allocator.Error!*Task {
+fn createTestTask(allocator: Allocator) Allocator.Error!*Task {
     var t = try allocator.create(Task);
     errdefer allocator.destroy(t);
     t.pid = test_pid_counter;
@@ -181,7 +182,7 @@ fn createTestTask(allocator: *Allocator) Allocator.Error!*Task {
     return t;
 }
 
-fn destroyTestTask(self: *Task, allocator: *Allocator) void {
+fn destroyTestTask(self: *Task, allocator: Allocator) void {
     if (@ptrToInt(self.kernel_stack.ptr) != @ptrToInt(&KERNEL_STACK_START)) {
         allocator.free(self.kernel_stack);
     }
@@ -298,9 +299,9 @@ fn task_function() noreturn {
 /// occurs. Also tests that a global volatile can be test in one task and be reacted to in another.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to use when needing to allocate memory.
+///     IN allocator: Allocator - The allocator to use when needing to allocate memory.
 ///
-fn rt_variable_preserved(allocator: *Allocator) void {
+fn rt_variable_preserved(allocator: Allocator) void {
     // Create the memory for the boolean
     is_set = allocator.create(bool) catch unreachable;
     defer allocator.destroy(is_set);
@@ -353,7 +354,7 @@ fn rt_variable_preserved(allocator: *Allocator) void {
 ///     IN allocator: *std.mem.Allocator - The allocator to use when intialising the task
 ///     IN mem_profile: mem.MemProfile - The system's memory profile. Determines the end address of the user task's VMM.
 ///
-fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void {
+fn rt_user_task(allocator: Allocator, mem_profile: *const mem.MemProfile) void {
     for (&[_][]const u8{ "/user_program_data.elf", "/user_program.elf" }) |user_program| {
         // 1. Create user VMM
         var task_vmm = allocator.create(vmm.VirtualMemoryManager(arch.VmmPayload)) catch |e| {
@@ -405,10 +406,10 @@ fn rt_user_task(allocator: *Allocator, mem_profile: *const mem.MemProfile) void 
 /// The scheduler runtime tests that will test the scheduling functionality.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to use when needing to allocate memory.
+///     IN allocator: Allocator - The allocator to use when needing to allocate memory.
 ///     IN mem_profile: *const mem.MemProfile - The system's memory profile. Used to set up user task VMMs.
 ///
-fn runtimeTests(allocator: *Allocator, mem_profile: *const mem.MemProfile) void {
+fn runtimeTests(allocator: Allocator, mem_profile: *const mem.MemProfile) void {
     arch.enableInterrupts();
     rt_user_task(allocator, mem_profile);
     rt_variable_preserved(allocator);

@@ -215,7 +215,7 @@ pub fn Bitmap(comptime BitmapType: type) type {
         num_entries: usize,
         bitmaps: []BitmapType,
         num_free_entries: usize,
-        allocator: *std.mem.Allocator,
+        allocator: Allocator,
 
         ///
         /// Create an instance of this bitmap type.
@@ -223,15 +223,15 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Arguments:
         ///     IN num_entries: usize - The number of entries that the bitmap created will have.
         ///         The number of BitmapType required to store this many entries will be allocated and each will be zeroed.
-        ///     IN allocator: *std.mem.Allocator - The allocator to use when allocating the BitmapTypes required.
+        ///     IN allocator: Allocator - The allocator to use when allocating the BitmapTypes required.
         ///
         /// Return: Self.
         ///     The bitmap instance.
         ///
-        /// Error: std.mem.Allocator.Error
+        /// Error: Allocator.Error
         ///     OutOfMemory: There isn't enough memory available to allocate the required number of BitmapType.
         ///
-        pub fn init(num_entries: usize, allocator: *std.mem.Allocator) !Self {
+        pub fn init(num_entries: usize, allocator: Allocator) !Self {
             const num = std.mem.alignForward(num_entries, ENTRIES_PER_BITMAP) / ENTRIES_PER_BITMAP;
             const self = Self{
                 .num_bitmaps = num,
@@ -255,10 +255,10 @@ pub fn Bitmap(comptime BitmapType: type) type {
         /// Return: Self
         ///     The cloned bitmap
         ///
-        /// Error: std.mem.Allocator.Error
+        /// Error: Allocator.Error
         ///     OutOfMemory: There isn't enough memory available to allocate the required number of BitmapType.
         ///
-        pub fn clone(self: *const Self) std.mem.Allocator.Error!Self {
+        pub fn clone(self: *const Self) Allocator.Error!Self {
             var copy = try init(self.num_entries, self.allocator);
             var i: usize = 0;
             while (i < copy.num_entries) : (i += 1) {

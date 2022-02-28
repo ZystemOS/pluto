@@ -182,7 +182,7 @@ inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
 ///     IN phys_addr: usize - The start of the physical space to map
 ///     IN phys_end: usize - The end of the physical space to map
 ///     IN attrs: vmm.Attributes - The attributes to apply to this mapping
-///     IN allocator: *Allocator - The allocator to use to map any tables needed
+///     IN allocator: Allocator - The allocator to use to map any tables needed
 ///     OUT dir: *Directory - The directory that this entry is in
 ///
 /// Error: vmm.MapperError || Allocator.Error
@@ -193,7 +193,7 @@ inline fn clearAttribute(val: *align(1) u32, attr: u32) void {
 ///     vmm.MapperError.MisalignedVirtualAddress - One or both of the virtual addresses aren't page size aligned
 ///     Allocator.Error.* - See Allocator.alignedAlloc
 ///
-fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: *Allocator) (vmm.MapperError || Allocator.Error)!void {
+fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: Allocator) (vmm.MapperError || Allocator.Error)!void {
     if (phys_start > phys_end) {
         return vmm.MapperError.InvalidPhysicalAddress;
     }
@@ -271,12 +271,12 @@ fn mapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, phys_start: 
 ///     IN virt_addr: usize - The start of the virtual space to map
 ///     IN virt_end: usize - The end of the virtual space to map
 ///     OUT dir: *Directory - The directory that this entry is in
-///     IN allocator: *Allocator - The allocator used to map the region to be freed.
+///     IN allocator: Allocator - The allocator used to map the region to be freed.
 ///
 /// Error: vmm.MapperError
 ///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
 ///
-fn unmapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, allocator: *Allocator) vmm.MapperError!void {
+fn unmapDirEntry(dir: *Directory, virt_start: usize, virt_end: usize, allocator: Allocator) vmm.MapperError!void {
     // Suppress unused var warning
     _ = allocator;
     const entry = virtToDirEntryIdx(virt_start);
@@ -362,13 +362,13 @@ fn mapTableEntry(dir: *const Directory, entry: *align(1) TableEntry, virt_addr: 
 ///     IN physical_start: usize - The start of the physical region to map to
 ///     IN physical_end: usize - The end (exclusive) of the physical region to map to
 ///     IN attrs: vmm.Attributes - The attributes to apply to this mapping
-///     IN/OUT allocator: *Allocator - The allocator to use to allocate any intermediate data structures required to map this region
+///     IN/OUT allocator: Allocator - The allocator to use to allocate any intermediate data structures required to map this region
 ///     IN/OUT dir: *Directory - The page directory to map within
 ///
 /// Error: vmm.MapperError || Allocator.Error
 ///     * - See mapDirEntry
 ///
-pub fn map(virtual_start: usize, virtual_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: *Allocator, dir: *Directory) (Allocator.Error || vmm.MapperError)!void {
+pub fn map(virtual_start: usize, virtual_end: usize, phys_start: usize, phys_end: usize, attrs: vmm.Attributes, allocator: Allocator, dir: *Directory) (Allocator.Error || vmm.MapperError)!void {
     var virt_addr = virtual_start;
     var phys_addr = phys_start;
     var virt_next = std.math.min(virtual_end, std.mem.alignBackward(virt_addr, PAGE_SIZE_4MB) + PAGE_SIZE_4MB);
@@ -396,7 +396,7 @@ pub fn map(virtual_start: usize, virtual_end: usize, phys_start: usize, phys_end
 /// Error: vmm.MapperError
 ///     vmm.MapperError.NotMapped - If the region being unmapped wasn't mapped in the first place
 ///
-pub fn unmap(virtual_start: usize, virtual_end: usize, allocator: *Allocator, dir: *Directory) vmm.MapperError!void {
+pub fn unmap(virtual_start: usize, virtual_end: usize, allocator: Allocator, dir: *Directory) vmm.MapperError!void {
     var virt_addr = virtual_start;
     var virt_next = std.math.min(virtual_end, std.mem.alignBackward(virt_addr, PAGE_SIZE_4MB) + PAGE_SIZE_4MB);
     var entry_idx = virtToDirEntryIdx(virt_addr);

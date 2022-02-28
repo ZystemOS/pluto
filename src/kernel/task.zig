@@ -68,7 +68,7 @@ pub const Task = struct {
     ///     IN entry_point: EntryPoint - The entry point into the task. This must be a function.
     ///     IN kernel: bool              - Whether the task has kernel or user privileges.
     ///     IN task_vmm: *VirtualMemoryManager - The virtual memory manager associated with the task.
-    ///     IN allocator: *Allocator     - The allocator for allocating memory for a task.
+    ///     IN allocator: Allocator     - The allocator for allocating memory for a task.
     ///
     /// Return: *Task
     ///     Pointer to an allocated task. This will then need to be added to the task queue.
@@ -77,7 +77,7 @@ pub const Task = struct {
     ///     OutOfMemory - If there is no more memory to allocate. Any memory or PID allocated will
     ///                   be freed on return.
     ///
-    pub fn create(entry_point: EntryPoint, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: *Allocator) Allocator.Error!*Task {
+    pub fn create(entry_point: EntryPoint, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) Allocator.Error!*Task {
         var task = try allocator.create(Task);
         errdefer allocator.destroy(task);
 
@@ -104,7 +104,7 @@ pub const Task = struct {
         return task;
     }
 
-    pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: *Allocator) (bitmap.Bitmap(usize).BitmapError || vmm.VmmError || Allocator.Error)!*Task {
+    pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) (bitmap.Bitmap(usize).BitmapError || vmm.VmmError || Allocator.Error)!*Task {
         const task = try create(program_elf.header.entry_address, kernel, task_vmm, allocator);
         errdefer task.destroy(allocator);
 
@@ -141,8 +141,9 @@ pub const Task = struct {
     ///
     /// Arguments:
     ///     IN/OUT self: *Self - The pointer to self.
+    ///     IN allocator: Allocator - The allocator used to create the task.
     ///
-    pub fn destroy(self: *Self, allocator: *Allocator) void {
+    pub fn destroy(self: *Self, allocator: Allocator) void {
         freePid(self.pid);
         // We need to check that the the stack has been allocated as task 0 (init) won't have a
         // stack allocated as this in the linker script

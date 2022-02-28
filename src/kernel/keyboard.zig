@@ -336,7 +336,7 @@ pub fn addKeyboard(kb: *Keyboard) Allocator.Error!void {
 /// Initialise the keyboard system and the architecture's keyboard
 ///
 /// Arguments:
-///     allocator: *std.mem.Allocator - The allocator to initialise the keyboard list and architecture keyboard with
+///     allocator: std.mem.Allocator - The allocator to initialise the keyboard list and architecture keyboard with
 ///
 /// Return: ?*Keyboard
 ///     The architecture keyboard found, else null if one wasn't detected
@@ -344,7 +344,7 @@ pub fn addKeyboard(kb: *Keyboard) Allocator.Error!void {
 /// Error: std.mem.Allocator.Error
 ///     OutOfMemory - There wasn't enough memory to initialise the keyboard list or the architecture keyboard
 ///
-pub fn init(allocator: *Allocator) Allocator.Error!?*Keyboard {
+pub fn init(allocator: Allocator) Allocator.Error!?*Keyboard {
     keyboards = ArrayList(*Keyboard).init(allocator);
     return arch.initKeyboard(allocator);
 }
