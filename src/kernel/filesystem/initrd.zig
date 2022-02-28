@@ -1,6 +1,6 @@
 const std = @import("std");
-const builtin = std.builtin;
-const is_test = builtin.is_test;
+const builtin = @import("builtin");
+const is_test = std.builtin.is_test;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
@@ -357,7 +357,7 @@ test "init with files cleans memory if OutOfMemory" {
         defer std.testing.allocator.free(ramdisk_bytes);
 
         var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
-        try expectError(error.OutOfMemory, InitrdFS.init(&initrd_stream, &fa.allocator));
+        try expectError(error.OutOfMemory, InitrdFS.init(&initrd_stream, fa.allocator()));
     }
 }
 
@@ -449,7 +449,7 @@ test "open a file, out of memory" {
     defer std.testing.allocator.free(ramdisk_bytes);
 
     var initrd_stream = std.io.fixedBufferStream(ramdisk_bytes);
-    var fs = try InitrdFS.init(&initrd_stream, &fa.allocator);
+    var fs = try InitrdFS.init(&initrd_stream, fa.allocator());
     defer fs.deinit();
 
     try vfs.setRoot(fs.root_node);

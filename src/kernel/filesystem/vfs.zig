@@ -569,7 +569,7 @@ const TestFS = struct {
         data: ?[]u8,
         children: *ArrayList(*@This()),
 
-        fn deinit(self: *@This(), allocator: *Allocator) void {
+        fn deinit(self: *@This(), allocator: Allocator) void {
             allocator.destroy(self.val);
             allocator.free(self.name);
             if (self.data) |d| {
@@ -586,7 +586,7 @@ const TestFS = struct {
 
     tree: TreeNode,
     fs: *FileSystem,
-    allocator: *Allocator,
+    allocator: Allocator,
     open_count: usize,
     instance: usize,
 
@@ -718,7 +718,7 @@ const TestFS = struct {
     }
 };
 
-fn testInitFs(allocator: *Allocator) !*TestFS {
+fn testInitFs(allocator: Allocator) !*TestFS {
     const fs = try allocator.create(FileSystem);
     var testfs = try allocator.create(TestFS);
     var root_node = try allocator.create(Node);
@@ -948,7 +948,7 @@ test "read" {
     var test_file = try openFile("/foo.txt", .CREATE_FILE);
     var f_data = &testfs.tree.children.items[0].data;
     var str = "test123";
-    f_data.* = try std.mem.dupe(testing.allocator, u8, str);
+    f_data.* = try Allocator.dupe(testing.allocator, u8, str);
 
     var buffer: [64]u8 = undefined;
     {

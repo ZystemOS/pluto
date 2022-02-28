@@ -182,7 +182,7 @@ pub fn main() (Allocator.Error || File.OpenError || File.WriteError || File.Read
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    const allocator = &gpa.allocator;
+    const allocator = gpa.allocator();
 
     // All the string
     const imports_str = comptime genImports();

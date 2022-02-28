@@ -492,7 +492,7 @@ pub const FreeListAllocator = struct {
 
         // Attempting to allocate more than the size of the largest free node should fail
         const remaining_size = second_header.size + @sizeOf(Header);
-        try testing.expectError(Allocator.Error.OutOfMemory, alloc(&free_list.allocator, remaining_size + 1, 0, 0, @returnAddress()));
+        try testing.expectError(Allocator.Error.OutOfMemory, free_list.alloc(remaining_size + 1, 0, 0, @returnAddress()));
 
         // Alloc a non aligned to header
         var alloc4 = try free_list.alloc(13, 1, 0, @returnAddress());
@@ -526,7 +526,7 @@ pub const FreeListAllocator = struct {
         try testing.expectEqual(free_node3.size, size - alloc0.len - alloc1.len - alloc2.len - @sizeOf(Header));
         try testing.expectEqual(free_node3.next_free, null);
 
-        free_list.free(alloc0);
+        free_list.free(alloc0, 0, 0);
         // There should now be two free nodes. One where alloc0 was and another after alloc2
         const free_node0 = @intToPtr(*Header, start);
         try testing.expectEqual(free_list.first_free, free_node0);
@@ -534,13 +534,13 @@ pub const FreeListAllocator = struct {
         try testing.expectEqual(free_node0.next_free, free_node3);
 
         // Freeing alloc1 should join it with free_node0
-        free_list.free(alloc1);
+        free_list.free(alloc1, 0, 0);
         try testing.expectEqual(free_list.first_free, free_node0);
         try testing.expectEqual(free_node0.size, alloc0.len - @sizeOf(Header) + alloc1.len);
         try testing.expectEqual(free_node0.next_free, free_node3);
 
         // Freeing alloc2 should then join them all together into one big free node
-        free_list.free(alloc2);
+        free_list.free(alloc2, 0, 0);
         try testing.expectEqual(free_list.first_free, free_node0);
         try testing.expectEqual(free_node0.size, size - @sizeOf(Header));
         try testing.expectEqual(free_node0.next_free, null);
@@ -558,10 +558,10 @@ pub const FreeListAllocator = struct {
         var alloc1 = try free_list.alloc(256, 0, 0, @returnAddress());
 
         // Expanding alloc0 should fail as alloc1 is right next to it
-        try testing.expectError(Allocator.Error.OutOfMemory, resize(&free_list.allocator, alloc0, 0, 136, 0, @returnAddress()));
+        try testing.expectEqual(free_list.resize(alloc0, 0, 136, 0, @returnAddress()), null);
 
         // Expanding alloc1 should succeed
-        try testing.expectEqual(try resize(allocator, alloc1, 0, 512, 0, @returnAddress()), 512);
+        try testing.expectEqual(free_list.resize(alloc1, 0, 512, 0, @returnAddress()), 512);
         alloc1 = alloc1.ptr[0..512];
         // And there should be a free node on the right of it
         var header = @intToPtr(*Header, @ptrToInt(alloc1.ptr) + 512);
@@ -570,7 +570,7 @@ pub const FreeListAllocator = struct {
         try testing.expectEqual(free_list.first_free, header);
 
         // Shrinking alloc1 should produce a big free node on the right
-        try testing.expectEqual(try resize(allocator, alloc1, 0, 128, 0, @returnAddress()), 128);
+        try testing.expectEqual(free_list.resize(alloc1, 0, 128, 0, @returnAddress()), 128);
         alloc1 = alloc1.ptr[0..128];
         header = @intToPtr(*Header, @ptrToInt(alloc1.ptr) + 128);
         try testing.expectEqual(header.size, size - 128 - 128 - @sizeOf(Header));
@@ -578,9 +578,9 @@ pub const FreeListAllocator = struct {
         try testing.expectEqual(free_list.first_free, header);
 
         // Shrinking by less space than would allow for a new Header shouldn't work
-        try testing.expectEqual(resize(allocator, alloc1, 0, alloc1.len - @sizeOf(Header) / 2, 0, @returnAddress()), 128);
+        try testing.expectEqual(free_list.resize(alloc1, 0, alloc1.len - @sizeOf(Header) / 2, 0, @returnAddress()), 128);
         // Shrinking to less space than would allow for a new Header shouldn't work
-        try testing.expectEqual(resize(allocator, alloc1, 0, @sizeOf(Header) / 2, 0, @returnAddress()), @sizeOf(Header));
+        try testing.expectEqual(free_list.resize(alloc1, 0, @sizeOf(Header) / 2, 0, @returnAddress()), @sizeOf(Header));
     }
 };
 

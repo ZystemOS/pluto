@@ -759,11 +759,11 @@ test "indexToBit" {
     try testing.expectEqual(Type.indexToBit(9), 2);
 }
 
-fn testCheckBitmaps(bmp: Bitmap(u4), b1: u4, b2: u4, b3: u4, b4: u4) void {
-    testing.expectEqual(@as(u4, b1), bmp.bitmaps[0]);
-    testing.expectEqual(@as(u4, b2), bmp.bitmaps[1]);
-    testing.expectEqual(@as(u4, b3), bmp.bitmaps[2]);
-    testing.expectEqual(@as(u4, b4), bmp.bitmaps[3]);
+fn testCheckBitmaps(bmp: Bitmap(u4), b1: u4, b2: u4, b3: u4, b4: u4) !void {
+    try testing.expectEqual(@as(u4, b1), bmp.bitmaps[0]);
+    try testing.expectEqual(@as(u4, b2), bmp.bitmaps[1]);
+    try testing.expectEqual(@as(u4, b3), bmp.bitmaps[2]);
+    try testing.expectEqual(@as(u4, b4), bmp.bitmaps[3]);
 }
 
 test "setContiguous" {
@@ -774,32 +774,32 @@ test "setContiguous" {
     try testing.expectEqual(bmp.setContiguous(bmp.num_entries + 1, 1), null);
     // All entries should still be free
     try testing.expectEqual(bmp.num_free_entries, bmp.num_entries);
-    testCheckBitmaps(bmp, 0, 0, 0, 0);
+    try testCheckBitmaps(bmp, 0, 0, 0, 0);
 
     try testing.expectEqual(bmp.setContiguous(3, 0) orelse unreachable, 0);
-    testCheckBitmaps(bmp, 0b0111, 0, 0, 0);
+    try testCheckBitmaps(bmp, 0b0111, 0, 0, 0);
 
     // Test setting from top
     try testing.expectEqual(bmp.setContiguous(2, 14) orelse unreachable, 14);
-    testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
+    try testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
 
     try testing.expectEqual(bmp.setContiguous(3, 12), null);
-    testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
+    try testCheckBitmaps(bmp, 0b0111, 0, 0, 0b1100);
 
     try testing.expectEqual(bmp.setContiguous(3, null) orelse unreachable, 3);
-    testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
+    try testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
 
     // Test setting beyond the what is available
     try testing.expectEqual(bmp.setContiguous(9, null), null);
-    testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
+    try testCheckBitmaps(bmp, 0b1111, 0b0011, 0, 0b1100);
 
     try testing.expectEqual(bmp.setContiguous(8, null) orelse unreachable, 6);
-    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
+    try testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
 
     // No more are possible
     try testing.expectEqual(bmp.setContiguous(1, null), null);
-    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
+    try testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
 
     try testing.expectEqual(bmp.setContiguous(1, 0), null);
-    testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
+    try testCheckBitmaps(bmp, 0b1111, 0b1111, 0b1111, 0b1111);
 }

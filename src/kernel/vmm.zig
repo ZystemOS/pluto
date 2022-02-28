@@ -717,24 +717,24 @@ test "alloc at a specific address" {
 
     const attrs = Attributes{ .writable = true, .cachable = true, .kernel = true };
     // Try allocating at the start
-    std.testing.expectEqual(vmm.alloc(10, vmm.start, attrs), vmm.start);
+    try std.testing.expectEqual(vmm.alloc(10, vmm.start, attrs), vmm.start);
     // Try that again
-    std.testing.expectEqual(vmm.alloc(5, vmm.start, attrs), null);
+    try std.testing.expectEqual(vmm.alloc(5, vmm.start, attrs), null);
     const middle = vmm.start + (vmm.end - vmm.start) / 2;
     // Try allocating at the middle
-    std.testing.expectEqual(vmm.alloc(num_entries / 2, middle, attrs), middle);
+    try std.testing.expectEqual(vmm.alloc(num_entries / 2, middle, attrs), middle);
     // Allocating after the start and colliding with the middle should be impossible
-    std.testing.expectEqual(vmm.alloc(num_entries / 2, vmm.start + 10 * BLOCK_SIZE, attrs), null);
+    try std.testing.expectEqual(vmm.alloc(num_entries / 2, vmm.start + 10 * BLOCK_SIZE, attrs), null);
     // Allocating within the last half should be impossible
-    std.testing.expectEqual(vmm.alloc(num_entries / 4, middle + BLOCK_SIZE, attrs), null);
+    try std.testing.expectEqual(vmm.alloc(num_entries / 4, middle + BLOCK_SIZE, attrs), null);
     // It should still be possible to allocate between the start and middle
-    std.testing.expectEqual(vmm.alloc(num_entries / 2 - 10, vmm.start + 10 * BLOCK_SIZE, attrs), vmm.start + 10 * BLOCK_SIZE);
+    try std.testing.expectEqual(vmm.alloc(num_entries / 2 - 10, vmm.start + 10 * BLOCK_SIZE, attrs), vmm.start + 10 * BLOCK_SIZE);
     // It should now be full
-    std.testing.expectEqual(vmm.bmp.num_free_entries, 0);
+    try std.testing.expectEqual(vmm.bmp.num_free_entries, 0);
 
     // Allocating at the end and before the start should fail
-    std.testing.expectEqual(vmm.alloc(1, vmm.end, attrs), null);
-    std.testing.expectEqual(vmm.alloc(1, vmm.start - BLOCK_SIZE, attrs), null);
+    try std.testing.expectEqual(vmm.alloc(1, vmm.end, attrs), null);
+    try std.testing.expectEqual(vmm.alloc(1, vmm.start - BLOCK_SIZE, attrs), null);
 }
 
 test "set" {
@@ -923,12 +923,12 @@ pub fn testDeinit(vmm: *VirtualMemoryManager(arch.VmmPayload)) void {
 ///     IN/OUT allocator: Allocator - The allocator to use. Ignored
 ///     IN payload: arch.VmmPayload - The payload value. Expected to be arch.KERNEL_VMM_PAYLOAD
 ///
-fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: Allocator, payload: arch.VmmPayload) (Allocator.Error || MapperError)!void {
+fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attributes, allocator: Allocator, payload: arch.VmmPayload) MapperError!void {
     // Suppress unused var warning
     _ = attrs;
     _ = allocator;
     if (vend - vstart != pend - pstart) return MapperError.AddressMismatch;
-    try std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
+    std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload) catch unreachable;
     var vaddr = vstart;
     var allocations = test_allocations.?;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {
@@ -947,7 +947,7 @@ fn testMap(vstart: usize, vend: usize, pstart: usize, pend: usize, attrs: Attrib
 fn testUnmap(vstart: usize, vend: usize, allocator: Allocator, payload: arch.VmmPayload) MapperError!void {
     // Suppress unused var warning
     _ = allocator;
-    try std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload);
+    std.testing.expectEqual(arch.KERNEL_VMM_PAYLOAD, payload) catch unreachable;
     var vaddr = vstart;
     var allocations = test_allocations.?;
     while (vaddr < vend) : (vaddr += BLOCK_SIZE) {

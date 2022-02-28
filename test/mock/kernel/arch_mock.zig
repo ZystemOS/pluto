@@ -56,12 +56,12 @@ pub const CpuState = struct {
     user_ss: u32,
 };
 
-pub const VmmPayload = switch (builtin.arch) {
+pub const VmmPayload = switch (builtin.cpu.arch) {
     .i386 => *x86_paging.Directory,
     else => unreachable,
 };
 
-pub const KERNEL_VMM_PAYLOAD: VmmPayload = switch (builtin.arch) {
+pub const KERNEL_VMM_PAYLOAD: VmmPayload = switch (builtin.cpu.arch) {
     .i386 => &x86_paging.kernel_directory,
     else => unreachable,
 };
@@ -78,8 +78,21 @@ var KERNEL_VADDR_START: u32 = 0xC0100000;
 var KERNEL_VADDR_END: u32 = 0xC1100000;
 var KERNEL_ADDR_OFFSET: u32 = 0xC0000000;
 
-pub fn map(start: usize, end: usize, p_start: usize, p_end: usize, attrs: vmm.Attributes, allocator: *Allocator, payload: VmmPayload) !void {}
-pub fn unmap(start: usize, end: usize, allocator: *Allocator, payload: VmmPayload) !void {}
+pub fn map(start: usize, end: usize, p_start: usize, p_end: usize, attrs: vmm.Attributes, allocator: Allocator, payload: VmmPayload) !void {
+    _ = start;
+    _ = end;
+    _ = p_start;
+    _ = p_end;
+    _ = attrs;
+    _ = allocator;
+    _ = payload;
+}
+pub fn unmap(start: usize, end: usize, allocator: Allocator, payload: VmmPayload) !void {
+    _ = start;
+    _ = end;
+    _ = allocator;
+    _ = payload;
+}
 
 pub fn out(port: u16, data: anytype) void {
     return mock_framework.performAction("out", void, .{ port, data });
@@ -168,20 +181,20 @@ pub fn initMem(payload: BootPayload) Allocator.Error!mem.MemProfile {
     };
 }
 
-pub fn initTask(t: *Task, entry_point: usize, allocator: *Allocator) Allocator.Error!void {
+pub fn initTask(t: *Task, entry_point: usize, allocator: Allocator) Allocator.Error!void {
     // Suppress unused variable warnings
     _ = t;
     _ = entry_point;
     _ = allocator;
 }
 
-pub fn initKeyboard(allocator: *Allocator) Allocator.Error!?*Keyboard {
+pub fn initKeyboard(allocator: Allocator) Allocator.Error!?*Keyboard {
     // Suppress unused variable warnings
     _ = allocator;
     return null;
 }
 
-pub fn getDevices(allocator: *Allocator) Allocator.Error![]Device {
+pub fn getDevices(allocator: Allocator) Allocator.Error![]Device {
     // Suppress unused variable warnings
     _ = allocator;
     return &[_]Device{};
