@@ -9,28 +9,32 @@ jobs:
   test:
     name: Build mode ${{ matrix.build_mode }}
     runs-on: ubuntu-18.04
-    container: samtebbs33/zig-095a3fa_llvm-13:latest
     strategy:
       matrix:
         build_mode: ["", -Drelease-fast, -Drelease-safe, -Drelease-small]
 
     steps:
     - uses: actions/checkout@v1
-
+    
+    - name: Download zig
+      run: |
+        export PYTHONIOENCODING=utf8
+        wget https://ziglang.org/download/0.9.1/zig-linux-x86_64-0.9.1.tar.xz
+        sudo apt-get install mtools
+        tar -xvf zig*
+    - name: Install qemu
+      run: |
+        sudo apt-get update
+        sudo apt-get install qemu qemu-system --fix-missing
     - name: Check formatting
-      run: zig fmt --check src
-
+      run: zig*/zig fmt --check src
     - name: Build kernel
-      run: zig build ${{ matrix.build_mode }}
-
+      run: zig*/zig build ${{ matrix.build_mode }}
     - name: Run unit tests
-      run: zig build test ${{ matrix.build_mode }}
-
+      run: zig*/zig build test ${{ matrix.build_mode }}
     - name: Run runtime test - Initialisation
-      run: zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
-
+      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Initialisation ${{ matrix.build_mode }}
     - name: Run runtime test - Panic
-      run: zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
-
+      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Panic ${{ matrix.build_mode }}
     - name: Run runtime test - Scheduler
-      run: zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
+      run: zig*/zig build rt-test -Ddisable-display -Dtest-mode=Scheduler ${{ matrix.build_mode }}
