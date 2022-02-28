@@ -402,7 +402,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                 // Allocate from a specific entry if the caller requested it
                 if (self.bmp.setContiguous(num, if (virtual_addr) |a| (a - self.start) / BLOCK_SIZE else null)) |entry| {
                     var block_list = std.ArrayList(usize).init(self.allocator);
-                    try block_list.ensureCapacity(num);
+                    try block_list.ensureUnusedCapacity(num);
 
                     var i: usize = 0;
                     const vaddr_start = self.start + entry * BLOCK_SIZE;
