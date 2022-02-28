@@ -143,7 +143,7 @@ pub const RuntimeStep = struct {
             defer self.builder.allocator.free(msg);
             // Print the line to see what is going on
             std.debug.print("{s}\n", .{msg});
-            if (std.mem.eql(u8, msg, "[emerg] (panic): Kernel panic: integer overflow")) {
+            if (std.mem.eql(u8, msg, "[err] (panic): Kernel panic: integer overflow")) {
                 return true;
             }
         }
