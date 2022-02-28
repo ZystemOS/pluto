@@ -3983,18 +3983,7 @@ test "Fat32FS.openImpl - match short name" {
     var test_fs = try initialiseFAT32(std.testing.allocator, test_fat32_image);
     defer test_fs.destroy() catch unreachable;
 
-    const file_node = try Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "INSANE~1.TXT");
-    defer file_node.File.close();
-}
-
-test "Fat32FS.openImpl - match long name" {
-    const test_fat32_image = try std.fs.cwd().openFile("test/fat32/test_fat32.img", .{});
-    defer test_fat32_image.close();
-
-    var test_fs = try initialiseFAT32(std.testing.allocator, test_fat32_image);
-    defer test_fs.destroy() catch unreachable;
-
-    const file_node = try Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long.txt");
+    const file_node = try Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "short.txt");
     defer file_node.File.close();
 }
 
@@ -5981,8 +5970,8 @@ test "Fat32FS.init FATConfig expected" {
         .fsinfo_sector = 1,
         .backup_boot_sector = 6,
         .has_fs_info = true,
-        .number_free_clusters = 65471,
-        .next_free_cluster = 55,
+        .number_free_clusters = 65473,
+        .next_free_cluster = 53,
         .cluster_end_marker = 0x0FFFFFFF,
     };
 
@@ -6081,7 +6070,7 @@ test "Fat32FS.init FATConfig mix FSInfo" {
             .backup_boot_sector = 6,
             .has_fs_info = true,
             .number_free_clusters = 0xFFFFFFFF,
-            .next_free_cluster = 55,
+            .next_free_cluster = 53,
             .cluster_end_marker = 0x0FFFFFFF,
         };
 
