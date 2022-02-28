@@ -380,7 +380,7 @@ pub fn pageUp() void {
         page_index += 1;
         // Bounds have been checked, so shouldn't error
         videoCopy(START_OF_DISPLAYABLE_REGION, pages[page_index][0..TOTAL_CHAR_ON_PAGE], TOTAL_CHAR_ON_PAGE) catch |e| {
-            log.crit("Error moving page up. Error: {}\n", .{e});
+            log.err("Error moving page up. Error: {}\n", .{e});
         };
         vga.disableCursor();
     }
@@ -396,7 +396,7 @@ pub fn pageDown() void {
         page_index -= 1;
         // Bounds have been checked, so shouldn't error
         videoCopy(START_OF_DISPLAYABLE_REGION, pages[page_index][0..TOTAL_CHAR_ON_PAGE], TOTAL_CHAR_ON_PAGE) catch |e| {
-            log.crit("Error moving page down. Error: {}\n", .{e});
+            log.err("Error moving page down. Error: {}\n", .{e});
         };
 
         if (page_index == 0) {
@@ -416,7 +416,7 @@ pub fn clearScreen() void {
     // Move all the rows up
     // This is within bounds, so shouldn't error
     pagesMoveRowsUp(ROW_TOTAL) catch |e| {
-        log.crit("Error moving all pages up. Error: {}\n", .{e});
+        log.err("Error moving all pages up. Error: {}\n", .{e});
     };
 
     // Clear the screen
@@ -535,13 +535,13 @@ pub fn init() void {
 
         // Set the top 7 rows blank
         setVideoBuffer(blank, START_OF_DISPLAYABLE_REGION) catch |e| {
-            log.crit("Error clearing the top 7 rows. Error: {}\n", .{e});
+            log.err("Error clearing the top 7 rows. Error: {}\n", .{e});
         };
         row += @truncate(u8, row_offset + ROW_MIN);
     } else {
         // Clear the screen
         setVideoBuffer(blank, VIDEO_BUFFER_SIZE) catch |e| {
-            log.crit("Error clearing the screen. Error: {}\n", .{e});
+            log.err("Error clearing the screen. Error: {}\n", .{e});
         };
         // Set the row to below the logo
         row = ROW_MIN;
@@ -900,7 +900,7 @@ test "putEntryAt in displayable region page_index is not 0" {
     column = @truncate(u8, vga.WIDTH) - @truncate(u8, text.len);
     row = ROW_MIN - 1;
     writeString(text) catch |e| {
-        log.crit("Unable to print page number, printing out of bounds. Error: {}\n", .{e});
+        log.err("Unable to print page number, printing out of bounds. Error: {}\n", .{e});
     };
     column = column_temp;
     row = row_temp;
@@ -1558,7 +1558,7 @@ test "pageUp bottom page" {
     column = @truncate(u8, vga.WIDTH) - @truncate(u8, text.len);
     row = ROW_MIN - 1;
     writeString(text) catch |e| {
-        log.crit("Unable to print page number, printing out of bounds. Error: {}\n", .{e});
+        log.err("Unable to print page number, printing out of bounds. Error: {}\n", .{e});
     };
     column = column_temp;
     row = row_temp;
@@ -1638,7 +1638,7 @@ test "pageDown top page" {
     column = @truncate(u8, vga.WIDTH) - @truncate(u8, text.len);
     row = ROW_MIN - 1;
     writeString(text) catch |e| {
-        log.crit("Unable to print page number, printing out of bounds. Error: {}\n", .{e});
+        log.err("Unable to print page number, printing out of bounds. Error: {}\n", .{e});
     };
     column = column_temp;
     row = row_temp;

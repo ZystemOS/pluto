@@ -54,7 +54,7 @@ fn printCallback(ctx: void, str: []const u8) !usize {
 pub fn print(comptime format: []const u8, args: anytype) void {
     // Printing can't error because of the scrolling, if it does, we have a big problem
     fmt.format(Writer{ .context = {} }, format, args) catch |e| {
-        log.emerg("Error printing. Error: {}\n", .{e});
+        log.err("Error printing. Error: {}\n", .{e});
     };
 }
 

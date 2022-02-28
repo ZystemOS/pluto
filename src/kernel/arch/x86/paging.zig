@@ -667,7 +667,7 @@ fn rt_accessUnmappedMem(v_end: u32) void {
     var ptr = @intToPtr(*u8, v_end);
     var value = ptr.*;
     // Need this as in release builds the above is optimised out so it needs to be use
-    log.emerg("FAILURE: Value: {}\n", .{value});
+    log.err("FAILURE: Value: {}\n", .{value});
     // This is the label that we return to after processing the page fault
     asm volatile (
         \\.global rt_fault_callback
