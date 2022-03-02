@@ -61,17 +61,12 @@ var kernel_heap: heap.FreeListAllocator = undefined;
 
 export fn kmain(boot_payload: arch.BootPayload) void {
     const serial_stream = serial.init(boot_payload);
-
     log_root.init(serial_stream);
 
     const mem_profile = arch.initMem(boot_payload) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise memory profile: {}", .{e});
     };
     var fixed_allocator = mem_profile.fixed_allocator;
-
-    panic_root.init(&mem_profile, fixed_allocator.allocator()) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}\n", .{e});
-    };
 
     pmm.init(&mem_profile, fixed_allocator.allocator());
     var kernel_vmm = vmm.init(&mem_profile, fixed_allocator.allocator()) catch |e| {
@@ -81,6 +76,10 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     kmain_log.info("Init arch " ++ @tagName(builtin.cpu.arch) ++ "\n", .{});
     arch.init(&mem_profile);
     kmain_log.info("Arch init done\n", .{});
+
+    panic_root.init(&mem_profile, fixed_allocator.allocator()) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}\n", .{e});
+    };
 
     // The VMM runtime tests can't happen until the architecture has initialised itself
     switch (build_options.test_mode) {
