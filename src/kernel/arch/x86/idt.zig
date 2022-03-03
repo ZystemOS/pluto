@@ -259,7 +259,6 @@ test "openInterruptGate" {
         .base_high = @truncate(u16, test_fn_0_addr >> 16),
     };
 
-    std.debug.print("Expected {}, actual {}\n", .{ expected_entry0, idt_entries[index] });
     try expectEqual(expected_entry0, idt_entries[index]);
 
     // Reset
