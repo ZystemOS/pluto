@@ -32,6 +32,7 @@ pub const FreeListAllocator = struct {
             };
         }
     };
+    const Self = @This();
 
     first_free: ?*Header,
 
@@ -55,7 +56,7 @@ pub const FreeListAllocator = struct {
         };
     }
 
-    pub fn allocator(self: *FreeListAllocator) Allocator {
+    pub fn allocator(self: *Self) Allocator {
         return Allocator.init(self, alloc, resize, free);
     }
 
@@ -84,7 +85,7 @@ pub const FreeListAllocator = struct {
     ///     IN previous: ?*Header - The previous free node or null if there wasn't one. If null, self.first_free will be set to header, else previous.next_free will be set to header
     ///     IN header: ?*Header - The header being pointed to. This will be the new value of self.first_free or previous.next_free
     ///
-    fn registerFreeHeader(self: *FreeListAllocator, previous: ?*Header, header: ?*Header) void {
+    fn registerFreeHeader(self: *Self, previous: ?*Header, header: ?*Header) void {
         if (previous) |p| {
             p.next_free = header;
         } else {
@@ -101,7 +102,7 @@ pub const FreeListAllocator = struct {
     ///     IN alignment: u29 - The alignment used to allocate the memory
     ///     IN ret_addr: usize - The return address passed by the high-level Allocator API. This is ignored.
     ///
-    fn free(self: *FreeListAllocator, mem: []u8, alignment: u29, ret_addr: usize) void {
+    fn free(self: *Self, mem: []u8, alignment: u29, ret_addr: usize) void {
         _ = alignment;
         _ = ret_addr;
         const size = std.math.max(mem.len, @sizeOf(Header));
@@ -193,7 +194,7 @@ pub const FreeListAllocator = struct {
     /// Return: ?usize
     ///     The new size of the buffer, which will be new_size if the operation was successfull, or null if the operation wasn't successful.
     ///
-    fn resize(self: *FreeListAllocator, old_mem: []u8, old_align: u29, new_size: usize, size_alignment: u29, ret_addr: usize) ?usize {
+    fn resize(self: *Self, old_mem: []u8, old_align: u29, new_size: usize, size_alignment: u29, ret_addr: usize) ?usize {
         // Suppress unused var warning
         _ = old_align;
         _ = ret_addr;
@@ -316,7 +317,7 @@ pub const FreeListAllocator = struct {
     /// Error: std.Allocator.Error
     ///     std.Allocator.Error.OutOfMemory - There wasn't enough memory left to fulfill the request
     ///
-    pub fn alloc(self: *FreeListAllocator, size: usize, alignment: u29, size_alignment: u29, ret_addr: usize) Allocator.Error![]u8 {
+    pub fn alloc(self: *Self, size: usize, alignment: u29, size_alignment: u29, ret_addr: usize) Allocator.Error![]u8 {
         // Suppress unused var warning
         _ = ret_addr;
         if (self.first_free == null) return Allocator.Error.OutOfMemory;
