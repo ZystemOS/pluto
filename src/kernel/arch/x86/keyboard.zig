@@ -164,7 +164,7 @@ fn onKeyEvent(ctx: *arch.CpuState) usize {
     const scan_code = readKeyboardBuffer();
     if (parseScanCode(scan_code)) |action| {
         if (!keyboard.writeKey(action)) {
-            log.info("No room for keyboard action {}\n", .{action});
+            log.warn("No room for keyboard action {}\n", .{action});
         }
     }
     return @ptrToInt(ctx);
