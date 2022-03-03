@@ -194,7 +194,7 @@ fn Mock() type {
 
             // Test that the types match
             const expect_type = comptime getDataElementType(expected_function);
-            expectEqual(expect_type, @as(DataElementType, test_element)) catch unreachable;
+            expectEqual(expect_type, @as(DataElementType, test_element)) catch @panic("Function type is not as expected\n");
 
             // Types match, so can use the expected type to get the actual data
             const actual_function = getDataValue(expected_function, test_element);
@@ -219,19 +219,13 @@ fn Mock() type {
 
             // Test that the types match
             const expect_type = comptime getDataElementType(ExpectedType);
-            expectEqual(expect_type, @as(DataElementType, elem)) catch {
-                std.debug.print("Expected {}, got {}\n", .{ expect_type, @as(DataElementType, elem) });
-                unreachable;
-            };
+            expectEqual(expect_type, @as(DataElementType, elem)) catch std.debug.panic("Expected {}, got {}\n", .{ expect_type, @as(DataElementType, elem) });
 
             // Types match, so can use the expected type to get the actual data
             const actual_value = getDataValue(ExpectedType, elem);
 
             // Test the values
-            expectEqual(expected_value, actual_value) catch {
-                std.debug.print("Expected {}, got {}\n", .{ expected_value, actual_value });
-                unreachable;
-            };
+            expectEqual(expected_value, actual_value) catch std.debug.panic("Expected {}, got {}\n", .{ expected_value, actual_value });
         }
 
         ///
@@ -260,10 +254,7 @@ fn Mock() type {
 
                 // Test that the data match
                 const expect_data = comptime getDataElementType(DataType);
-                expectEqual(expect_data, @as(DataElementType, action.data)) catch {
-                    std.debug.print("Expected {}, got {}\n", .{ expect_data, action.data });
-                    unreachable;
-                };
+                expectEqual(expect_data, @as(DataElementType, action.data)) catch std.debug.panic("Expected {}, got {}\n", .{ expect_data, action.data });
                 return getDataValue(DataType, action.data);
             } else {
                 std.debug.panic("No more test values for the return of function: " ++ fun_name ++ "\n", .{});

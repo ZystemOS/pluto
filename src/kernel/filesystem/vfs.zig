@@ -756,7 +756,7 @@ test "mount" {
     var testfs = try testInitFs(allocator);
     defer allocator.destroy(testfs);
     defer testfs.deinit();
-    defer testing.expectEqual(testfs.open_count, 0) catch unreachable;
+    defer testing.expectEqual(testfs.open_count, 0) catch @panic("Test fs open count is not zero\n");
 
     testfs.instance = 1;
     root = testfs.tree.val;
@@ -765,7 +765,7 @@ test "mount" {
     var testfs2 = try testInitFs(allocator);
     defer allocator.destroy(testfs2);
     defer testfs2.deinit();
-    defer testing.expectEqual(testfs2.open_count, 0) catch unreachable;
+    defer testing.expectEqual(testfs2.open_count, 0) catch @panic("Second test fs open count is not zero\n");
 
     testfs2.instance = 2;
     // Create the dir to mount to
