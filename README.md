@@ -17,7 +17,7 @@ All of these goals will benefit from the features of Zig.
 
 ## Build
 
-Requires a master build of Zig 0.8.0([downloaded](https://ziglang.org/download/0.8.0/zig-linux-x86_64-0.8.0.tar.xz) or [built from source](https://github.com/ziglang/zig#building-from-source)), *xorriso* and the grub tools (such as *grub-mkrescue*). A *qemu-system* binary compatible with your chosen target is required to run the kernel (e.g. *qemu-system-i386*).
+Requires a master build of Zig 0.9.1([downloaded](https://ziglang.org/download) or [built from source](https://github.com/ziglang/zig#building-from-source)), *xorriso* and the grub tools (such as *grub-mkrescue*). A *qemu-system* binary compatible with your chosen target is required to run the kernel (e.g. *qemu-system-i386*).
 
 ```Shell
 zig build
