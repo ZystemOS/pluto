@@ -3,7 +3,6 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const log = std.log.scoped(.pci);

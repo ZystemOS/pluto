@@ -6,7 +6,6 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_isr);
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
 const syscalls = @import("syscalls.zig");
 const panic = @import("../../panic.zig").panic;
 const idt = if (is_test) @import("../../../../test/mock/kernel/idt_mock.zig") else @import("idt.zig");

@@ -106,16 +106,12 @@ pub fn build(b: *Builder) !void {
     b.default_step.dependOn(&make_iso.step);
 
     const test_step = b.step("test", "Run tests");
-    const mock_path = "../../test/mock/kernel/";
-    const arch_mock_path = "../../../../test/mock/kernel/";
     const unit_tests = b.addTest(main_src);
     unit_tests.setBuildMode(build_mode);
     unit_tests.setMainPkgPath(".");
     const unit_test_options = b.addOptions();
     unit_tests.addOptions("build_options", unit_test_options);
     unit_test_options.addOption(TestMode, "test_mode", test_mode);
-    unit_test_options.addOption([]const u8, "mock_path", mock_path);
-    unit_test_options.addOption([]const u8, "arch_mock_path", arch_mock_path);
     unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
 
     if (builtin.os.tag != .windows) {

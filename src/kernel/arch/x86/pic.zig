@@ -5,7 +5,6 @@ const log = std.log.scoped(.x86_pic);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 const panic = @import("../../panic.zig").panic;
 

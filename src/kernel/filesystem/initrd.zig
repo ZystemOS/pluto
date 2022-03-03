@@ -7,7 +7,6 @@ const expectError = std.testing.expectError;
 const expectEqualSlices = std.testing.expectEqualSlices;
 const log = std.log.scoped(.initrd);
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
 const Allocator = std.mem.Allocator;
 const AutoHashMap = std.AutoHashMap;
 const vfs = @import("vfs.zig");

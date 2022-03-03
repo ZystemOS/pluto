@@ -7,7 +7,6 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const panic = @import("../../panic.zig").panic;
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
 const arch = if (builtin.is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 const isr = @import("isr.zig");
 const MemProfile = @import("../../mem.zig").MemProfile;

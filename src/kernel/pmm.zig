@@ -2,7 +2,6 @@ const is_test = @import("builtin").is_test;
 const std = @import("std");
 const log = std.log.scoped(.pmm);
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const MemProfile = @import("mem.zig").MemProfile;
 const testing = std.testing;

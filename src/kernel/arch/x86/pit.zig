@@ -7,7 +7,6 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_pit);
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
 const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 const panic = @import("../../panic.zig").panic;
 const irq = @import("irq.zig");

@@ -3,7 +3,6 @@ const kmain_log = std.log.scoped(.kmain);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
-const mock_path = build_options.mock_path;
 const arch = @import("arch.zig").internals;
 const tty = @import("tty.zig");
 const log_root = @import("log.zig");
