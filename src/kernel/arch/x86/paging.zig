@@ -683,6 +683,7 @@ fn rt_accessMappedMem(v_end: u32) void {
     faulted = false;
     // Accessing mapped memory doesn't cause a page fault
     var ptr = @intToPtr(*u8, v_end - PAGE_SIZE_4KB);
+    // Print the value to avoid the load from being optimised away
     log.info("Read value in mapped memory: {}\n", .{ptr.*});
     asm volatile (
         \\.global rt_fault_callback2
