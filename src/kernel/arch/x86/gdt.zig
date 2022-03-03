@@ -426,8 +426,8 @@ pub fn init() void {
 }
 
 fn mock_lgdt(ptr: *const GdtPtr) void {
-    expectEqual(TABLE_SIZE, ptr.limit) catch unreachable;
-    expectEqual(@ptrToInt(&gdt_entries[0]), ptr.base) catch unreachable;
+    expectEqual(TABLE_SIZE, ptr.limit) catch panic(null, "GDT pointer limit was not correct", .{});
+    expectEqual(@ptrToInt(&gdt_entries[0]), ptr.base) catch panic(null, "GDT pointer base was not correct", .{});
 }
 
 test "GDT entries" {

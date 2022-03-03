@@ -3987,6 +3987,17 @@ test "Fat32FS.openImpl - match short name" {
     defer file_node.File.close();
 }
 
+test "Fat32FS.openImpl - match long name" {
+    return error.SkipZigTest;
+    //const test_fat32_image = try std.fs.cwd().openFile("test/fat32/test_fat32.img", .{});
+    //defer test_fat32_image.close();
+    //
+    //var test_fs = try initialiseFAT32(std.testing.allocator, test_fat32_image);
+    //defer test_fs.destroy() catch unreachable;
+    //
+    //const file_node = try Fat32FS(@TypeOf(test_fat32_image)).openImpl(test_fs.fs, &test_fs.root_node.node.Dir, "insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long_insanely_long.txt");
+}
+
 test "Fat32FS.openImpl - no match" {
     const test_fat32_image = try std.fs.cwd().openFile("test/fat32/test_fat32.img", .{});
     defer test_fat32_image.close();

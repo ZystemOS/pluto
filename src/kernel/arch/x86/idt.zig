@@ -195,8 +195,8 @@ fn testHandler0() callconv(.Naked) void {}
 fn testHandler1() callconv(.Naked) void {}
 
 fn mock_lidt(ptr: *const IdtPtr) void {
-    expectEqual(TABLE_SIZE, ptr.limit) catch unreachable;
-    expectEqual(@ptrToInt(&idt_entries[0]), ptr.base) catch unreachable;
+    expectEqual(TABLE_SIZE, ptr.limit) catch panic(null, "IDT pointer limit was not correct", .{});
+    expectEqual(@ptrToInt(&idt_entries[0]), ptr.base) catch panic(null, "IDT pointer base was not correct", .{});
 }
 
 test "IDT entries" {
