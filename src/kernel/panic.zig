@@ -297,8 +297,8 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: any
 }
 
 ///
-/// Initialise the panic subsystem by looking for a boot module called "kernel.map" and loading the
-/// symbols from it. Exits early if no such module was found.
+/// Initialise the symbol table used by the panic subsystem by looking for a boot module called "kernel.map" and loading the
+/// symbol entries from it. Exits early if no such module was found.
 ///
 /// Arguments:
 ///     IN mem_profile: *const mem.MemProfile - The memory profile from which to get the loaded boot
@@ -310,7 +310,7 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: any
 ///     Allocator.Error.OutOfMemory - If there wasn't enough memory.
 ///     std.fmt.ParseIntError - See parseMapEntry.
 ///
-pub fn init(mem_profile: *const mem.MemProfile, allocator: Allocator) (PanicError || Allocator.Error || std.fmt.ParseIntError)!void {
+pub fn initSymbols(mem_profile: *const mem.MemProfile, allocator: Allocator) (PanicError || Allocator.Error || std.fmt.ParseIntError)!void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 

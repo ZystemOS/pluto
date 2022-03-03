@@ -76,8 +76,8 @@ export fn kmain(boot_payload: arch.BootPayload) void {
     arch.init(&mem_profile);
     kmain_log.info("Arch init done\n", .{});
 
-    panic_root.init(&mem_profile, fixed_allocator.allocator()) catch |e| {
-        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic: {}\n", .{e});
+    panic_root.initSymbols(&mem_profile, fixed_allocator.allocator()) catch |e| {
+        panic_root.panic(@errorReturnTrace(), "Failed to initialise panic symbols: {}\n", .{e});
     };
 
     // The VMM runtime tests can't happen until the architecture has initialised itself
