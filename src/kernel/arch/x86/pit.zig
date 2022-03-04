@@ -436,22 +436,8 @@ test "setupCounter lowest frequency" {
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
 
     while (freq <= 18) : (freq += 1) {
-        // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
         try expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
-
-        // try expectEqual(u32(0), ticks);
-        // try expectEqual(expected_freq, current_freq_0);
-        // try expectEqual(expected_freq, getFrequency());
-
-        // // These are the hard coded expected values. Calculated externally to check the internal calculation
-        // try expectEqual(u32(52631578), time_ns);
-        // try expectEqual(u32(947), time_under_1_ns);
     }
-
-    // Reset globals
-    time_ns = 0;
-    current_freq_0 = 0;
-    ticks = 0;
 }
 
 test "setupCounter highest frequency" {
@@ -465,22 +451,7 @@ test "setupCounter highest frequency" {
 
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
 
-    // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
-
     try expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
-
-    // try expectEqual(u32(0), ticks);
-    // try expectEqual(expected_freq, current_freq_0);
-    // try expectEqual(expected_freq, getFrequency());
-
-    // // These are the hard coded expected values. Calculated externally to check the internal calculation
-    // try expectEqual(u32(838), time_ns);
-    // try expectEqual(u32(95), time_under_1_ns);
-
-    // Reset globals
-    time_ns = 0;
-    current_freq_0 = 0;
-    ticks = 0;
 }
 
 test "setupCounter normal frequency" {
