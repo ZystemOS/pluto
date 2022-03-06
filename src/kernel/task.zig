@@ -406,14 +406,14 @@ test "addVFSHandle" {
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
     const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
-    expectEqual(handle1, 0);
-    expectEqual(&node1, task.file_handle_mapping.get(handle1).?);
-    expectEqual(true, try task.file_handles.isSet(handle1));
+    try expectEqual(handle1, 0);
+    try expectEqual(&node1, task.file_handle_mapping.get(handle1).?);
+    try expectEqual(true, try task.file_handles.isSet(handle1));
 
     const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
-    expectEqual(handle2, 1);
-    expectEqual(&node2, task.file_handle_mapping.get(handle2).?);
-    expectEqual(true, try task.file_handles.isSet(handle2));
+    try expectEqual(handle2, 1);
+    try expectEqual(&node2, task.file_handle_mapping.get(handle2).?);
+    try expectEqual(true, try task.file_handles.isSet(handle2));
 }
 
 test "hasFreeVFSHandle" {
@@ -421,18 +421,18 @@ test "hasFreeVFSHandle" {
     defer task.destroy(std.testing.allocator);
     var node1 = vfs.Node{ .Dir = .{ .fs = undefined, .mount = null } };
 
-    expect(task.hasFreeVFSHandle());
+    try expect(task.hasFreeVFSHandle());
 
-    const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
-    expect(task.hasFreeVFSHandle());
+    _ = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
+    try expect(task.hasFreeVFSHandle());
 
     var i: usize = 0;
     const free_entries = task.file_handles.num_free_entries;
     while (i < free_entries) : (i += 1) {
-        expect(task.hasFreeVFSHandle());
+        try expect(task.hasFreeVFSHandle());
         _ = task.file_handles.setFirstFree();
     }
-    expect(!task.hasFreeVFSHandle());
+    try expect(!task.hasFreeVFSHandle());
 }
 
 test "getVFSHandle" {
@@ -442,13 +442,13 @@ test "getVFSHandle" {
     var node2 = vfs.Node{ .File = .{ .fs = undefined } };
 
     const handle1 = (try task.addVFSHandle(&node1)) orelse return error.FailedToAddVFSHandle;
-    expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
+    try expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
 
     const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
-    expectEqual(&node2, (try task.getVFSHandle(handle2)).?);
-    expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
+    try expectEqual(&node2, (try task.getVFSHandle(handle2)).?);
+    try expectEqual(&node1, (try task.getVFSHandle(handle1)).?);
 
-    expectEqual(task.getVFSHandle(handle2 + 1), null);
+    try expectEqual(task.getVFSHandle(handle2 + 1), null);
 }
 
 test "clearVFSHandle" {
@@ -461,12 +461,12 @@ test "clearVFSHandle" {
     const handle2 = (try task.addVFSHandle(&node2)) orelse return error.FailedToAddVFSHandle;
 
     try task.clearVFSHandle(handle1);
-    expectEqual(false, try task.hasVFSHandle(handle1));
+    try expectEqual(false, try task.hasVFSHandle(handle1));
 
     try task.clearVFSHandle(handle2);
-    expectEqual(false, try task.hasVFSHandle(handle2));
+    try expectEqual(false, try task.hasVFSHandle(handle2));
 
-    expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle2 + 1));
-    expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle2));
-    expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle1));
+    try expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle2 + 1));
+    try expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle2));
+    try expectError(Task.Error.VFSHandleNotSet, task.clearVFSHandle(handle1));
 }

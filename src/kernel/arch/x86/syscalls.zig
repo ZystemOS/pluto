@@ -64,7 +64,7 @@ fn handle(ctx: *arch.CpuState) usize {
     const syscall = ctx.eax;
     if (isValidSyscall(syscall)) {
         if (handlers[syscall]) |handler| {
-            const result = handler(syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
+            const result = handler(ctx, syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
             if (result) |res| {
                 ctx.eax = res;
                 ctx.ebx = 0;
@@ -98,107 +98,107 @@ pub fn registerSyscall(syscall: usize, handler: Handler) Error!void {
         return Error.SyscallExists;
     handlers[syscall] = handler;
 }
-fn syscall0(syscall: usize) callconv(.Inline) anyerror!usize {
+inline fn syscall0(syscall: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
-        : [syscall] "{eax}" (syscall)
+        : [ret] "={eax}" (-> usize),
+        : [syscall] "{eax}" (syscall),
         : "ebx"
     );
     const err = @intCast(u16, asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     ));
     if (err != 0) {
         return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
-fn syscall1(syscall: usize, arg: usize) callconv(.Inline) anyerror!usize {
+inline fn syscall1(syscall: usize, arg: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
-          [arg1] "{ebx}" (arg)
+          [arg1] "{ebx}" (arg),
     );
     const err = @intCast(u16, asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     ));
     if (err != 0) {
         return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
-fn syscall2(syscall: usize, arg1: usize, arg2: usize) callconv(.Inline) anyerror!usize {
+inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
-        : [syscall] "{eax}" (syscall),
-          [arg1] "{ebx}" (arg1),
-          [arg2] "{ecx}" (arg2)
-    );
-    const err = @intCast(u16, asm (""
-        : [ret] "={ebx}" (-> usize)
-    ));
-    if (err != 0) {
-        return syscalls.fromErrorCode(@intCast(u16, err));
-    }
-    return res;
-}
-fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) callconv(.Inline) anyerror!usize {
-    const res = asm volatile (
-        \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
-          [arg3] "{edx}" (arg3)
     );
     const err = @intCast(u16, asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     ));
     if (err != 0) {
         return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
-fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize) callconv(.Inline) anyerror!usize {
+inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
-          [arg4] "{esi}" (arg4)
     );
     const err = @intCast(u16, asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     ));
     if (err != 0) {
         return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
-fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) callconv(.Inline) anyerror!usize {
+inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
-        : [ret] "={eax}" (-> usize)
+        : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
           [arg4] "{esi}" (arg4),
-          [arg5] "{edi}" (arg5)
     );
     const err = @intCast(u16, asm (""
-        : [ret] "={ebx}" (-> usize)
+        : [ret] "={ebx}" (-> usize),
     ));
     if (err != 0) {
         return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
-fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) callconv(.Inline) usize {
+inline fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+    const res = asm volatile (
+        \\int $0x80
+        : [ret] "={eax}" (-> usize),
+        : [syscall] "{eax}" (syscall),
+          [arg1] "{ebx}" (arg1),
+          [arg2] "{ecx}" (arg2),
+          [arg3] "{edx}" (arg3),
+          [arg4] "{esi}" (arg4),
+          [arg5] "{edi}" (arg5),
+    );
+    const err = @intCast(u16, asm (""
+        : [ret] "={ebx}" (-> usize),
+    ));
+    if (err != 0) {
+        return syscalls.fromErrorCode(@intCast(u16, err));
+    }
+    return res;
+}
+inline fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) usize {
     return switch (arg_idx) {
         0 => ctx.ebx,
         1 => ctx.ecx,
@@ -221,6 +221,7 @@ fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) callconv(.Inline) usiz
 fn makeHandler(comptime syscall: syscalls.Syscall) Handler {
     return struct {
         fn func(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+            _ = ctx;
             return syscalls.handle(syscall, arg1, arg2, arg3, arg4, arg5);
         }
     }.func;
@@ -255,8 +256,9 @@ pub fn init() void {
 /// Tests
 var test_int: u32 = 0;
 
-fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+fn testHandler0(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg1;
     _ = arg2;
     _ = arg3;
@@ -268,6 +270,7 @@ fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
 
 fn testHandler1(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg2;
     _ = arg3;
     _ = arg4;
@@ -278,6 +281,7 @@ fn testHandler1(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4
 
 fn testHandler2(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg3;
     _ = arg4;
     _ = arg5;
@@ -287,6 +291,7 @@ fn testHandler2(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4
 
 fn testHandler3(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg4;
     _ = arg5;
     test_int += arg1 + arg2 + arg3;
@@ -295,18 +300,21 @@ fn testHandler3(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4
 
 fn testHandler4(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg5;
     test_int += arg1 + arg2 + arg3 + arg4;
     return 4;
 }
 
 fn testHandler5(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+    _ = ctx;
     test_int += arg1 + arg2 + arg3 + arg4 + arg5;
     return 5;
 }
 
 fn testHandler6(ctx: *arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg1;
     _ = arg2;
     _ = arg3;

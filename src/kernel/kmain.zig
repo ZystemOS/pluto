@@ -97,7 +97,7 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise kernel heap: {}\n", .{e});
     };
 
-    syscalls.init(&kernel_heap.allocator);
+    syscalls.init(kernel_heap.allocator());
     tty.init(kernel_heap.allocator(), boot_payload);
     var arch_kb = keyboard.init(fixed_allocator.allocator()) catch |e| {
         panic_root.panic(@errorReturnTrace(), "Failed to inititalise keyboard: {}\n", .{e});

@@ -10,7 +10,7 @@ const task = @import("task.zig");
 const arch = @import("arch.zig").internals;
 const testing = std.testing;
 
-var allocator: *std.mem.Allocator = undefined;
+var allocator: std.mem.Allocator = undefined;
 
 /// The maximum amount of data to allocate when copying user memory into kernel memory
 pub const USER_MAX_DATA_LEN = 16 * 1024;
@@ -138,7 +138,7 @@ pub const Syscall = enum {
 /// A function that can handle a syscall and return a result or an error
 pub const Handler = fn (arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize;
 
-pub fn init(alloc: *std.mem.Allocator) void {
+pub fn init(alloc: std.mem.Allocator) void {
     allocator = alloc;
 }
 
@@ -211,7 +211,7 @@ fn getData(ptr: usize, len: usize) Error![]u8 {
         }
         var buff = try allocator.alloc(u8, len);
         errdefer allocator.free(buff);
-        try vmm.kernel_vmm.copyData(scheduler.current_task.vmm, buff, ptr, false);
+        try vmm.kernel_vmm.copyData(scheduler.current_task.vmm, false, buff, ptr);
         return buff;
     }
 }
@@ -237,6 +237,7 @@ fn getData(ptr: usize, len: usize) Error![]u8 {
 ///     Refer to vfs.Error for details on what causes vfs errors
 ///
 fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, args: usize, ignored: usize) Error!usize {
+    _ = ignored;
     const current_task = scheduler.current_task;
     if (!current_task.hasFreeVFSHandle()) {
         return Error.NoMoreFSHandles;
@@ -281,6 +282,8 @@ fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, args: usize, ignor
 ///     Refer to vfs.FileNode.read and vmm.VirtualMemoryManager.copyData for details on what causes other errors
 ///
 fn handleRead(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: usize, ignored2: usize) Error!usize {
+    _ = ignored1;
+    _ = ignored2;
     if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
         return error.OutOfBounds;
     const real_handle = @intCast(task.Handle, node_handle);
@@ -300,7 +303,7 @@ fn handleRead(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: us
 
         const bytes_read = try file.read(buff);
         // TODO: A more performant method would be mapping in the user memory and using that directly. Then we wouldn't need to allocate or copy the buffer
-        if (!current_task.kernel) try vmm.kernel_vmm.copyData(current_task.vmm, buff, buff_ptr, true);
+        if (!current_task.kernel) try vmm.kernel_vmm.copyData(current_task.vmm, true, buff, buff_ptr);
         return bytes_read;
     }
 
@@ -326,6 +329,8 @@ fn handleRead(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: us
 ///     Refer to vfs.FileNode.read and vmm.VirtualMemoryManager.copyData for details on what causes other errors
 ///
 fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: usize, ignored2: usize) Error!usize {
+    _ = ignored1;
+    _ = ignored2;
     if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
         return error.OutOfBounds;
     const real_handle = @intCast(task.Handle, node_handle);
@@ -360,6 +365,10 @@ fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: u
 ///     OutOfBounds         - The node handle is outside of the maximum per process
 ///     NotOpened           - The node handle hasn't been opened
 fn handleClose(node_handle: usize, ignored1: usize, ignored2: usize, ignored3: usize, ignored4: usize) Error!usize {
+    _ = ignored1;
+    _ = ignored2;
+    _ = ignored3;
+    _ = ignored4;
     if (node_handle >= task.VFS_HANDLES_PER_PROCESS)
         return error.OutOfBounds;
     const real_handle = @intCast(task.Handle, node_handle);
@@ -435,44 +444,44 @@ test "handleOpen" {
     const name1 = "/abc.txt";
     var test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name1), name1.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined));
     var test_node = (try current_task.getVFSHandle(test_handle)).?;
-    testing.expectEqual(testfs.tree.children.items.len, 1);
+    try testing.expectEqual(testfs.tree.children.items.len, 1);
     var tree = testfs.tree.children.items[0];
-    testing.expect(tree.val.isFile() and test_node.isFile());
-    testing.expectEqual(&test_node.File, &tree.val.File);
-    testing.expect(std.mem.eql(u8, tree.name, "abc.txt"));
-    testing.expectEqual(tree.data, null);
-    testing.expectEqual(tree.children.items.len, 0);
+    try testing.expect(tree.val.isFile() and test_node.isFile());
+    try testing.expectEqual(&test_node.File, &tree.val.File);
+    try testing.expect(std.mem.eql(u8, tree.name, "abc.txt"));
+    try testing.expectEqual(tree.data, null);
+    try testing.expectEqual(tree.children.items.len, 0);
 
     // Creating a dir
     const name2 = "/def";
     test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name2), name2.len, @enumToInt(vfs.OpenFlags.CREATE_DIR), undefined, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
-    testing.expectEqual(testfs.tree.children.items.len, 2);
+    try testing.expectEqual(testfs.tree.children.items.len, 2);
     tree = testfs.tree.children.items[1];
-    testing.expect(tree.val.isDir() and test_node.isDir());
-    testing.expectEqual(&test_node.Dir, &tree.val.Dir);
-    testing.expect(std.mem.eql(u8, tree.name, "def"));
-    testing.expectEqual(tree.data, null);
-    testing.expectEqual(tree.children.items.len, 0);
+    try testing.expect(tree.val.isDir() and test_node.isDir());
+    try testing.expectEqual(&test_node.Dir, &tree.val.Dir);
+    try testing.expect(std.mem.eql(u8, tree.name, "def"));
+    try testing.expectEqual(tree.data, null);
+    try testing.expectEqual(tree.children.items.len, 0);
 
     // Creating a file under a new dir
     const name3 = "/def/ghi.zig";
     test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name3), name3.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
-    testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
+    try testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
     tree = testfs.tree.children.items[1].children.items[0];
-    testing.expect(tree.val.isFile() and test_node.isFile());
-    testing.expectEqual(&test_node.File, &tree.val.File);
-    testing.expect(std.mem.eql(u8, tree.name, "ghi.zig"));
-    testing.expectEqual(tree.data, null);
-    testing.expectEqual(tree.children.items.len, 0);
+    try testing.expect(tree.val.isFile() and test_node.isFile());
+    try testing.expectEqual(&test_node.File, &tree.val.File);
+    try testing.expect(std.mem.eql(u8, tree.name, "ghi.zig"));
+    try testing.expectEqual(tree.data, null);
+    try testing.expectEqual(tree.children.items.len, 0);
 
     // Opening an existing file
     test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name3), name3.len, @enumToInt(vfs.OpenFlags.NO_CREATION), undefined, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
-    testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
-    testing.expect(test_node.isFile());
-    testing.expectEqual(&test_node.File, &tree.val.File);
+    try testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
+    try testing.expect(test_node.isFile());
+    try testing.expectEqual(&test_node.File, &tree.val.File);
 }
 
 test "handleRead" {
@@ -488,44 +497,44 @@ test "handleRead" {
     defer vmm.kernel_vmm.deinit();
     scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
     defer scheduler.current_task.destroy(allocator);
-    var current_task = scheduler.current_task;
+    _ = scheduler.current_task;
 
     const test_file_path = "/foo.txt";
     var test_file = @intCast(task.Handle, try handleOpen(@ptrToInt(test_file_path), test_file_path.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), undefined, undefined));
     var f_data = &testfs.tree.children.items[0].data;
     var str = "test123";
-    f_data.* = try std.mem.dupe(testing.allocator, u8, str);
+    f_data.* = try testing.allocator.dupe(u8, str);
 
     var buffer: [str.len]u8 = undefined;
     {
         const length = try handleRead(test_file, @ptrToInt(&buffer[0]), buffer.len, undefined, undefined);
-        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
         const length = try handleRead(test_file, @ptrToInt(&buffer[0]), buffer.len + 1, undefined, undefined);
-        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
         const length = try handleRead(test_file, @ptrToInt(&buffer[0]), buffer.len + 3, undefined, undefined);
-        testing.expect(std.mem.eql(u8, str, buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str, buffer[0..length]));
     }
 
     {
         const length = try handleRead(test_file, @ptrToInt(&buffer[0]), buffer.len - 1, undefined, undefined);
-        testing.expect(std.mem.eql(u8, str[0 .. str.len - 1], buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str[0 .. str.len - 1], buffer[0..length]));
     }
 
     {
         const length = try handleRead(test_file, @ptrToInt(&buffer[0]), 0, undefined, undefined);
-        testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
     }
     // Try reading from a symlink
     const args = vfs.OpenArgs{ .symlink_target = test_file_path };
     var test_link = @intCast(task.Handle, try handleOpen(@ptrToInt("/link"), "/link".len, @enumToInt(vfs.OpenFlags.CREATE_SYMLINK), @ptrToInt(&args), undefined));
     {
         const length = try handleRead(test_link, @ptrToInt(&buffer[0]), buffer.len, undefined, undefined);
-        testing.expect(std.mem.eql(u8, str[0..str.len], buffer[0..length]));
+        try testing.expect(std.mem.eql(u8, str[0..str.len], buffer[0..length]));
     }
 }
