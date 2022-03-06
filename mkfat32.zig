@@ -487,7 +487,7 @@ pub const Fat32 = struct {
                     else => @compileError("Unexpected field type: " ++ @typeName(info.child)),
                 },
                 .Int => try fat32_header_stream.writer().writeIntLittle(item.field_type, @field(fat32_header, item.name)),
-                else => @compileError("Unexpected field type: " ++ @typeName(info.child)),
+                else => @compileError("Unexpected field type: " ++ @typeName(@typeInfo(item.field_type))),
             }
         }
 
@@ -567,8 +567,8 @@ pub const Fat32 = struct {
     ///     @TypeOf(stream).WriteError - Error writing to the stream.
     ///
     fn clearStream(stream: anytype, size: usize) ErrorSet(@TypeOf(stream))!void {
-        comptime const buff_size = 4096;
-        comptime const bytes: [buff_size]u8 = [_]u8{0x00} ** buff_size;
+        const buff_size = 4096;
+        const bytes: [buff_size]u8 = [_]u8{0x00} ** buff_size;
 
         var remaining: usize = size;
         while (remaining > 0) {

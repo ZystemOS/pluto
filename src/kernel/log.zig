@@ -28,6 +28,8 @@ var serial: Serial = undefined;
 ///     {} - No error as LoggingError is empty.
 ///
 fn logCallback(context: void, str: []const u8) LoggingError!usize {
+    // Suppress unused var warning
+    _ = context;
     serial.writeBytes(str);
     return str.len;
 }

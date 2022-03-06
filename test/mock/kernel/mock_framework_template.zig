@@ -194,7 +194,7 @@ fn Mock() type {
 
             // Test that the types match
             const expect_type = comptime getDataElementType(expected_function);
-            expectEqual(expect_type, @as(DataElementType, test_element));
+            expectEqual(expect_type, @as(DataElementType, test_element)) catch @panic("Function type is not as expected\n");
 
             // Types match, so can use the expected type to get the actual data
             const actual_function = getDataValue(expected_function, test_element);
@@ -219,13 +219,13 @@ fn Mock() type {
 
             // Test that the types match
             const expect_type = comptime getDataElementType(ExpectedType);
-            expectEqual(expect_type, @as(DataElementType, elem));
+            expectEqual(expect_type, @as(DataElementType, elem)) catch std.debug.panic("Expected {}, got {}\n", .{ expect_type, @as(DataElementType, elem) });
 
             // Types match, so can use the expected type to get the actual data
             const actual_value = getDataValue(ExpectedType, elem);
 
             // Test the values
-            expectEqual(expected_value, actual_value);
+            expectEqual(expected_value, actual_value) catch std.debug.panic("Expected {}, got {}\n", .{ expected_value, actual_value });
         }
 
         ///
@@ -254,7 +254,7 @@ fn Mock() type {
 
                 // Test that the data match
                 const expect_data = comptime getDataElementType(DataType);
-                expectEqual(expect_data, @as(DataElementType, action.data));
+                expectEqual(expect_data, @as(DataElementType, action.data)) catch std.debug.panic("Expected {}, got {}\n", .{ expect_data, action.data });
                 return getDataValue(DataType, action.data);
             } else {
                 std.debug.panic("No more test values for the return of function: " ++ fun_name ++ "\n", .{});
@@ -281,7 +281,7 @@ fn Mock() type {
             // Get the function mapping to add the parameter to.
             if (self.named_actions.getEntry(fun_name)) |actions_kv| {
                 // Take a reference of the value so the underlying action list will update
-                var action_list = &actions_kv.value;
+                var action_list = &actions_kv.value_ptr;
                 const action = Action{
                     .action = action_type,
                     .data = createDataElement(data),
@@ -312,7 +312,7 @@ fn Mock() type {
         pub fn performAction(self: *Self, comptime fun_name: []const u8, comptime RetType: type, params: anytype) RetType {
             if (self.named_actions.getEntry(fun_name)) |kv_actions_list| {
                 // Take a reference of the value so the underlying action list will update
-                var action_list = &kv_actions_list.value;
+                var action_list = &kv_actions_list.value_ptr;
                 // Peak the first action to test the action type
                 if (action_list.*.first) |action_node| {
                     const action = action_node.data;
@@ -331,7 +331,7 @@ fn Mock() type {
 
                                 expectTest(param_type, param, test_action.data);
                             }
-                            break :ret expectGetValue(fun_name, action_list, RetType);
+                            break :ret expectGetValue(fun_name, action_list.*, RetType);
                         },
                         ActionType.ConsumeFunctionCall => ret: {
                             // Now pop the action as we are going to use it
@@ -383,13 +383,13 @@ fn Mock() type {
             var it = self.named_actions.iterator();
             while (it.next()) |next| {
                 // Take a reference so the underlying action list will be updated.
-                var action_list = &next.value;
+                var action_list = &next.value_ptr;
                 if (action_list.*.popFirst()) |action_node| {
                     const action = action_node.data;
                     switch (action.action) {
                         ActionType.TestValue, ActionType.ConsumeFunctionCall => {
                             // These need to be all consumed
-                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{s}'\n", .{ action.action, @as(DataElementType, action.data), next.key });
+                            std.debug.panic("Unused testing value: Type: {}, value: {} for function '{s}'\n", .{ action.action, @as(DataElementType, action.data), next.key_ptr.* });
                         },
                         ActionType.RepeatFunctionCall => {
                             // As this is a repeat action, the function will still be here

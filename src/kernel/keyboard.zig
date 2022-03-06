@@ -216,44 +216,44 @@ pub const Keyboard = struct {
 
     test "init" {
         const keyboard = Keyboard.init();
-        testing.expectEqual(keyboard.queue_front, 0);
-        testing.expectEqual(keyboard.queue_end, 0);
+        try testing.expectEqual(keyboard.queue_front, 0);
+        try testing.expectEqual(keyboard.queue_end, 0);
     }
 
     test "isEmpty" {
         var keyboard = Keyboard.init();
-        testing.expect(keyboard.isEmpty());
+        try testing.expect(keyboard.isEmpty());
 
         keyboard.queue_end += 1;
-        testing.expect(!keyboard.isEmpty());
+        try testing.expect(!keyboard.isEmpty());
 
         keyboard.queue_front += 1;
-        testing.expect(keyboard.isEmpty());
+        try testing.expect(keyboard.isEmpty());
 
         keyboard.queue_end = std.math.maxInt(QueueIndex);
         keyboard.queue_front = 0;
-        testing.expect(!keyboard.isEmpty());
+        try testing.expect(!keyboard.isEmpty());
 
         keyboard.queue_front = std.math.maxInt(QueueIndex);
-        testing.expect(keyboard.isEmpty());
+        try testing.expect(keyboard.isEmpty());
     }
 
     test "isFull" {
         var keyboard = Keyboard.init();
-        testing.expect(!keyboard.isFull());
+        try testing.expect(!keyboard.isFull());
 
         keyboard.queue_end += 1;
-        testing.expect(!keyboard.isFull());
+        try testing.expect(!keyboard.isFull());
 
         keyboard.queue_front += 1;
-        testing.expect(!keyboard.isFull());
+        try testing.expect(!keyboard.isFull());
 
         keyboard.queue_end = 0;
-        testing.expect(keyboard.isFull());
+        try testing.expect(keyboard.isFull());
 
         keyboard.queue_front = 0;
         keyboard.queue_end = std.math.maxInt(QueueIndex);
-        testing.expect(keyboard.isFull());
+        try testing.expect(keyboard.isFull());
     }
 
     test "writeKey" {
@@ -261,20 +261,20 @@ pub const Keyboard = struct {
 
         comptime var i = 0;
         inline while (i < QUEUE_SIZE - 1) : (i += 1) {
-            testing.expectEqual(keyboard.writeKey(.{
+            try testing.expectEqual(keyboard.writeKey(.{
                 .position = @intToEnum(KeyPosition, i),
                 .released = false,
             }), true);
-            testing.expectEqual(keyboard.queue[i].position, @intToEnum(KeyPosition, i));
-            testing.expectEqual(keyboard.queue_end, i + 1);
-            testing.expectEqual(keyboard.queue_front, 0);
+            try testing.expectEqual(keyboard.queue[i].position, @intToEnum(KeyPosition, i));
+            try testing.expectEqual(keyboard.queue_end, i + 1);
+            try testing.expectEqual(keyboard.queue_front, 0);
         }
 
-        testing.expectEqual(keyboard.writeKey(.{
+        try testing.expectEqual(keyboard.writeKey(.{
             .position = @intToEnum(KeyPosition, 33),
             .released = false,
         }), false);
-        testing.expect(keyboard.isFull());
+        try testing.expect(keyboard.isFull());
     }
 
     test "readKey" {
@@ -282,7 +282,7 @@ pub const Keyboard = struct {
 
         comptime var i = 0;
         inline while (i < QUEUE_SIZE - 1) : (i += 1) {
-            testing.expectEqual(keyboard.writeKey(.{
+            try testing.expectEqual(keyboard.writeKey(.{
                 .position = @intToEnum(KeyPosition, i),
                 .released = false,
             }), true);
@@ -290,13 +290,13 @@ pub const Keyboard = struct {
 
         i = 0;
         inline while (i < QUEUE_SIZE - 1) : (i += 1) {
-            testing.expectEqual(keyboard.readKey().?.position, @intToEnum(KeyPosition, i));
-            testing.expectEqual(keyboard.queue_end, QUEUE_SIZE - 1);
-            testing.expectEqual(keyboard.queue_front, i + 1);
+            try testing.expectEqual(keyboard.readKey().?.position, @intToEnum(KeyPosition, i));
+            try testing.expectEqual(keyboard.queue_end, QUEUE_SIZE - 1);
+            try testing.expectEqual(keyboard.queue_front, i + 1);
         }
 
-        testing.expect(keyboard.isEmpty());
-        testing.expectEqual(keyboard.readKey(), null);
+        try testing.expect(keyboard.isEmpty());
+        try testing.expectEqual(keyboard.readKey(), null);
     }
 };
 
@@ -336,7 +336,7 @@ pub fn addKeyboard(kb: *Keyboard) Allocator.Error!void {
 /// Initialise the keyboard system and the architecture's keyboard
 ///
 /// Arguments:
-///     allocator: *std.mem.Allocator - The allocator to initialise the keyboard list and architecture keyboard with
+///     allocator: std.mem.Allocator - The allocator to initialise the keyboard list and architecture keyboard with
 ///
 /// Return: ?*Keyboard
 ///     The architecture keyboard found, else null if one wasn't detected
@@ -344,7 +344,7 @@ pub fn addKeyboard(kb: *Keyboard) Allocator.Error!void {
 /// Error: std.mem.Allocator.Error
 ///     OutOfMemory - There wasn't enough memory to initialise the keyboard list or the architecture keyboard
 ///
-pub fn init(allocator: *Allocator) Allocator.Error!?*Keyboard {
+pub fn init(allocator: Allocator) Allocator.Error!?*Keyboard {
     keyboards = ArrayList(*Keyboard).init(allocator);
     return arch.initKeyboard(allocator);
 }

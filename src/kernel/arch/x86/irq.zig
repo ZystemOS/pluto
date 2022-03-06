@@ -7,10 +7,9 @@ const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_irq);
 const build_options = @import("build_options");
 const panic = @import("../../panic.zig").panic;
-const mock_path = build_options.arch_mock_path;
-const idt = if (is_test) @import(mock_path ++ "idt_mock.zig") else @import("idt.zig");
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
-const pic = if (is_test) @import(mock_path ++ "pic_mock.zig") else @import("pic.zig");
+const idt = if (is_test) @import("../../../../test/mock/kernel/idt_mock.zig") else @import("idt.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
+const pic = if (is_test) @import("../../../../test/mock/kernel/pic_mock.zig") else @import("pic.zig");
 const interrupts = @import("interrupts.zig");
 
 /// The error set for the IRQ. This will be from installing a IRQ handler.
@@ -146,10 +145,16 @@ pub fn init() void {
 }
 
 fn testFunction0() callconv(.Naked) void {}
+
 fn testFunction1(ctx: *arch.CpuState) u32 {
+    // Suppress unused variable warnings
+    _ = ctx;
     return 0;
 }
+
 fn testFunction2(ctx: *arch.CpuState) u32 {
+    // Suppress unused variable warnings
+    _ = ctx;
     return 0;
 }
 
@@ -169,10 +174,10 @@ test "openIrq" {
 test "isValidIrq" {
     comptime var i = 0;
     inline while (i < NUMBER_OF_ENTRIES) : (i += 1) {
-        expect(isValidIrq(i));
+        try expect(isValidIrq(i));
     }
 
-    expect(!isValidIrq(200));
+    try expect(!isValidIrq(200));
 }
 
 test "registerIrq re-register irq handler" {
@@ -184,19 +189,19 @@ test "registerIrq re-register irq handler" {
 
     // Pre testing
     for (irq_handlers) |h| {
-        expect(null == h);
+        try expect(null == h);
     }
 
     // Call function
     try registerIrq(0, testFunction1);
-    expectError(IrqError.IrqExists, registerIrq(0, testFunction2));
+    try expectError(IrqError.IrqExists, registerIrq(0, testFunction2));
 
     // Post testing
     for (irq_handlers) |h, i| {
         if (i != 0) {
-            expect(null == h);
+            try expect(null == h);
         } else {
-            expectEqual(testFunction1, h.?);
+            try expectEqual(testFunction1, h.?);
         }
     }
 
@@ -213,7 +218,7 @@ test "registerIrq register irq handler" {
 
     // Pre testing
     for (irq_handlers) |h| {
-        expect(null == h);
+        try expect(null == h);
     }
 
     // Call function
@@ -222,9 +227,9 @@ test "registerIrq register irq handler" {
     // Post testing
     for (irq_handlers) |h, i| {
         if (i != 0) {
-            expect(null == h);
+            try expect(null == h);
         } else {
-            expectEqual(testFunction1, h.?);
+            try expectEqual(testFunction1, h.?);
         }
     }
 
@@ -233,7 +238,7 @@ test "registerIrq register irq handler" {
 }
 
 test "registerIrq invalid irq index" {
-    expectError(IrqError.InvalidIrq, registerIrq(200, testFunction1));
+    try expectError(IrqError.InvalidIrq, registerIrq(200, testFunction1));
 }
 
 ///

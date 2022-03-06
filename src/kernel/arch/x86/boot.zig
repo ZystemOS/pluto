@@ -107,7 +107,7 @@ export fn start_higher_half() callconv(.Naked) noreturn {
     // Get the multiboot header address and add the virtual offset
     const mb_info_addr = asm (
         \\mov %%ebx, %[res]
-        : [res] "=r" (-> usize)
+        : [res] "=r" (-> usize),
     ) + @ptrToInt(&KERNEL_ADDR_OFFSET);
     kmain(@intToPtr(arch.BootPayload, mb_info_addr));
     while (true) {}

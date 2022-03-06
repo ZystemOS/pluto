@@ -6,12 +6,11 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_rtc);
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 const pic = @import("pic.zig");
 const pit = @import("pit.zig");
 const irq = @import("irq.zig");
-const cmos = if (is_test) @import(mock_path ++ "cmos_mock.zig") else @import("cmos.zig");
+const cmos = if (is_test) @import("../../../../test/mock/kernel/cmos_mock.zig") else @import("cmos.zig");
 const panic = @import("../../panic.zig").panic;
 const scheduler = @import("../../scheduler.zig");
 
@@ -166,7 +165,7 @@ fn rtcHandler(ctx: *arch.CpuState) usize {
 
     // Need to read status register C
     // Might need to disable the NMI bit, set to true
-    const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
+    _ = cmos.readStatusRegister(cmos.StatusRegister.C, false);
 
     return ret_esp;
 }
@@ -290,7 +289,7 @@ pub fn init() void {
     enableInterrupts();
 
     // Read status register C to clear any interrupts that may have happened during set up
-    const reg_c = cmos.readStatusRegister(cmos.StatusRegister.C, false);
+    _ = cmos.readStatusRegister(cmos.StatusRegister.C, false);
 
     switch (build_options.test_mode) {
         .Initialisation => runtimeTests(),
@@ -307,7 +306,7 @@ test "isBusy not busy" {
         .{ cmos.StatusRegister.A, false, @as(u8, 0x60) },
     );
 
-    expect(!isBusy());
+    try expect(!isBusy());
 }
 
 test "isBusy busy" {
@@ -319,7 +318,7 @@ test "isBusy busy" {
         .{ cmos.StatusRegister.A, false, @as(u8, 0x80) },
     );
 
-    expect(isBusy());
+    try expect(isBusy());
 }
 
 test "calcDayOfWeek" {
@@ -337,7 +336,7 @@ test "calcDayOfWeek" {
     var actual = calcDayOfWeek(date_time);
     var expected = @as(u32, 5);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 
     date_time.day = 20;
     date_time.month = 7;
@@ -346,7 +345,7 @@ test "calcDayOfWeek" {
     actual = calcDayOfWeek(date_time);
     expected = @as(u32, 6);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 
     date_time.day = 9;
     date_time.month = 11;
@@ -355,7 +354,7 @@ test "calcDayOfWeek" {
     actual = calcDayOfWeek(date_time);
     expected = @as(u32, 1);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 
     date_time.day = 1;
     date_time.month = 1;
@@ -364,7 +363,7 @@ test "calcDayOfWeek" {
     actual = calcDayOfWeek(date_time);
     expected = @as(u32, 6);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "isBcd not BCD" {
@@ -376,7 +375,7 @@ test "isBcd not BCD" {
         .{ cmos.StatusRegister.B, false, @as(u8, 0x00) },
     );
 
-    expect(!isBcd());
+    try expect(!isBcd());
 }
 
 test "isBcd BCD" {
@@ -388,7 +387,7 @@ test "isBcd BCD" {
         .{ cmos.StatusRegister.B, false, @as(u8, 0x04) },
     );
 
-    expect(isBcd());
+    try expect(isBcd());
 }
 
 test "is12Hr not 12Hr" {
@@ -411,7 +410,7 @@ test "is12Hr not 12Hr" {
         .{ cmos.StatusRegister.B, false, @as(u8, 0x00) },
     );
 
-    expect(!is12Hr(date_time));
+    try expect(!is12Hr(date_time));
 }
 
 test "is12Hr 12Hr" {
@@ -434,24 +433,24 @@ test "is12Hr 12Hr" {
         .{ cmos.StatusRegister.B, false, @as(u8, 0x02) },
     );
 
-    expect(is12Hr(date_time));
+    try expect(is12Hr(date_time));
 }
 
 test "bcdToBinary" {
     var expected = @as(u32, 59);
     var actual = bcdToBinary(0x59);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 
     expected = @as(u32, 48);
     actual = bcdToBinary(0x48);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 
     expected = @as(u32, 1);
     actual = bcdToBinary(0x01);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "readRtcRegisters" {
@@ -486,7 +485,7 @@ test "readRtcRegisters" {
     };
     const actual = readRtcRegisters();
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "readRtc unstable read" {
@@ -560,7 +559,7 @@ test "readRtc unstable read" {
     };
     const actual = getDateTime();
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "readRtc is BCD" {
@@ -613,7 +612,7 @@ test "readRtc is BCD" {
     };
     const actual = getDateTime();
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "readRtc is 12 hours" {
@@ -666,13 +665,13 @@ test "readRtc is 12 hours" {
     };
     const actual = getDateTime();
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "setRate below 3" {
-    expectError(RtcError.RateError, setRate(0));
-    expectError(RtcError.RateError, setRate(1));
-    expectError(RtcError.RateError, setRate(2));
+    try expectError(RtcError.RateError, setRate(0));
+    try expectError(RtcError.RateError, setRate(1));
+    try expectError(RtcError.RateError, setRate(2));
 }
 
 test "setRate" {

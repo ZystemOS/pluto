@@ -6,8 +6,7 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const panic = @import("../../panic.zig").panic;
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 
 /// The access bits for a GDT entry.
 const AccessBits = packed struct {
@@ -427,73 +426,73 @@ pub fn init() void {
 }
 
 fn mock_lgdt(ptr: *const GdtPtr) void {
-    expectEqual(TABLE_SIZE, ptr.limit);
-    expectEqual(@ptrToInt(&gdt_entries[0]), ptr.base);
+    expectEqual(TABLE_SIZE, ptr.limit) catch panic(null, "GDT pointer limit was not correct", .{});
+    expectEqual(@ptrToInt(&gdt_entries[0]), ptr.base) catch panic(null, "GDT pointer base was not correct", .{});
 }
 
 test "GDT entries" {
-    expectEqual(@as(u32, 1), @sizeOf(AccessBits));
-    expectEqual(@as(u32, 1), @sizeOf(FlagBits));
-    expectEqual(@as(u32, 8), @sizeOf(GdtEntry));
-    expectEqual(@as(u32, 104), @sizeOf(Tss));
-    expectEqual(@as(u32, 6), @sizeOf(GdtPtr));
+    try expectEqual(@as(u32, 1), @sizeOf(AccessBits));
+    try expectEqual(@as(u32, 1), @sizeOf(FlagBits));
+    try expectEqual(@as(u32, 8), @sizeOf(GdtEntry));
+    try expectEqual(@as(u32, 104), @sizeOf(Tss));
+    try expectEqual(@as(u32, 6), @sizeOf(GdtPtr));
 
     const null_entry = gdt_entries[NULL_INDEX];
-    expectEqual(@as(u64, 0), @bitCast(u64, null_entry));
+    try expectEqual(@as(u64, 0), @bitCast(u64, null_entry));
 
     const kernel_code_entry = gdt_entries[KERNEL_CODE_INDEX];
-    expectEqual(@as(u64, 0xCF9A000000FFFF), @bitCast(u64, kernel_code_entry));
+    try expectEqual(@as(u64, 0xCF9A000000FFFF), @bitCast(u64, kernel_code_entry));
 
     const kernel_data_entry = gdt_entries[KERNEL_DATA_INDEX];
-    expectEqual(@as(u64, 0xCF92000000FFFF), @bitCast(u64, kernel_data_entry));
+    try expectEqual(@as(u64, 0xCF92000000FFFF), @bitCast(u64, kernel_data_entry));
 
     const user_code_entry = gdt_entries[USER_CODE_INDEX];
-    expectEqual(@as(u64, 0xCFFA000000FFFF), @bitCast(u64, user_code_entry));
+    try expectEqual(@as(u64, 0xCFFA000000FFFF), @bitCast(u64, user_code_entry));
 
     const user_data_entry = gdt_entries[USER_DATA_INDEX];
-    expectEqual(@as(u64, 0xCFF2000000FFFF), @bitCast(u64, user_data_entry));
+    try expectEqual(@as(u64, 0xCFF2000000FFFF), @bitCast(u64, user_data_entry));
 
     const tss_entry = gdt_entries[TSS_INDEX];
-    expectEqual(@as(u64, 0), @bitCast(u64, tss_entry));
+    try expectEqual(@as(u64, 0), @bitCast(u64, tss_entry));
 
-    expectEqual(TABLE_SIZE, gdt_ptr.limit);
+    try expectEqual(TABLE_SIZE, gdt_ptr.limit);
 
-    expectEqual(@as(u32, 0), main_tss_entry.prev_tss);
-    expectEqual(@as(u32, 0), main_tss_entry.esp0);
-    expectEqual(@as(u32, KERNEL_DATA_OFFSET), main_tss_entry.ss0);
-    expectEqual(@as(u32, 0), main_tss_entry.esp1);
-    expectEqual(@as(u32, 0), main_tss_entry.ss1);
-    expectEqual(@as(u32, 0), main_tss_entry.esp2);
-    expectEqual(@as(u32, 0), main_tss_entry.ss2);
-    expectEqual(@as(u32, 0), main_tss_entry.cr3);
-    expectEqual(@as(u32, 0), main_tss_entry.eip);
-    expectEqual(@as(u32, 0), main_tss_entry.eflags);
-    expectEqual(@as(u32, 0), main_tss_entry.eax);
-    expectEqual(@as(u32, 0), main_tss_entry.ecx);
-    expectEqual(@as(u32, 0), main_tss_entry.edx);
-    expectEqual(@as(u32, 0), main_tss_entry.ebx);
-    expectEqual(@as(u32, 0), main_tss_entry.esp);
-    expectEqual(@as(u32, 0), main_tss_entry.ebp);
-    expectEqual(@as(u32, 0), main_tss_entry.esi);
-    expectEqual(@as(u32, 0), main_tss_entry.edi);
-    expectEqual(@as(u32, 0), main_tss_entry.es);
-    expectEqual(@as(u32, 0), main_tss_entry.cs);
-    expectEqual(@as(u32, 0), main_tss_entry.ss);
-    expectEqual(@as(u32, 0), main_tss_entry.ds);
-    expectEqual(@as(u32, 0), main_tss_entry.fs);
-    expectEqual(@as(u32, 0), main_tss_entry.gs);
-    expectEqual(@as(u32, 0), main_tss_entry.ldtr);
-    expectEqual(@as(u16, 0), main_tss_entry.trap);
+    try expectEqual(@as(u32, 0), main_tss_entry.prev_tss);
+    try expectEqual(@as(u32, 0), main_tss_entry.esp0);
+    try expectEqual(@as(u32, KERNEL_DATA_OFFSET), main_tss_entry.ss0);
+    try expectEqual(@as(u32, 0), main_tss_entry.esp1);
+    try expectEqual(@as(u32, 0), main_tss_entry.ss1);
+    try expectEqual(@as(u32, 0), main_tss_entry.esp2);
+    try expectEqual(@as(u32, 0), main_tss_entry.ss2);
+    try expectEqual(@as(u32, 0), main_tss_entry.cr3);
+    try expectEqual(@as(u32, 0), main_tss_entry.eip);
+    try expectEqual(@as(u32, 0), main_tss_entry.eflags);
+    try expectEqual(@as(u32, 0), main_tss_entry.eax);
+    try expectEqual(@as(u32, 0), main_tss_entry.ecx);
+    try expectEqual(@as(u32, 0), main_tss_entry.edx);
+    try expectEqual(@as(u32, 0), main_tss_entry.ebx);
+    try expectEqual(@as(u32, 0), main_tss_entry.esp);
+    try expectEqual(@as(u32, 0), main_tss_entry.ebp);
+    try expectEqual(@as(u32, 0), main_tss_entry.esi);
+    try expectEqual(@as(u32, 0), main_tss_entry.edi);
+    try expectEqual(@as(u32, 0), main_tss_entry.es);
+    try expectEqual(@as(u32, 0), main_tss_entry.cs);
+    try expectEqual(@as(u32, 0), main_tss_entry.ss);
+    try expectEqual(@as(u32, 0), main_tss_entry.ds);
+    try expectEqual(@as(u32, 0), main_tss_entry.fs);
+    try expectEqual(@as(u32, 0), main_tss_entry.gs);
+    try expectEqual(@as(u32, 0), main_tss_entry.ldtr);
+    try expectEqual(@as(u16, 0), main_tss_entry.trap);
 
     // Size of Tss will fit in a u16 as 104 < 65535 (2^16)
-    expectEqual(@as(u16, @sizeOf(Tss)), main_tss_entry.io_permissions_base_offset);
+    try expectEqual(@as(u16, @sizeOf(Tss)), main_tss_entry.io_permissions_base_offset);
 }
 
 test "makeGdtEntry NULL" {
     const actual = makeGdtEntry(0, 0, NULL_SEGMENT, NULL_FLAGS);
 
     const expected: u64 = 0;
-    expectEqual(expected, @bitCast(u64, actual));
+    try expectEqual(expected, @bitCast(u64, actual));
 }
 
 test "makeGdtEntry alternating bit pattern" {
@@ -507,7 +506,7 @@ test "makeGdtEntry alternating bit pattern" {
         .present = 0,
     };
 
-    expectEqual(@as(u8, 0b01010101), @bitCast(u8, alt_access));
+    try expectEqual(@as(u8, 0b01010101), @bitCast(u8, alt_access));
 
     const alt_flag = FlagBits{
         .reserved_zero = 1,
@@ -516,12 +515,12 @@ test "makeGdtEntry alternating bit pattern" {
         .granularity = 0,
     };
 
-    expectEqual(@as(u4, 0b0101), @bitCast(u4, alt_flag));
+    try expectEqual(@as(u4, 0b0101), @bitCast(u4, alt_flag));
 
     const actual = makeGdtEntry(0b01010101010101010101010101010101, 0b01010101010101010101, alt_access, alt_flag);
 
     const expected: u64 = 0b0101010101010101010101010101010101010101010101010101010101010101;
-    expectEqual(expected, @bitCast(u64, actual));
+    try expectEqual(expected, @bitCast(u64, actual));
 }
 
 test "init" {
@@ -549,7 +548,7 @@ test "init" {
     // Flags are zero
     expected |= @as(u64, @truncate(u8, tss_addr >> 24)) << (16 + 24 + 8 + 4 + 4);
 
-    expectEqual(expected, @bitCast(u64, tss_entry));
+    try expectEqual(expected, @bitCast(u64, tss_entry));
 
     // Reset
     gdt_ptr.base = 0;
