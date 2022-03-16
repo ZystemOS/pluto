@@ -133,7 +133,7 @@ pub var kernel_vmm: VirtualMemoryManager(arch.VmmPayload) = undefined;
 pub fn VirtualMemoryManager(comptime Payload: type) type {
     return struct {
         /// The bitmap that keeps track of allocated and free regions
-        bmp: bitmap.Bitmap(usize),
+        bmp: bitmap.Bitmap(false, usize, null),
 
         /// The start of the memory to be tracked
         start: usize,
@@ -173,7 +173,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///
         pub fn init(start: usize, end: usize, allocator: Allocator, mapper: Mapper(Payload), payload: Payload) Allocator.Error!Self {
             const size = end - start;
-            var bmp = try bitmap.Bitmap(usize).init(std.mem.alignForward(size, pmm.BLOCK_SIZE) / pmm.BLOCK_SIZE, allocator);
+            var bmp = try bitmap.Bitmap(false, usize, null).init(std.mem.alignForward(size, pmm.BLOCK_SIZE) / pmm.BLOCK_SIZE, allocator);
             return Self{
                 .bmp = bmp,
                 .start = start,
@@ -305,7 +305,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         /// Error: pmm.PmmError
         ///     Bitmap(u32).Error.OutOfBounds - The address given is outside of the memory managed
         ///
-        pub fn isSet(self: *const Self, virt: usize) bitmap.Bitmap(u32).BitmapError!bool {
+        pub fn isSet(self: *const Self, virt: usize) bitmap.BitmapError!bool {
             return self.bmp.isSet((virt - self.start) / BLOCK_SIZE);
         }
 
@@ -328,7 +328,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     Allocator.Error.OutOfMemory - Allocating the required memory failed
         ///     MapperError.* - The causes depend on the mapper used
         ///
-        pub fn set(self: *Self, virtual: mem.Range, physical: ?mem.Range, attrs: Attributes) (VmmError || bitmap.Bitmap(u32).BitmapError || Allocator.Error || MapperError)!void {
+        pub fn set(self: *Self, virtual: mem.Range, physical: ?mem.Range, attrs: Attributes) (VmmError || bitmap.BitmapError || Allocator.Error || MapperError)!void {
             var virt = virtual.start;
             while (virt < virtual.end) : (virt += BLOCK_SIZE) {
                 if (try self.isSet(virt)) {
@@ -440,14 +440,14 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     Bitmap(u32).Error.OutOfBounds - The address given is outside of the memory managed
         ///     Allocator.Error.OutOfMemory - There wasn't enough memory available to fulfill the request
         ///
-        pub fn copyData(self: *Self, other: *const Self, comptime from: bool, data: if (from) []const u8 else []u8, address: usize) (bitmap.Bitmap(usize).BitmapError || VmmError || Allocator.Error)!void {
+        pub fn copyData(self: *Self, other: *const Self, comptime from: bool, data: if (from) []const u8 else []u8, address: usize) (bitmap.BitmapError || VmmError || Allocator.Error)!void {
             if (data.len == 0) {
                 return;
             }
             const start_addr = std.mem.alignBackward(address, BLOCK_SIZE);
             const end_addr = std.mem.alignForward(address + data.len, BLOCK_SIZE);
             if (end_addr >= other.end or start_addr < other.start)
-                return bitmap.Bitmap(usize).BitmapError.OutOfBounds;
+                return bitmap.BitmapError.OutOfBounds;
             // Find physical blocks for the address
             var blocks = std.ArrayList(usize).init(self.allocator);
             defer blocks.deinit();
@@ -511,7 +511,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     VmmError.NotAllocated - This address hasn't been allocated yet
         ///     Bitmap.BitmapError.OutOfBounds - The address is out of the manager's bounds
         ///
-        pub fn free(self: *Self, vaddr: usize) (bitmap.Bitmap(u32).BitmapError || VmmError)!void {
+        pub fn free(self: *Self, vaddr: usize) (bitmap.BitmapError || VmmError)!void {
             const entry = (vaddr - self.start) / BLOCK_SIZE;
             if (try self.bmp.isSet(entry)) {
                 // There will be an allocation associated with this virtual address
@@ -666,8 +666,8 @@ test "alloc and free" {
                 // Allocation failed as there weren't enough free entries
                 if (vaddr >= num_entries * BLOCK_SIZE) {
                     // If this address is beyond the VMM's end address, it should be out of bounds
-                    try std.testing.expectError(bitmap.Bitmap(u32).BitmapError.OutOfBounds, vmm.isSet(vaddr));
-                    try std.testing.expectError(bitmap.Bitmap(u64).BitmapError.OutOfBounds, allocations.isSet(vaddr / BLOCK_SIZE));
+                    try std.testing.expectError(bitmap.BitmapError.OutOfBounds, vmm.isSet(vaddr));
+                    try std.testing.expectError(bitmap.BitmapError.OutOfBounds, allocations.isSet(vaddr / BLOCK_SIZE));
                 } else {
                     // Else it should not be set
                     try std.testing.expect(!(try vmm.isSet(vaddr)));
@@ -832,8 +832,8 @@ test "copyData from" {
     try std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
 
     // Test Bitmap.Error.OutOfBounds
-    try std.testing.expectError(bitmap.Bitmap(usize).BitmapError.OutOfBounds, vmm2.copyData(&vmm, true, buff[0..buff.len], vmm.end));
-    try std.testing.expectError(bitmap.Bitmap(usize).BitmapError.OutOfBounds, vmm.copyData(&vmm2, true, buff[0..buff.len], vmm2.end));
+    try std.testing.expectError(bitmap.BitmapError.OutOfBounds, vmm2.copyData(&vmm, true, buff[0..buff.len], vmm.end));
+    try std.testing.expectError(bitmap.BitmapError.OutOfBounds, vmm.copyData(&vmm2, true, buff[0..buff.len], vmm2.end));
     try std.testing.expectEqual(vmm_free_entries, vmm.bmp.num_free_entries);
     try std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
 }
@@ -857,7 +857,7 @@ test "copyDaya to" {
     try std.testing.expectEqual(vmm2_free_entries - 1, vmm2.bmp.num_free_entries);
 }
 
-var test_allocations: ?*bitmap.Bitmap(u64) = null;
+var test_allocations: ?*bitmap.Bitmap(false, u64, null) = null;
 var test_mapper = Mapper(arch.VmmPayload){ .mapFn = testMap, .unmapFn = testUnmap };
 
 ///
@@ -874,8 +874,8 @@ var test_mapper = Mapper(arch.VmmPayload){ .mapFn = testMap, .unmapFn = testUnma
 ///
 pub fn testInit(num_entries: u32) Allocator.Error!VirtualMemoryManager(arch.VmmPayload) {
     if (test_allocations == null) {
-        test_allocations = try std.testing.allocator.create(bitmap.Bitmap(u64));
-        test_allocations.?.* = try bitmap.Bitmap(u64).init(num_entries, std.testing.allocator);
+        test_allocations = try std.testing.allocator.create(bitmap.Bitmap(false, u64, null));
+        test_allocations.?.* = try bitmap.Bitmap(false, u64, null).init(num_entries, std.testing.allocator);
     } else |allocations| {
         var entry: u32 = 0;
         while (entry < allocations.num_entries) : (entry += 1) {

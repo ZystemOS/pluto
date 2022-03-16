@@ -12,7 +12,6 @@ const pmm = @import("pmm.zig");
 const mem = @import("mem.zig");
 const elf = @import("elf.zig");
 const bitmap = @import("bitmap.zig");
-const ComptimeBitmap = bitmap.ComptimeBitmap;
 const vfs = @import("filesystem/vfs.zig");
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.task);
@@ -31,10 +30,12 @@ pub const Handle = u16;
 pub const EntryPoint = usize;
 
 /// The bitmap type for the PIDs
-const PidBitmap = if (is_test) ComptimeBitmap(u128) else ComptimeBitmap(u1024);
+const PidBitmap = if (is_test) bitmap.Bitmap(true, usize, 128) else bitmap.Bitmap(true, usize, 1024);
+
+const FileHandleBitmap = bitmap.Bitmap(true, usize, 1024);
 
 /// The list of PIDs that have been allocated.
-var all_pids = PidBitmap.init();
+var all_pids = (if (is_test) PidBitmap.init(128, null) else PidBitmap.init(1024, null)) catch unreachable;
 
 /// The default stack size of a task. Currently this is set to a page size.
 pub const STACK_SIZE: u32 = arch.MEMORY_BLOCK_SIZE / @sizeOf(u32);
@@ -49,7 +50,7 @@ pub const Task = struct {
     const Self = @This();
 
     /// The unique task identifier
-    pid: PidBitmap.IndexType,
+    pid: usize,
 
     /// Pointer to the kernel stack for the task. This will be allocated on initialisation.
     kernel_stack: []usize,
@@ -67,7 +68,7 @@ pub const Task = struct {
     vmm: *vmm.VirtualMemoryManager(arch.VmmPayload),
 
     /// The list of file handles for this process
-    file_handles: bitmap.Bitmap(usize),
+    file_handles: FileHandleBitmap,
 
     /// The mapping between file handles and file nodes
     file_handle_mapping: std.hash_map.AutoHashMap(Handle, *vfs.Node),
@@ -95,7 +96,7 @@ pub const Task = struct {
         errdefer allocator.destroy(task);
 
         const pid = allocatePid();
-        errdefer freePid(pid);
+        errdefer freePid(pid) catch |e| panic(@errorReturnTrace(), "Failed to free task PID in errdefer ({}): {}\n", .{ pid, e });
 
         var k_stack = try allocator.alloc(usize, STACK_SIZE);
         errdefer allocator.free(k_stack);
@@ -110,7 +111,7 @@ pub const Task = struct {
             .stack_pointer = @ptrToInt(&k_stack[STACK_SIZE - 1]),
             .kernel = kernel,
             .vmm = task_vmm,
-            .file_handles = try bitmap.Bitmap(usize).init(VFS_HANDLES_PER_PROCESS, allocator),
+            .file_handles = FileHandleBitmap.init(null, null) catch unreachable,
             .file_handle_mapping = std.hash_map.AutoHashMap(Handle, *vfs.Node).init(allocator),
         };
 
@@ -119,7 +120,7 @@ pub const Task = struct {
         return task;
     }
 
-    pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) (bitmap.Bitmap(usize).BitmapError || vmm.VmmError || Allocator.Error)!*Task {
+    pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) (bitmap.BitmapError || vmm.VmmError || Allocator.Error)!*Task {
         const task = try create(program_elf.header.entry_address, kernel, task_vmm, allocator);
         errdefer task.destroy(allocator);
 
@@ -159,7 +160,7 @@ pub const Task = struct {
     ///     IN allocator: Allocator - The allocator used to create the task.
     ///
     pub fn destroy(self: *Self, allocator: Allocator) void {
-        freePid(self.pid);
+        freePid(self.pid) catch |e| panic(@errorReturnTrace(), "Failed to free task's PID ({}): {}\n", .{ self.pid, e });
         // We need to check that the the stack has been allocated as task 0 (init) won't have a
         // stack allocated as this in the linker script
         if (@ptrToInt(self.kernel_stack.ptr) != @ptrToInt(&KERNEL_STACK_START)) {
@@ -168,12 +169,11 @@ pub const Task = struct {
         if (!self.kernel) {
             allocator.free(self.user_stack);
         }
-        self.file_handles.deinit();
         self.file_handle_mapping.deinit();
         allocator.destroy(self);
     }
 
-    pub fn getVFSHandle(self: Self, handle: Handle) bitmap.Bitmap(usize).BitmapError!?*vfs.Node {
+    pub fn getVFSHandle(self: Self, handle: Handle) bitmap.BitmapError!?*vfs.Node {
         return self.file_handle_mapping.get(handle);
     }
 
@@ -190,13 +190,13 @@ pub const Task = struct {
         return null;
     }
 
-    pub fn hasVFSHandle(self: Self, handle: Handle) bitmap.Bitmap(usize).BitmapError!bool {
+    pub fn hasVFSHandle(self: Self, handle: Handle) bitmap.BitmapError!bool {
         return self.file_handles.isSet(handle);
     }
 
-    pub fn clearVFSHandle(self: *Self, handle: Handle) (bitmap.Bitmap(usize).BitmapError || Error)!void {
+    pub fn clearVFSHandle(self: *Self, handle: Handle) (bitmap.BitmapError || Error)!void {
         if (try self.hasVFSHandle(handle)) {
-            self.file_handles.clearEntry(handle) catch unreachable;
+            try self.file_handles.clearEntry(handle);
             _ = self.file_handle_mapping.remove(handle);
         } else {
             return Error.VFSHandleNotSet;
@@ -211,7 +211,7 @@ pub const Task = struct {
 /// Return: u32
 ///     A new PID.
 ///
-fn allocatePid() PidBitmap.IndexType {
+fn allocatePid() usize {
     return all_pids.setFirstFree() orelse panic(@errorReturnTrace(), "Out of PIDs\n", .{});
 }
 
@@ -219,13 +219,16 @@ fn allocatePid() PidBitmap.IndexType {
 /// Free an allocated PID. One must be allocated to be freed. If one wasn't allocated will panic.
 ///
 /// Arguments:
-///     IN pid: u32 - The PID to free.
+///     IN pid: usize - The PID to free.
 ///
-fn freePid(pid: PidBitmap.IndexType) void {
-    if (!all_pids.isSet(pid)) {
+/// Error: BitmapError.
+///     OutOfBounds: The index given is out of bounds.
+///
+fn freePid(pid: usize) bitmap.BitmapError!void {
+    if (!(try all_pids.isSet(pid))) {
         panic(@errorReturnTrace(), "PID {} not allocated\n", .{pid});
     }
-    all_pids.clearEntry(pid);
+    all_pids.clearEntry(pid) catch unreachable;
 }
 
 // For testing the errdefer
@@ -245,7 +248,9 @@ test "create out of memory for task" {
     try expectEqual(fa.allocated_bytes, fa.freed_bytes);
 
     // Make sure no PIDs were allocated
-    try expectEqual(all_pids.bitmap, 0);
+    for (all_pids.bitmaps) |bmp| {
+        try expectEqual(bmp, 0);
+    }
 }
 
 test "create out of memory for stack" {
@@ -259,7 +264,9 @@ test "create out of memory for stack" {
     try expectEqual(fa.allocated_bytes, fa.freed_bytes);
 
     // Make sure no PIDs were allocated
-    try expectEqual(all_pids.bitmap, 0);
+    for (all_pids.bitmaps) |bmp| {
+        try expectEqual(bmp, 0);
+    }
 }
 
 test "create expected setup" {
@@ -290,7 +297,9 @@ test "destroy cleans up" {
     user_task.destroy(allocator);
 
     // All PIDs were freed
-    try expectEqual(all_pids.bitmap, 0);
+    for (all_pids.bitmaps) |bmp| {
+        try expectEqual(bmp, 0);
+    }
 }
 
 test "Multiple create" {
@@ -299,16 +308,25 @@ test "Multiple create" {
 
     try expectEqual(task1.pid, 0);
     try expectEqual(task2.pid, 1);
-    try expectEqual(all_pids.bitmap, 3);
+    try expectEqual(all_pids.bitmaps[0], 3);
+    for (all_pids.bitmaps) |bmp, i| {
+        if (i > 0) try expectEqual(bmp, 0);
+    }
 
     task1.destroy(std.testing.allocator);
 
-    try expectEqual(all_pids.bitmap, 2);
+    try expectEqual(all_pids.bitmaps[0], 2);
+    for (all_pids.bitmaps) |bmp, i| {
+        if (i > 0) try expectEqual(bmp, 0);
+    }
 
     var task3 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
 
     try expectEqual(task3.pid, 0);
-    try expectEqual(all_pids.bitmap, 3);
+    try expectEqual(all_pids.bitmaps[0], 3);
+    for (all_pids.bitmaps) |bmp, i| {
+        if (i > 0) try expectEqual(bmp, 0);
+    }
 
     task2.destroy(std.testing.allocator);
     task3.destroy(std.testing.allocator);
@@ -316,28 +334,39 @@ test "Multiple create" {
     var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
 
     try expectEqual(user_task.pid, 0);
-    try expectEqual(all_pids.bitmap, 1);
+    try expectEqual(all_pids.bitmaps[0], 1);
+    for (all_pids.bitmaps) |bmp, i| {
+        if (i > 0) try expectEqual(bmp, 0);
+    }
 
     user_task.destroy(std.testing.allocator);
-    try expectEqual(all_pids.bitmap, 0);
+    for (all_pids.bitmaps) |bmp| {
+        try expectEqual(bmp, 0);
+    }
 }
 
 test "allocatePid and freePid" {
-    try expectEqual(all_pids.bitmap, 0);
+    for (all_pids.bitmaps) |bmp| {
+        try expectEqual(bmp, 0);
+    }
 
     var i: usize = 0;
-    while (i < PidBitmap.NUM_ENTRIES) : (i += 1) {
+    while (i < all_pids.num_entries) : (i += 1) {
         try expectEqual(i, allocatePid());
     }
 
-    try expectEqual(all_pids.bitmap, PidBitmap.BITMAP_FULL);
-
-    i = 0;
-    while (i < PidBitmap.NUM_ENTRIES) : (i += 1) {
-        freePid(@truncate(PidBitmap.IndexType, i));
+    for (all_pids.bitmaps) |bmp| {
+        try expectEqual(bmp, PidBitmap.BITMAP_FULL);
     }
 
-    try expectEqual(all_pids.bitmap, 0);
+    i = 0;
+    while (i < all_pids.num_entries) : (i += 1) {
+        try freePid(i);
+    }
+
+    for (all_pids.bitmaps) |bmp| {
+        try expectEqual(bmp, 0);
+    }
 }
 
 test "createFromElf" {
@@ -381,7 +410,7 @@ test "createFromElf clean-up" {
     // Test OutOfMemory
     var allocator2 = std.testing.FailingAllocator.init(allocator, 0).allocator();
     try std.testing.expectError(std.mem.Allocator.Error.OutOfMemory, Task.createFromElf(the_elf, true, &the_vmm, allocator2));
-    try std.testing.expectEqual(all_pids.num_free_entries, PidBitmap.NUM_ENTRIES - 1);
+    try std.testing.expectEqual(all_pids.num_free_entries, all_pids.num_entries - 1);
     // Test AlreadyAllocated
     try std.testing.expectError(error.AlreadyAllocated, Task.createFromElf(the_elf, true, &the_vmm, allocator));
     // Test OutOfBounds
