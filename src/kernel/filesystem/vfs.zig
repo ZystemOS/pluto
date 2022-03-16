@@ -422,6 +422,20 @@ pub fn open(path: []const u8, follow_symlinks: bool, flags: OpenFlags, args: Ope
 }
 
 ///
+/// Close a node.
+///
+/// Arguments:
+///     IN node: Node - The node to close
+///
+pub fn close(node: Node) void {
+    switch (node) {
+        .Dir => |d| d.close(),
+        .File => |f| f.close(),
+        .Symlink => |s| s.close(),
+    }
+}
+
+///
 /// Open a file at a path.
 ///
 /// Arguments:

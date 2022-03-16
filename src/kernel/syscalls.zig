@@ -259,7 +259,8 @@ fn handleOpen(path_ptr: usize, path_len: usize, flags: usize, args: usize, ignor
     const path = try getData(path_ptr, path_len);
     defer if (!current_task.kernel) allocator.free(path);
 
-    var node = try vfs.open(path, true, open_flags, open_args);
+    const node = try vfs.open(path, true, open_flags, open_args);
+    errdefer vfs.close(node.*);
     return (try current_task.addVFSHandle(node)) orelse panic(null, "Failed to add a VFS handle to current_task\n", .{});
 }
 
