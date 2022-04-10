@@ -539,3 +539,40 @@ test "handleRead" {
         try testing.expect(std.mem.eql(u8, str[0..str.len], buffer[0..length]));
     }
 }
+
+test "handleOpen errors" {
+    allocator = std.testing.allocator;
+    var testfs = try vfs.testInitFs(allocator);
+    defer allocator.destroy(testfs);
+    defer testfs.deinit();
+
+    testfs.instance = 1;
+    try vfs.setRoot(testfs.tree.val);
+
+    vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 1024, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
+    defer vmm.kernel_vmm.deinit();
+    scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+    defer scheduler.current_task.destroy(allocator);
+
+    const free_handles = scheduler.current_task.file_handles.num_free_entries;
+    scheduler.current_task.file_handles.num_free_entries = 0;
+    try testing.expectError(Error.NoMoreFSHandles, handleOpen(0, 0, 0, 0, 0));
+    scheduler.current_task.file_handles.num_free_entries = handles;
+    try testing.expect(!testing.allocator_instance.detectLeaks());
+
+    try testing.expectError(Error.TooBig, handleOpen(0, USER_MAX_DATA_LEN + 1, 0, 0, 0));
+    try testing.expect(!testing.allocator_instance.detectLeaks());
+
+    scheduler.current_task.kernel = false;
+    try testing.expectError(Error.TooBig, handleOpen(0, USER_MAX_DATA_LEN + 1, 0, 0, 0));
+    try testing.expect(!testing.allocator_instance.detectLeaks());
+    scheduler.current_task.kernel = true;
+
+    scheduler.current_task.kernel = false;
+    try testing.expectError(Error.InvalidAddress, handleOpen(0, 1, 0, 0, 0));
+    try testing.expect(!testing.allocator_instance.detectLeaks());
+    scheduler.current_task.kernel = true;
+
+    try testing.expectError(Error.InvalidFlags, handleOpen(0, 1, 0, 0, 0));
+    try testing.expect(!testing.allocator_instance.detectLeaks());
+}
