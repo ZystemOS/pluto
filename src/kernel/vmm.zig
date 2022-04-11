@@ -306,6 +306,9 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
         ///     Bitmap(u32).Error.OutOfBounds - The address given is outside of the memory managed
         ///
         pub fn isSet(self: *const Self, virt: usize) bitmap.BitmapError!bool {
+            if (virt < self.start) {
+                return bitmap.BitmapError.OutOfBounds;
+            }
             return self.bmp.isSet((virt - self.start) / BLOCK_SIZE);
         }
 
@@ -446,6 +449,7 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
             }
             const start_addr = std.mem.alignBackward(address, BLOCK_SIZE);
             const end_addr = std.mem.alignForward(address + data.len, BLOCK_SIZE);
+
             if (end_addr >= other.end or start_addr < other.start)
                 return bitmap.BitmapError.OutOfBounds;
             // Find physical blocks for the address
