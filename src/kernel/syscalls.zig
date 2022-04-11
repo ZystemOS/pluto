@@ -8,6 +8,8 @@ const vmm = @import("vmm.zig");
 const bitmap = @import("bitmap.zig");
 const task = @import("task.zig");
 const arch = @import("arch.zig").internals;
+const mem = @import("mem.zig");
+const pmm = @import("pmm.zig");
 const testing = std.testing;
 
 var allocator: std.mem.Allocator = undefined;
@@ -197,14 +199,19 @@ pub fn handle(syscall: Syscall, arg1: usize, arg2: usize, arg3: usize, arg4: usi
 /// Error: Error
 ///     Error.OutOfMemory - There wasn't enough kernel (heap or VMM) memory left to fulfill the request.
 ///     Error.TooBig - The user task requested to have too much data copied
-///     Error.InvalidAddress - The address that the user task passed is invalid (not mapped, out of bounds etc.)
+///     Error.NotAllocated - The pointer hasn't been mapped by the task
+///     Error.OutOfBounds - The pointer and length is out of bounds of the task's VMM
 ///
 /// Return: []u8
 ///     The slice of data. Will be stack-allocated if the current task is kernel-level, otherwise will be heap-allocated
 ///
 fn getData(ptr: usize, len: usize) Error![]u8 {
     if (scheduler.current_task.kernel) {
-        return @intToPtr([*]u8, ptr)[0..len];
+        if (try vmm.kernel_vmm.isSet(ptr)) {
+            return @intToPtr([*]u8, ptr)[0..len];
+        } else {
+            return Error.NotAllocated;
+        }
     } else {
         if (len > USER_MAX_DATA_LEN) {
             return Error.TooBig;
@@ -412,6 +419,37 @@ pub fn handleTest3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usi
     return std.mem.Allocator.Error.OutOfMemory;
 }
 
+fn testInitMem(comptime num_vmm_entries: usize, alloc: std.mem.Allocator, map_all: bool) !std.heap.FixedBufferAllocator {
+    // handleOpen requires that the name passed is mapped in the VMM
+    // Allocate them within a buffer so we know the start and end address to give to the VMM
+    var buffer = try alloc.alloc(u8, num_vmm_entries * vmm.BLOCK_SIZE);
+    var fixed_buffer_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
+
+    vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(@ptrToInt(fixed_buffer_allocator.buffer.ptr), @ptrToInt(fixed_buffer_allocator.buffer.ptr) + buffer.len, alloc, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
+    // The PMM is required as well
+    const mem_profile = mem.MemProfile{
+        .vaddr_end = undefined,
+        .vaddr_start = undefined,
+        .physaddr_start = undefined,
+        .physaddr_end = undefined,
+        .mem_kb = num_vmm_entries * vmm.BLOCK_SIZE / 1024,
+        .fixed_allocator = undefined,
+        .virtual_reserved = &[_]mem.Map{},
+        .physical_reserved = &[_]mem.Range{},
+        .modules = &[_]mem.Module{},
+    };
+    pmm.init(&mem_profile, alloc);
+    // Set the whole VMM space as mapped so all address within the buffer allocator will be considered valid
+    if (map_all) _ = try vmm.kernel_vmm.alloc(num_vmm_entries, null, .{ .kernel = true, .writable = true, .cachable = true });
+    return fixed_buffer_allocator;
+}
+
+fn testDeinitMem(alloc: std.mem.Allocator, buffer_allocator: std.heap.FixedBufferAllocator) void {
+    alloc.free(buffer_allocator.buffer);
+    vmm.kernel_vmm.deinit();
+    pmm.deinit();
+}
+
 test "getHandler" {
     try std.testing.expectEqual(Syscall.Test1.getHandler(), handleTest1);
     try std.testing.expectEqual(Syscall.Test2.getHandler(), handleTest2);
@@ -543,36 +581,46 @@ test "handleRead" {
 test "handleOpen errors" {
     allocator = std.testing.allocator;
     var testfs = try vfs.testInitFs(allocator);
-    defer allocator.destroy(testfs);
-    defer testfs.deinit();
+    {
+        defer allocator.destroy(testfs);
+        defer testfs.deinit();
 
-    testfs.instance = 1;
-    try vfs.setRoot(testfs.tree.val);
+        testfs.instance = 1;
+        try vfs.setRoot(testfs.tree.val);
 
-    vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 1024, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
-    defer vmm.kernel_vmm.deinit();
-    scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
-    defer scheduler.current_task.destroy(allocator);
+        // The data we pass to handleOpen needs to be mapped within the VMM, so we need to know their address
+        // Allocating the data within a fixed buffer allocator is the best way to know the address of the data
+        var fixed_buffer_allocator = try testInitMem(3, allocator, false);
+        var buffer_allocator = fixed_buffer_allocator.allocator();
+        defer testDeinitMem(allocator, fixed_buffer_allocator);
 
-    const free_handles = scheduler.current_task.file_handles.num_free_entries;
-    scheduler.current_task.file_handles.num_free_entries = 0;
-    try testing.expectError(Error.NoMoreFSHandles, handleOpen(0, 0, 0, 0, 0));
-    scheduler.current_task.file_handles.num_free_entries = handles;
-    try testing.expect(!testing.allocator_instance.detectLeaks());
+        scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+        defer scheduler.current_task.destroy(allocator);
 
-    try testing.expectError(Error.TooBig, handleOpen(0, USER_MAX_DATA_LEN + 1, 0, 0, 0));
-    try testing.expect(!testing.allocator_instance.detectLeaks());
+        // Check opening with no free file handles left
+        const free_handles = scheduler.current_task.file_handles.num_free_entries;
+        scheduler.current_task.file_handles.num_free_entries = 0;
+        try testing.expectError(Error.NoMoreFSHandles, handleOpen(0, 0, 0, 0, 0));
+        scheduler.current_task.file_handles.num_free_entries = free_handles;
 
-    scheduler.current_task.kernel = false;
-    try testing.expectError(Error.TooBig, handleOpen(0, USER_MAX_DATA_LEN + 1, 0, 0, 0));
-    try testing.expect(!testing.allocator_instance.detectLeaks());
-    scheduler.current_task.kernel = true;
+        // Using a path that is too long
+        scheduler.current_task.kernel = false;
+        try testing.expectError(Error.TooBig, handleOpen(0, USER_MAX_DATA_LEN + 1, 0, 0, 0));
 
-    scheduler.current_task.kernel = false;
-    try testing.expectError(Error.InvalidAddress, handleOpen(0, 1, 0, 0, 0));
-    try testing.expect(!testing.allocator_instance.detectLeaks());
-    scheduler.current_task.kernel = true;
+        // Unallocated user address
+        const test_alloc = try buffer_allocator.alloc(u8, 1);
+        // The kernel VMM and task VMM need to have their buffers mapped, so we'll temporarily use the buffer allocator since it operates within a known address space
+        allocator = buffer_allocator;
+        std.debug.print("test_alloc: {}, vmm start: {}, vmm end: {}\n", .{ @ptrToInt(test_alloc.ptr), vmm.kernel_vmm.start, vmm.kernel_vmm.end });
+        try testing.expectError(Error.NotAllocated, handleOpen(@ptrToInt(test_alloc.ptr), 1, 0, 0, 0));
+        allocator = std.testing.allocator;
 
-    try testing.expectError(Error.InvalidFlags, handleOpen(0, 1, 0, 0, 0));
+        // Unallocated kernel address
+        scheduler.current_task.kernel = true;
+        try testing.expectError(Error.NotAllocated, handleOpen(@ptrToInt(test_alloc.ptr), 1, 0, 0, 0));
+
+        // Invalid flag enum value
+        try testing.expectError(Error.InvalidFlags, handleOpen(@ptrToInt(test_alloc.ptr), 1, 999, 0, 0));
+    }
     try testing.expect(!testing.allocator_instance.detectLeaks());
 }
