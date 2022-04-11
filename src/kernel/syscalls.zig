@@ -475,13 +475,17 @@ test "handleOpen" {
     testfs.instance = 1;
     try vfs.setRoot(testfs.tree.val);
 
+    var fixed_buffer_allocator = try testInitMem(1, allocator, true);
+    var buffer_allocator = fixed_buffer_allocator.allocator();
+    defer testDeinitMem(allocator, fixed_buffer_allocator);
+
     scheduler.current_task = try task.Task.create(0, true, undefined, allocator);
     defer scheduler.current_task.destroy(allocator);
     var current_task = scheduler.current_task;
 
     // Creating a file
-    const name1 = "/abc.txt";
-    var test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name1), name1.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, undefined));
+    var name1 = try buffer_allocator.dupe(u8, "/abc.txt");
+    var test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name1.ptr), name1.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, undefined));
     var test_node = (try current_task.getVFSHandle(test_handle)).?;
     try testing.expectEqual(testfs.tree.children.items.len, 1);
     var tree = testfs.tree.children.items[0];
@@ -492,8 +496,8 @@ test "handleOpen" {
     try testing.expectEqual(tree.children.items.len, 0);
 
     // Creating a dir
-    const name2 = "/def";
-    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name2), name2.len, @enumToInt(vfs.OpenFlags.CREATE_DIR), 0, undefined));
+    var name2 = try buffer_allocator.dupe(u8, "/def");
+    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name2.ptr), name2.len, @enumToInt(vfs.OpenFlags.CREATE_DIR), 0, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
     try testing.expectEqual(testfs.tree.children.items.len, 2);
     tree = testfs.tree.children.items[1];
@@ -504,8 +508,8 @@ test "handleOpen" {
     try testing.expectEqual(tree.children.items.len, 0);
 
     // Creating a file under a new dir
-    const name3 = "/def/ghi.zig";
-    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name3), name3.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, undefined));
+    var name3 = try buffer_allocator.dupe(u8, "/def/ghi.zig");
+    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name3.ptr), name3.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
     try testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
     tree = testfs.tree.children.items[1].children.items[0];
@@ -516,7 +520,7 @@ test "handleOpen" {
     try testing.expectEqual(tree.children.items.len, 0);
 
     // Opening an existing file
-    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name3), name3.len, @enumToInt(vfs.OpenFlags.NO_CREATION), 0, undefined));
+    test_handle = @intCast(task.Handle, try handleOpen(@ptrToInt(name3.ptr), name3.len, @enumToInt(vfs.OpenFlags.NO_CREATION), 0, undefined));
     test_node = (try current_task.getVFSHandle(test_handle)).?;
     try testing.expectEqual(testfs.tree.children.items[1].children.items.len, 1);
     try testing.expect(test_node.isFile());
@@ -532,14 +536,15 @@ test "handleRead" {
     testfs.instance = 1;
     try vfs.setRoot(testfs.tree.val);
 
-    vmm.kernel_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 1024, allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
-    defer vmm.kernel_vmm.deinit();
+    var fixed_buffer_allocator = try testInitMem(1, allocator, true);
+    var buffer_allocator = fixed_buffer_allocator.allocator();
+    defer testDeinitMem(allocator, fixed_buffer_allocator);
     scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
     defer scheduler.current_task.destroy(allocator);
     _ = scheduler.current_task;
 
-    const test_file_path = "/foo.txt";
-    var test_file = @intCast(task.Handle, try handleOpen(@ptrToInt(test_file_path), test_file_path.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, undefined));
+    var test_file_path = try buffer_allocator.dupe(u8, "/foo.txt");
+    var test_file = @intCast(task.Handle, try handleOpen(@ptrToInt(test_file_path.ptr), test_file_path.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, undefined));
     var f_data = &testfs.tree.children.items[0].data;
     var str = "test123";
     f_data.* = try testing.allocator.dupe(u8, str);
@@ -570,8 +575,10 @@ test "handleRead" {
         try testing.expect(std.mem.eql(u8, str[0..0], buffer[0..length]));
     }
     // Try reading from a symlink
-    const args = vfs.OpenArgs{ .symlink_target = test_file_path };
-    var test_link = @intCast(task.Handle, try handleOpen(@ptrToInt("/link"), "/link".len, @enumToInt(vfs.OpenFlags.CREATE_SYMLINK), @ptrToInt(&args), undefined));
+    var args = try buffer_allocator.create(vfs.OpenArgs);
+    args.* = vfs.OpenArgs{ .symlink_target = test_file_path };
+    var link = try buffer_allocator.dupe(u8, "/link");
+    var test_link = @intCast(task.Handle, try handleOpen(@ptrToInt(link.ptr), link.len, @enumToInt(vfs.OpenFlags.CREATE_SYMLINK), @ptrToInt(args), undefined));
     {
         const length = try handleRead(test_link, @ptrToInt(&buffer[0]), buffer.len, 0, undefined);
         try testing.expect(std.mem.eql(u8, str[0..str.len], buffer[0..length]));
