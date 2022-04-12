@@ -347,7 +347,7 @@ fn handleWrite(node_handle: usize, buff_ptr: usize, buff_len: usize, ignored1: u
     const node_opt = current_task.getVFSHandle(real_handle) catch panic(@errorReturnTrace(), "Failed to get VFS node for handle {}\n", .{real_handle});
     if (node_opt) |node| {
         const file = switch (node.*) {
-            .File => |f| f,
+            .File => |*f| f,
             else => return Error.NotAFile,
         };
 
@@ -585,6 +585,43 @@ test "handleRead" {
     }
 }
 
+test "handleWrite" {
+    allocator = std.testing.allocator;
+    var testfs = try vfs.testInitFs(allocator);
+    defer allocator.destroy(testfs);
+    defer testfs.deinit();
+
+    testfs.instance = 1;
+    try vfs.setRoot(testfs.tree.val);
+
+    var fixed_buffer_allocator = try testInitMem(1, allocator, true);
+    var buffer_allocator = fixed_buffer_allocator.allocator();
+    defer testDeinitMem(allocator, fixed_buffer_allocator);
+
+    scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+    defer scheduler.current_task.destroy(allocator);
+
+    // Open test file
+    const name = try buffer_allocator.dupe(u8, "/abc.txt");
+    const node = try handleOpen(@ptrToInt(name.ptr), name.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, undefined);
+
+    // Write
+    const data = try buffer_allocator.dupe(u8, "test_data 123");
+    const res = try handleWrite(node, @ptrToInt(data.ptr), data.len, 0, 0);
+    try testing.expectEqual(res, data.len);
+    try testing.expectEqualSlices(u8, data, testfs.tree.children.items[0].data.?);
+
+    // Write to a file in a folder
+    const name2 = try buffer_allocator.dupe(u8, "/dir");
+    _ = try handleOpen(@ptrToInt(name2.ptr), name2.len, @enumToInt(vfs.OpenFlags.CREATE_DIR), 0, undefined);
+    const name3 = try buffer_allocator.dupe(u8, "/dir/def.txt");
+    const node3 = try handleOpen(@ptrToInt(name3.ptr), name3.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, undefined);
+    const data2 = try buffer_allocator.dupe(u8, "some more test data!");
+    const res2 = try handleWrite(node3, @ptrToInt(data2.ptr), data2.len, 0, 0);
+    try testing.expectEqual(res2, data2.len);
+    try testing.expectEqualSlices(u8, data2, testfs.tree.children.items[1].children.items[0].data.?);
+}
+
 test "handleOpen errors" {
     allocator = std.testing.allocator;
     var testfs = try vfs.testInitFs(allocator);
@@ -618,7 +655,6 @@ test "handleOpen errors" {
         const test_alloc = try buffer_allocator.alloc(u8, 1);
         // The kernel VMM and task VMM need to have their buffers mapped, so we'll temporarily use the buffer allocator since it operates within a known address space
         allocator = buffer_allocator;
-        std.debug.print("test_alloc: {}, vmm start: {}, vmm end: {}\n", .{ @ptrToInt(test_alloc.ptr), vmm.kernel_vmm.start, vmm.kernel_vmm.end });
         try testing.expectError(Error.NotAllocated, handleOpen(@ptrToInt(test_alloc.ptr), 1, 0, 0, 0));
         allocator = std.testing.allocator;
 
