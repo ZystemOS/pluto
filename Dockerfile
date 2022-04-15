@@ -1,5 +1,4 @@
-ARG ZIG_TAG=llvm13-x86_64-1
-FROM ziglang/static-base:$ZIG_TAG
+FROM samtebbs33/zig:0.9.1-x86_64
 
 RUN apk update && \
     apk add xorriso grub qemu qemu-system-i386
