@@ -4063,11 +4063,14 @@ test "Fat32FS.open - no create - hand crafted" {
 }
 
 fn testOpenRec(dir_node: *const vfs.DirNode, path: []const u8) anyerror!void {
+    std.debug.print("parent: {s} ", .{path});
     var test_files = try std.fs.cwd().openDir(path, .{ .iterate = true });
+    std.debug.print("opened!\n", .{});
     defer test_files.close();
 
     var it = test_files.iterate();
     while (try it.next()) |file| {
+        std.debug.print("\tchild: {s}\n", .{file.name});
         if (file.kind == .Directory) {
             var dir_path = try std.testing.allocator.alloc(u8, path.len + file.name.len + 1);
             defer std.testing.allocator.free(dir_path);
