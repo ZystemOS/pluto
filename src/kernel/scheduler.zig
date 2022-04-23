@@ -195,8 +195,11 @@ test "pickNextTask" {
     tasks = TailQueue(*Task){};
 
     // Set up a current task
-    current_task = try allocator.create(Task);
-    defer allocator.destroy(current_task);
+    var first = try allocator.create(Task);
+    // We use an intermediary variable to avoid a double-free.
+    // Deferring freeing current_task will free whatever current_task points to at the end
+    defer allocator.destroy(first);
+    current_task = first;
     current_task.pid = 0;
     current_task.kernel_stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..4096];
     current_task.stack_pointer = @ptrToInt(&KERNEL_STACK_START);
@@ -232,7 +235,7 @@ test "pickNextTask" {
     // The stack pointer of the re-added task should point to the context
     try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
-    // Should be back tot he beginning
+    // Should be back to the beginning
     try expectEqual(current_task.pid, 0);
 
     // Reset the test pid

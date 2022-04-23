@@ -6,10 +6,11 @@ const arch = @import("arch.zig").internals;
 const MemProfile = @import("mem.zig").MemProfile;
 const testing = std.testing;
 const panic = @import("panic.zig").panic;
-const Bitmap = @import("bitmap.zig").Bitmap;
+const bitmap = @import("bitmap.zig");
+const Bitmap = bitmap.Bitmap;
 const Allocator = std.mem.Allocator;
 
-const PmmBitmap = Bitmap(u32);
+const PmmBitmap = Bitmap(null, u32);
 
 /// The possible errors thrown by bitmap functions
 const PmmError = error{
@@ -20,7 +21,7 @@ const PmmError = error{
 /// The size of memory associated with each bitmap entry
 pub const BLOCK_SIZE: usize = arch.MEMORY_BLOCK_SIZE;
 
-var bitmap: PmmBitmap = undefined;
+var the_bitmap: PmmBitmap = undefined;
 
 ///
 /// Set the bitmap entry for an address as occupied
@@ -31,8 +32,8 @@ var bitmap: PmmBitmap = undefined;
 /// Error: PmmBitmap.BitmapError.
 ///     *: See PmmBitmap.setEntry. Could occur if the address is out of bounds.
 ///
-pub fn setAddr(addr: usize) PmmBitmap.BitmapError!void {
-    try bitmap.setEntry(@intCast(u32, addr / BLOCK_SIZE));
+pub fn setAddr(addr: usize) bitmap.BitmapError!void {
+    try the_bitmap.setEntry(@intCast(u32, addr / BLOCK_SIZE));
 }
 
 ///
@@ -46,8 +47,8 @@ pub fn setAddr(addr: usize) PmmBitmap.BitmapError!void {
 /// Error: PmmBitmap.BitmapError.
 ///     *: See PmmBitmap.setEntry. Could occur if the address is out of bounds.
 ///
-pub fn isSet(addr: usize) PmmBitmap.BitmapError!bool {
-    return bitmap.isSet(@intCast(u32, addr / BLOCK_SIZE));
+pub fn isSet(addr: usize) bitmap.BitmapError!bool {
+    return the_bitmap.isSet(@intCast(u32, addr / BLOCK_SIZE));
 }
 
 ///
@@ -56,7 +57,7 @@ pub fn isSet(addr: usize) PmmBitmap.BitmapError!bool {
 /// Return: The address that was allocated.
 ///
 pub fn alloc() ?usize {
-    if (bitmap.setFirstFree()) |entry| {
+    if (the_bitmap.setFirstFree()) |entry| {
         return entry * BLOCK_SIZE;
     }
     return null;
@@ -72,10 +73,10 @@ pub fn alloc() ?usize {
 ///     PmmError.NotAllocated: The address wasn't allocated.
 ///     PmmBitmap.BitmapError.OutOfBounds: The address given was out of bounds.
 ///
-pub fn free(addr: usize) (PmmBitmap.BitmapError || PmmError)!void {
+pub fn free(addr: usize) (bitmap.BitmapError || PmmError)!void {
     const idx = @intCast(u32, addr / BLOCK_SIZE);
-    if (try bitmap.isSet(idx)) {
-        try bitmap.clearEntry(idx);
+    if (try the_bitmap.isSet(idx)) {
+        try the_bitmap.clearEntry(idx);
     } else {
         return PmmError.NotAllocated;
     }
@@ -88,7 +89,7 @@ pub fn free(addr: usize) (PmmBitmap.BitmapError || PmmError)!void {
 ///     The number of unallocated blocks of memory
 ///
 pub fn blocksFree() usize {
-    return bitmap.num_free_entries;
+    return the_bitmap.num_free_entries;
 }
 
 /// Intiialise the physical memory manager and set all unavailable regions as occupied (those from the memory map and those from the linker symbols).
@@ -101,7 +102,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: Allocator) void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 
-    bitmap = PmmBitmap.init(mem_profile.mem_kb * 1024 / BLOCK_SIZE, allocator) catch |e| {
+    the_bitmap = PmmBitmap.init(mem_profile.mem_kb * 1024 / BLOCK_SIZE, allocator) catch |e| {
         panic(@errorReturnTrace(), "Bitmap allocation failed: {}\n", .{e});
     };
 
@@ -116,7 +117,7 @@ pub fn init(mem_profile: *const MemProfile, allocator: Allocator) void {
         while (addr < end) : (addr += BLOCK_SIZE) {
             setAddr(addr) catch |e| switch (e) {
                 // We can ignore out of bounds errors as the memory won't be available anyway
-                PmmBitmap.BitmapError.OutOfBounds => break,
+                bitmap.BitmapError.OutOfBounds => break,
                 else => panic(@errorReturnTrace(), "Failed setting address 0x{x} from memory map as occupied: {}", .{ addr, e }),
             };
         }
@@ -132,12 +133,12 @@ pub fn init(mem_profile: *const MemProfile, allocator: Allocator) void {
 /// Free the internal state of the PMM. Is unusable aftwards unless re-initialised
 ///
 pub fn deinit() void {
-    bitmap.deinit();
+    the_bitmap.deinit();
 }
 
 test "alloc" {
-    bitmap = try Bitmap(u32).init(32, testing.allocator);
-    defer bitmap.deinit();
+    the_bitmap = try Bitmap(null, u32).init(32, testing.allocator);
+    defer the_bitmap.deinit();
     comptime var addr = 0;
     comptime var i = 0;
     // Allocate all entries, making sure they succeed and return the correct addresses
@@ -155,8 +156,8 @@ test "alloc" {
 }
 
 test "free" {
-    bitmap = try Bitmap(u32).init(32, testing.allocator);
-    defer bitmap.deinit();
+    the_bitmap = try Bitmap(null, u32).init(32, testing.allocator);
+    defer the_bitmap.deinit();
     comptime var i = 0;
     // Allocate and free all entries
     inline while (i < 32) : (i += 1) {
@@ -173,8 +174,8 @@ test "free" {
 
 test "setAddr and isSet" {
     const num_entries: u32 = 32;
-    bitmap = try Bitmap(u32).init(num_entries, testing.allocator);
-    defer bitmap.deinit();
+    the_bitmap = try Bitmap(null, u32).init(num_entries, testing.allocator);
+    defer the_bitmap.deinit();
     var addr: u32 = 0;
     var i: u32 = 0;
     while (i < num_entries) : ({
