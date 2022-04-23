@@ -585,6 +585,48 @@ test "handleRead" {
     }
 }
 
+test "handleRead errors" {
+    allocator = std.testing.allocator;
+    var testfs = try vfs.testInitFs(allocator);
+    {
+        defer allocator.destroy(testfs);
+        defer testfs.deinit();
+
+        testfs.instance = 1;
+        try vfs.setRoot(testfs.tree.val);
+
+        // The data we pass to handleRead needs to be mapped within the VMM, so we need to know their address
+        // Allocating the data within a fixed buffer allocator is the best way to know the address of the data
+        var fixed_buffer_allocator = try testInitMem(3, allocator, true);
+        var buffer_allocator = fixed_buffer_allocator.allocator();
+        defer testDeinitMem(allocator, fixed_buffer_allocator);
+
+        scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+        defer scheduler.current_task.destroy(allocator);
+
+        // Invalid file handle
+        try testing.expectError(Error.OutOfBounds, handleRead(task.VFS_HANDLES_PER_PROCESS, 0, 0, 0, 0));
+        try testing.expectError(Error.OutOfBounds, handleRead(task.VFS_HANDLES_PER_PROCESS + 1, 0, 0, 0, 0));
+
+        // Unopened file
+        try testing.expectError(Error.NotOpened, handleRead(0, 0, 0, 0, 0));
+        try testing.expectError(Error.NotOpened, handleRead(1, 0, 0, 0, 0));
+        try testing.expectError(Error.NotOpened, handleRead(task.VFS_HANDLES_PER_PROCESS - 1, 0, 0, 0, 0));
+
+        // Reading from a dir
+        const name = try buffer_allocator.dupe(u8, "/dir");
+        const node = try handleOpen(@ptrToInt(name.ptr), name.len, @enumToInt(vfs.OpenFlags.CREATE_DIR), 0, 0);
+        try testing.expectError(Error.NotAFile, handleRead(node, 0, 0, 0, 0));
+
+        // User buffer is too big
+        const name2 = try buffer_allocator.dupe(u8, "/file.txt");
+        const node2 = try handleOpen(@ptrToInt(name2.ptr), name2.len, @enumToInt(vfs.OpenFlags.CREATE_FILE), 0, 0);
+        scheduler.current_task.kernel = false;
+        try testing.expectError(Error.TooBig, handleRead(node2, 0, USER_MAX_DATA_LEN + 1, 0, 0));
+    }
+    try testing.expect(!testing.allocator_instance.detectLeaks());
+}
+
 test "handleWrite" {
     allocator = std.testing.allocator;
     var testfs = try vfs.testInitFs(allocator);
