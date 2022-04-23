@@ -17,7 +17,7 @@ pub const INTERRUPT: u16 = 0x80;
 pub const NUM_HANDLERS: u16 = 256;
 
 /// A syscall handler
-pub const Handler = fn (arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize;
+pub const Handler = fn (arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize;
 
 /// Errors that syscall utility functions can throw
 pub const Error = error{
@@ -108,21 +108,21 @@ pub fn registerSyscall(syscall: usize, handler: Handler) Error!void {
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
-inline fn syscall0(syscall: usize) syscalls.Error!usize {
+inline fn syscall0(syscall: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
         : "ebx"
     );
-    const err = asm (""
+    const err = @intCast(u16, asm (""
         : [ret] "={ebx}" (-> usize),
-    );
+    ));
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -137,21 +137,21 @@ inline fn syscall0(syscall: usize) syscalls.Error!usize {
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
-inline fn syscall1(syscall: usize, arg: usize) syscalls.Error!usize {
+inline fn syscall1(syscall: usize, arg: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
         : [syscall] "{eax}" (syscall),
           [arg1] "{ebx}" (arg),
     );
-    const err = asm (""
+    const err = @intCast(u16, asm (""
         : [ret] "={ebx}" (-> usize),
-    );
+    ));
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -167,10 +167,10 @@ inline fn syscall1(syscall: usize, arg: usize) syscalls.Error!usize {
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
-inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) syscalls.Error!usize {
+inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
@@ -178,11 +178,11 @@ inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) syscalls.Error!usiz
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
     );
-    const err = asm (""
+    const err = @intCast(u16, asm (""
         : [ret] "={ebx}" (-> usize),
-    );
+    ));
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -199,10 +199,10 @@ inline fn syscall2(syscall: usize, arg1: usize, arg2: usize) syscalls.Error!usiz
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
-inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) syscalls.Error!usize {
+inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
@@ -211,11 +211,11 @@ inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) syscal
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
     );
-    const err = asm (""
+    const err = @intCast(u16, asm (""
         : [ret] "={ebx}" (-> usize),
-    );
+    ));
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -233,10 +233,10 @@ inline fn syscall3(syscall: usize, arg1: usize, arg2: usize, arg3: usize) syscal
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
-inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize) syscalls.Error!usize {
+inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
@@ -246,11 +246,11 @@ inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: 
           [arg3] "{edx}" (arg3),
           [arg4] "{esi}" (arg4),
     );
-    const err = asm (""
+    const err = @intCast(u16, asm (""
         : [ret] "={ebx}" (-> usize),
-    );
+    ));
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -269,10 +269,10 @@ inline fn syscall4(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: 
 /// Return: usize
 ///     The return value from the syscall.
 ///
-/// Error: syscalls.Error
+/// Error: anyerror
 ///     This function will return the error that the syscall handler returns. See the documentation for the syscall for details.
 ///
-inline fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+inline fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     const res = asm volatile (
         \\int $0x80
         : [ret] "={eax}" (-> usize),
@@ -283,11 +283,11 @@ inline fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: 
           [arg4] "{esi}" (arg4),
           [arg5] "{edi}" (arg5),
     );
-    const err = asm (""
+    const err = @intCast(u16, asm (""
         : [ret] "={ebx}" (-> usize),
-    );
+    ));
     if (err != 0) {
-        return syscalls.fromErrorCode(err);
+        return syscalls.fromErrorCode(@intCast(u16, err));
     }
     return res;
 }
@@ -325,7 +325,7 @@ inline fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) usize {
 ///
 fn makeHandler(comptime syscall: syscalls.Syscall) Handler {
     return struct {
-        fn func(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+        fn func(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
             return syscalls.handle(syscall, arg1, arg2, arg3, arg4, arg5);
         }
     }.func;
@@ -344,9 +344,11 @@ pub fn init() void {
 
     inline for (std.meta.fields(syscalls.Syscall)) |field| {
         const syscall = @intToEnum(syscalls.Syscall, field.value);
-        registerSyscall(field.value, makeHandler(syscall)) catch |e| {
-            panic(@errorReturnTrace(), "Failed to register syscall for '" ++ field.name ++ "': {}\n", .{e});
-        };
+        if (!syscall.isTest()) {
+            registerSyscall(field.value, makeHandler(syscall)) catch |e| {
+                panic(@errorReturnTrace(), "Failed to register syscall for '" ++ field.name ++ "': {}\n", .{e});
+            };
+        }
     }
 
     switch (build_options.test_mode) {
@@ -358,7 +360,7 @@ pub fn init() void {
 /// Tests
 var test_int: u32 = 0;
 
-fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
     _ = arg1;
     _ = arg2;
@@ -369,7 +371,7 @@ fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     return 0;
 }
 
-fn testHandler1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+fn testHandler1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
     _ = arg2;
     _ = arg3;
@@ -379,7 +381,7 @@ fn testHandler1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     return 1;
 }
 
-fn testHandler2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+fn testHandler2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
     _ = arg3;
     _ = arg4;
@@ -388,7 +390,7 @@ fn testHandler2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     return 2;
 }
 
-fn testHandler3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+fn testHandler3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
     _ = arg4;
     _ = arg5;
@@ -396,26 +398,26 @@ fn testHandler3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     return 3;
 }
 
-fn testHandler4(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+fn testHandler4(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
     _ = arg5;
     test_int += arg1 + arg2 + arg3 + arg4;
     return 4;
 }
 
-fn testHandler5(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+fn testHandler5(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     test_int += arg1 + arg2 + arg3 + arg4 + arg5;
     return 5;
 }
 
-fn testHandler6(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) syscalls.Error!usize {
+fn testHandler6(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
     _ = arg1;
     _ = arg2;
     _ = arg3;
     _ = arg4;
     _ = arg5;
-    return syscalls.Error.OutOfMemory;
+    return anyerror.OutOfMemory;
 }
 
 test "registerSyscall returns SyscallExists" {
@@ -487,7 +489,7 @@ fn runtimeTests() void {
     if (syscall0(121)) {
         panic(@errorReturnTrace(), "FAILURE syscall6\n", .{});
     } else |e| {
-        if (e != syscalls.Error.OutOfMemory) {
+        if (e != error.OutOfMemory) {
             panic(@errorReturnTrace(), "FAILURE syscall6 returned the wrong error: {}\n", .{e});
         }
     }
