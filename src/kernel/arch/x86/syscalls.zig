@@ -17,7 +17,7 @@ pub const INTERRUPT: u16 = 0x80;
 pub const NUM_HANDLERS: u16 = 256;
 
 /// A syscall handler
-pub const Handler = fn (arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize;
+pub const Handler = fn (ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize;
 
 /// Errors that syscall utility functions can throw
 pub const Error = error{
@@ -64,7 +64,7 @@ fn handle(ctx: *arch.CpuState) usize {
     const syscall = ctx.eax;
     if (isValidSyscall(syscall)) {
         if (handlers[syscall]) |handler| {
-            const result = handler(syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
+            const result = handler(ctx, syscallArg(ctx, 0), syscallArg(ctx, 1), syscallArg(ctx, 2), syscallArg(ctx, 3), syscallArg(ctx, 4));
             if (result) |res| {
                 ctx.eax = res;
                 ctx.ebx = 0;
@@ -297,13 +297,13 @@ inline fn syscall5(syscall: usize, arg1: usize, arg2: usize, arg3: usize, arg4: 
 /// 3 => esi and 4 => edi.
 ///
 /// Arguments:
-///     IN ctx: *arch.CpuState - The interrupt context from which to get the argument
+///     IN ctx: *const arch.CpuState - The interrupt context from which to get the argument
 ///     IN arg_idx: comptime u32 - The argument index to get. Between 0 and 4.
 ///
 /// Return: usize
 ///     The syscall argument from the given index.
 ///
-inline fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) usize {
+inline fn syscallArg(ctx: *const arch.CpuState, comptime arg_idx: u32) usize {
     return switch (arg_idx) {
         0 => ctx.ebx,
         1 => ctx.ecx,
@@ -325,8 +325,8 @@ inline fn syscallArg(ctx: *arch.CpuState, comptime arg_idx: u32) usize {
 ///
 fn makeHandler(comptime syscall: syscalls.Syscall) Handler {
     return struct {
-        fn func(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
-            return syscalls.handle(syscall, arg1, arg2, arg3, arg4, arg5);
+        fn func(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+            return syscalls.handle(syscall, ctx, arg1, arg2, arg3, arg4, arg5);
         }
     }.func;
 }
@@ -360,8 +360,9 @@ pub fn init() void {
 /// Tests
 var test_int: u32 = 0;
 
-fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+fn testHandler0(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg1;
     _ = arg2;
     _ = arg3;
@@ -371,8 +372,9 @@ fn testHandler0(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     return 0;
 }
 
-fn testHandler1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+fn testHandler1(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg2;
     _ = arg3;
     _ = arg4;
@@ -381,8 +383,9 @@ fn testHandler1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     return 1;
 }
 
-fn testHandler2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+fn testHandler2(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg3;
     _ = arg4;
     _ = arg5;
@@ -390,28 +393,32 @@ fn testHandler2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
     return 2;
 }
 
-fn testHandler3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+fn testHandler3(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg4;
     _ = arg5;
     test_int += arg1 + arg2 + arg3;
     return 3;
 }
 
-fn testHandler4(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+fn testHandler4(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg5;
     test_int += arg1 + arg2 + arg3 + arg4;
     return 4;
 }
 
-fn testHandler5(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+fn testHandler5(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+    _ = ctx;
     test_int += arg1 + arg2 + arg3 + arg4 + arg5;
     return 5;
 }
 
-fn testHandler6(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
+fn testHandler6(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) anyerror!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg1;
     _ = arg2;
     _ = arg3;

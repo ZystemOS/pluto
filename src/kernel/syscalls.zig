@@ -2,6 +2,7 @@ const std = @import("std");
 const scheduler = @import("scheduler.zig");
 const panic = @import("panic.zig").panic;
 const log = std.log.scoped(.syscalls);
+const arch = @import("arch.zig").internals;
 
 /// A compilation of all errors that syscall handlers could return.
 pub const Error = error{OutOfMemory};
@@ -46,7 +47,7 @@ pub const Syscall = enum {
 };
 
 /// A function that can handle a syscall and return a result or an error
-pub const Handler = fn (arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize;
+pub const Handler = fn (ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize;
 
 ///
 /// Convert an error code to an instance of Error. The conversion must be synchronised with toErrorCode
@@ -88,12 +89,13 @@ pub fn toErrorCode(err: anyerror) u16 {
 /// Error: Error
 ///     The error raised by the handler
 ///
-pub fn handle(syscall: Syscall, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
-    return try syscall.getHandler()(arg1, arg2, arg3, arg4, arg5);
+pub fn handle(syscall: Syscall, ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    return try syscall.getHandler()(ctx, arg1, arg2, arg3, arg4, arg5);
 }
 
-pub fn handleTest1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+pub fn handleTest1(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg1;
     _ = arg2;
     _ = arg3;
@@ -102,12 +104,14 @@ pub fn handleTest1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usi
     return 0;
 }
 
-pub fn handleTest2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+pub fn handleTest2(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    _ = ctx;
     return arg1 + arg2 + arg3 + arg4 + arg5;
 }
 
-pub fn handleTest3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+pub fn handleTest3(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
     // Suppress unused variable warnings
+    _ = ctx;
     _ = arg1;
     _ = arg2;
     _ = arg3;
@@ -123,7 +127,8 @@ test "getHandler" {
 }
 
 test "handle" {
-    try std.testing.expectEqual(@as(usize, 0), try handle(.Test1, 0, 0, 0, 0, 0));
-    try std.testing.expectEqual(@as(usize, 1 + 2 + 3 + 4 + 5), try handle(.Test2, 1, 2, 3, 4, 5));
-    try std.testing.expectError(Error.OutOfMemory, handle(.Test3, 0, 0, 0, 0, 0));
+    const state = arch.CpuState.empty();
+    try std.testing.expectEqual(@as(usize, 0), try handle(.Test1, &state, 0, 0, 0, 0, 0));
+    try std.testing.expectEqual(@as(usize, 1 + 2 + 3 + 4 + 5), try handle(.Test2, &state, 1, 2, 3, 4, 5));
+    try std.testing.expectError(Error.OutOfMemory, handle(.Test3, &state, 0, 0, 0, 0, 0));
 }

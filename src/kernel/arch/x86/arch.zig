@@ -87,6 +87,31 @@ pub const CpuState = packed struct {
     eflags: u32,
     user_esp: u32,
     user_ss: u32,
+
+    pub fn empty() CpuState {
+        return .{
+            .cr3 = undefined,
+            .gs = undefined,
+            .fs = undefined,
+            .es = undefined,
+            .ds = undefined,
+            .edi = undefined,
+            .esi = undefined,
+            .ebp = undefined,
+            .esp = undefined,
+            .ebx = undefined,
+            .edx = undefined,
+            .ecx = undefined,
+            .eax = undefined,
+            .int_num = undefined,
+            .error_code = undefined,
+            .eip = undefined,
+            .cs = undefined,
+            .eflags = undefined,
+            .user_esp = undefined,
+            .user_ss = undefined,
+        };
+    }
 };
 
 /// x86's boot payload is the multiboot info passed by grub
