@@ -656,12 +656,12 @@ pub fn init(mem_profile: *const MemProfile) void {
 /// Check the state of the user task used for runtime testing for the expected values. These should mirror those in test/user_program.s
 ///
 /// Arguments:
-///     IN ctx: *const CpuState - The task's saved state
+///     IN ctx: CpuState - The task's saved state
 ///
 /// Return: bool
 ///     True if the expected values were found, else false
 ///
-pub fn runtimeTestCheckUserTaskState(ctx: *const CpuState) bool {
+pub fn runtimeTestCheckUserTaskState(ctx: CpuState) bool {
     return ctx.eax == 0xCAFE and ctx.ebx == 0xBEEF;
 }
 

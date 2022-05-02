@@ -158,7 +158,7 @@ fn rtcHandler(ctx: *arch.CpuState) usize {
 
     // Call the scheduler
     if (schedule) {
-        ret_esp = scheduler.pickNextTask(ctx);
+        ret_esp = scheduler.pickNextTask(ctx, true);
     } else {
         ret_esp = @ptrToInt(ctx);
     }

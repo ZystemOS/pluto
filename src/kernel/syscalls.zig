@@ -1,16 +1,18 @@
 const std = @import("std");
+const arch = @import("arch.zig").internals;
 const scheduler = @import("scheduler.zig");
 const panic = @import("panic.zig").panic;
 const log = std.log.scoped(.syscalls);
 
 /// A compilation of all errors that syscall handlers could return.
-pub const Error = error{OutOfMemory};
+pub const Error = error{OutOfMemory} || scheduler.Error;
 
 /// All implemented syscalls
 pub const Syscall = enum {
     Test1,
     Test2,
     Test3,
+    Exit,
 
     ///
     /// Get the handler associated with the syscall
@@ -26,6 +28,7 @@ pub const Syscall = enum {
             .Test1 => handleTest1,
             .Test2 => handleTest2,
             .Test3 => handleTest3,
+            .Exit => handleExit,
         };
     }
 
@@ -41,6 +44,7 @@ pub const Syscall = enum {
     pub fn isTest(self: @This()) bool {
         return switch (self) {
             .Test1, .Test2, .Test3 => true,
+            else => false,
         };
     }
 };
@@ -117,6 +121,17 @@ pub fn handleTest3(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: us
     _ = arg4;
     _ = arg5;
     return std.mem.Allocator.Error.OutOfMemory;
+}
+
+pub fn handleExit(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    _ = ctx;
+    _ = arg1;
+    _ = arg2;
+    _ = arg3;
+    _ = arg4;
+    _ = arg5;
+    try scheduler.exit(ctx);
+    return 0;
 }
 
 test "getHandler" {

@@ -58,6 +58,9 @@ pub const Task = struct {
     /// The virtual memory manager belonging to the task
     vmm: *vmm.VirtualMemoryManager(arch.VmmPayload),
 
+    /// The allocator used to create this task. So far, only used to know which allocator to free the task with
+    allocator: Allocator,
+
     ///
     /// Create a task. This will allocate a PID and the stack. The stack will be set up as a
     /// kernel task. As this is a new task, the stack will need to be initialised with the CPU
@@ -96,6 +99,7 @@ pub const Task = struct {
             .stack_pointer = @ptrToInt(&k_stack[STACK_SIZE - 1]),
             .kernel = kernel,
             .vmm = task_vmm,
+            .allocator = allocator,
         };
 
         try arch.initTask(task, entry_point, allocator);
@@ -105,7 +109,7 @@ pub const Task = struct {
 
     pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) (bitmap.Bitmap(usize).BitmapError || vmm.VmmError || Allocator.Error)!*Task {
         const task = try create(program_elf.header.entry_address, kernel, task_vmm, allocator);
-        errdefer task.destroy(allocator);
+        errdefer task.destroy();
 
         // Iterate over sections
         var i: usize = 0;
@@ -142,17 +146,17 @@ pub const Task = struct {
     ///     IN/OUT self: *Self - The pointer to self.
     ///     IN allocator: Allocator - The allocator used to create the task.
     ///
-    pub fn destroy(self: *Self, allocator: Allocator) void {
+    pub fn destroy(self: *Self) void {
         freePid(self.pid);
         // We need to check that the the stack has been allocated as task 0 (init) won't have a
         // stack allocated as this in the linker script
         if (@ptrToInt(self.kernel_stack.ptr) != @ptrToInt(&KERNEL_STACK_START)) {
-            allocator.free(self.kernel_stack);
+            self.allocator.free(self.kernel_stack);
         }
         if (!self.kernel) {
-            allocator.free(self.user_stack);
+            self.allocator.free(self.user_stack);
         }
-        allocator.destroy(self);
+        self.allocator.destroy(self);
     }
 };
 
@@ -216,7 +220,7 @@ test "create out of memory for stack" {
 
 test "create expected setup" {
     var task = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
-    defer task.destroy(std.testing.allocator);
+    defer task.destroy();
 
     // Will allocate the first PID 0
     try expectEqual(task.pid, 0);
@@ -224,7 +228,7 @@ test "create expected setup" {
     try expectEqual(task.user_stack.len, 0);
 
     var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
-    defer user_task.destroy(std.testing.allocator);
+    defer user_task.destroy();
     try expectEqual(user_task.pid, 1);
     try expectEqual(user_task.user_stack.len, STACK_SIZE);
     try expectEqual(user_task.kernel_stack.len, STACK_SIZE);
@@ -238,8 +242,8 @@ test "destroy cleans up" {
     var task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator);
     var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, allocator);
 
-    task.destroy(allocator);
-    user_task.destroy(allocator);
+    task.destroy();
+    user_task.destroy();
 
     // All PIDs were freed
     try expectEqual(all_pids.bitmap, 0);
@@ -253,7 +257,7 @@ test "Multiple create" {
     try expectEqual(task2.pid, 1);
     try expectEqual(all_pids.bitmap, 3);
 
-    task1.destroy(std.testing.allocator);
+    task1.destroy();
 
     try expectEqual(all_pids.bitmap, 2);
 
@@ -262,15 +266,15 @@ test "Multiple create" {
     try expectEqual(task3.pid, 0);
     try expectEqual(all_pids.bitmap, 3);
 
-    task2.destroy(std.testing.allocator);
-    task3.destroy(std.testing.allocator);
+    task2.destroy();
+    task3.destroy();
 
     var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
 
     try expectEqual(user_task.pid, 0);
     try expectEqual(all_pids.bitmap, 1);
 
-    user_task.destroy(std.testing.allocator);
+    user_task.destroy();
     try expectEqual(all_pids.bitmap, 0);
 }
 
@@ -306,7 +310,7 @@ test "createFromElf" {
     var the_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 10000, std.testing.allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
     defer the_vmm.deinit();
     const task = try Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator);
-    defer task.destroy(allocator);
+    defer task.destroy();
 
     try std.testing.expectEqual(task.pid, 0);
     try std.testing.expectEqual(task.user_stack.len, 0);
@@ -327,7 +331,7 @@ test "createFromElf clean-up" {
     var the_vmm = try vmm.VirtualMemoryManager(arch.VmmPayload).init(0, 10000, std.testing.allocator, arch.VMM_MAPPER, arch.KERNEL_VMM_PAYLOAD);
     defer the_vmm.deinit();
     const task = try Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator);
-    defer task.destroy(allocator);
+    defer task.destroy();
 
     // Test clean-up
     // Test OutOfMemory

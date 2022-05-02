@@ -19,6 +19,8 @@ const EntryPoint = task.EntryPoint;
 const Allocator = std.mem.Allocator;
 const TailQueue = std.TailQueue;
 
+pub const Error = error{CannotExitTask0};
+
 /// The default stack size of a task. Currently this is set to a page size.
 const STACK_SIZE: u32 = arch.MEMORY_BLOCK_SIZE / @sizeOf(usize);
 
@@ -54,13 +56,14 @@ pub fn taskSwitching(enabled: bool) void {
 /// its state. Interrupts are assumed disabled.
 ///
 /// Argument:
-///     IN ctx: *arch.CpuState - Pointer to the exception context containing the contents
+///     IN ctx: *const arch.CpuState - Pointer to the exception context containing the contents
 ///                              of the registers at the time of a exception.
+///     IN reschedule: bool - Whether the current task should be rescheduled.
 ///
 /// Return: usize
 ///     The new stack pointer to the next stack of the next task.
 ///
-pub fn pickNextTask(ctx: *arch.CpuState) usize {
+pub fn pickNextTask(ctx: *const arch.CpuState, reschedule: bool) usize {
     switch (build_options.test_mode) {
         .Scheduler => if (!current_task.kernel) {
             if (!arch.runtimeTestCheckUserTaskState(ctx)) {
@@ -83,13 +86,15 @@ pub fn pickNextTask(ctx: *arch.CpuState) usize {
         // Get the next task
         const next_task = new_task_node.data;
 
-        // Move some pointers to don't need to allocate memory, speeds things up
-        new_task_node.data = current_task;
-        new_task_node.prev = null;
-        new_task_node.next = null;
+        if (reschedule) {
+            // Move some pointers to don't need to allocate memory, speeds things up
+            new_task_node.data = current_task;
+            new_task_node.prev = null;
+            new_task_node.next = null;
 
-        // Add the 'current_task' node to the end of the queue
-        tasks.prepend(new_task_node);
+            // Add the 'current_task' node to the end of the queue
+            tasks.prepend(new_task_node);
+        }
 
         current_task = next_task;
     }
@@ -114,6 +119,14 @@ pub fn scheduleTask(new_task: *Task, allocator: Allocator) Allocator.Error!void 
     var task_node = try allocator.create(TailQueue(*Task).Node);
     task_node.* = .{ .data = new_task };
     tasks.prepend(task_node);
+}
+
+pub fn exit(ctx: *const arch.CpuState) Error!void {
+    if (current_task.pid == 0)
+        return Error.CannotExitTask0;
+    var current = current_task;
+    defer current.destroy();
+    _ = pickNextTask(ctx, false);
 }
 
 ///
@@ -156,7 +169,7 @@ pub fn init(allocator: Allocator, mem_profile: *const mem.MemProfile) Allocator.
 
     // Create the idle task when there are no more tasks left
     var idle_task = try Task.create(@ptrToInt(idle), true, &vmm.kernel_vmm, allocator);
-    errdefer idle_task.destroy(allocator);
+    errdefer idle_task.destroy();
 
     try scheduleTask(idle_task, allocator);
 }
@@ -203,36 +216,36 @@ test "pickNextTask" {
 
     // Create two tasks and schedule them
     var test_fn1_task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator);
-    defer test_fn1_task.destroy(allocator);
+    defer test_fn1_task.destroy();
     try scheduleTask(test_fn1_task, allocator);
 
     var test_fn2_task = try Task.create(@ptrToInt(test_fn2), true, undefined, allocator);
-    defer test_fn2_task.destroy(allocator);
+    defer test_fn2_task.destroy();
     try scheduleTask(test_fn2_task, allocator);
 
     // Get the stack pointers of the created tasks
     const fn1_stack_pointer = test_fn1_task.stack_pointer;
     const fn2_stack_pointer = test_fn2_task.stack_pointer;
 
-    try expectEqual(pickNextTask(&ctx), fn1_stack_pointer);
+    try expectEqual(pickNextTask(&ctx, true), fn1_stack_pointer);
     // The stack pointer of the re-added task should point to the context
     try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
     // Should be the PID of the next task
     try expectEqual(current_task.pid, 1);
 
-    try expectEqual(pickNextTask(&ctx), fn2_stack_pointer);
+    try expectEqual(pickNextTask(&ctx, true), fn2_stack_pointer);
     // The stack pointer of the re-added task should point to the context
     try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
     // Should be the PID of the next task
     try expectEqual(current_task.pid, 2);
 
-    try expectEqual(pickNextTask(&ctx), @ptrToInt(&ctx));
+    try expectEqual(pickNextTask(&ctx, true), @ptrToInt(&ctx));
     // The stack pointer of the re-added task should point to the context
     try expectEqual(tasks.first.?.data.stack_pointer, @ptrToInt(&ctx));
 
-    // Should be back tot he beginning
+    // Should be back to the beginning
     try expectEqual(current_task.pid, 0);
 
     // Reset the test pid
@@ -252,7 +265,7 @@ test "createNewTask add new task" {
     tasks = TailQueue(*Task){};
 
     var test_fn1_task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator);
-    defer test_fn1_task.destroy(allocator);
+    defer test_fn1_task.destroy();
     try scheduleTask(test_fn1_task, allocator);
 
     try expectEqual(tasks.len, 1);
@@ -273,9 +286,9 @@ test "init" {
     try expectEqual(tasks.len, 1);
 
     // Free the tasks created
-    current_task.destroy(allocator);
+    current_task.destroy();
     while (tasks.pop()) |elem| {
-        elem.data.destroy(allocator);
+        elem.data.destroy();
         allocator.destroy(elem);
     }
 }
