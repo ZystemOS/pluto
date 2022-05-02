@@ -54,6 +54,31 @@ pub const CpuState = struct {
     eflags: u32,
     user_esp: u32,
     user_ss: u32,
+
+    pub fn empty() CpuState {
+        return .{
+            .ss = undefined,
+            .gs = undefined,
+            .fs = undefined,
+            .es = undefined,
+            .ds = undefined,
+            .edi = undefined,
+            .esi = undefined,
+            .ebp = undefined,
+            .esp = undefined,
+            .ebx = undefined,
+            .edx = undefined,
+            .ecx = undefined,
+            .eax = undefined,
+            .int_num = undefined,
+            .error_code = undefined,
+            .eip = undefined,
+            .cs = undefined,
+            .eflags = undefined,
+            .user_esp = undefined,
+            .user_ss = undefined,
+        };
+    }
 };
 
 pub const VmmPayload = switch (builtin.cpu.arch) {
