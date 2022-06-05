@@ -211,13 +211,8 @@ pub const DirNode = struct {
 
     /// See the documentation for FileSystem.Open
     pub fn open(self: *const DirNode, name: []const u8, flags: OpenFlags, args: OpenArgs) (Allocator.Error || Error)!*Node {
-        var fs = self.fs;
-        var node = self;
-        if (self.mount) |mnt| {
-            fs = mnt.fs;
-            node = mnt;
-        }
-        return fs.open(fs, node, name, flags, args);
+        var node = self.mount orelse self;
+        return node.fs.open(node.fs, node, name, flags, args);
     }
 
     /// See the documentation for FileSystem.Close
@@ -427,6 +422,20 @@ pub fn open(path: []const u8, follow_symlinks: bool, flags: OpenFlags, args: Ope
 }
 
 ///
+/// Close a node.
+///
+/// Arguments:
+///     IN node: Node - The node to close
+///
+pub fn close(node: Node) void {
+    switch (node) {
+        .Dir => |d| d.close(),
+        .File => |f| f.close(),
+        .Symlink => |s| s.close(),
+    }
+}
+
+///
 /// Open a file at a path.
 ///
 /// Arguments:
@@ -592,7 +601,7 @@ const TestFS = struct {
 
     const Self = @This();
 
-    fn deinit(self: *@This()) void {
+    pub fn deinit(self: *@This()) void {
         self.tree.deinit(self.allocator);
         self.allocator.destroy(self.fs);
     }
@@ -718,7 +727,7 @@ const TestFS = struct {
     }
 };
 
-fn testInitFs(allocator: Allocator) !*TestFS {
+pub fn testInitFs(allocator: Allocator) !*TestFS {
     const fs = try allocator.create(FileSystem);
     var testfs = try allocator.create(TestFS);
     var root_node = try allocator.create(Node);
