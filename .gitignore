@@ -6,6 +6,7 @@
 
 # Zig ignore
 **/zig-cache/
+**/zig-out/
 **/build/
 **/build-*/
 **/docgen_tmp/
