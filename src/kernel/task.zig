@@ -25,12 +25,7 @@ pub const EntryPoint = usize;
 const PidBitmap = bitmap.Bitmap(1024, usize);
 
 /// The list of PIDs that have been allocated.
-var all_pids: PidBitmap = init: {
-    var pids = PidBitmap.init(1024, null) catch unreachable;
-    // Reserve PID 0 for the init task
-    _ = pids.setFirstFree() orelse unreachable;
-    break :init pids;
-};
+var all_pids = PidBitmap.init(1024, null) catch unreachable;
 
 /// The default stack size of a task. Currently this is set to a page size.
 pub const STACK_SIZE: u32 = arch.MEMORY_BLOCK_SIZE / @sizeOf(u32);
@@ -75,15 +70,15 @@ pub const Task = struct {
     ///     OutOfMemory - If there is no more memory to allocate. Any memory or PID allocated will
     ///                   be freed on return.
     ///
-    pub fn create(entry_point: EntryPoint, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) Allocator.Error!*Task {
+    pub fn create(entry_point: EntryPoint, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator, alloc_kernel_stack: bool) Allocator.Error!*Task {
         var task = try allocator.create(Task);
         errdefer allocator.destroy(task);
 
         const pid = allocatePid();
         errdefer freePid(pid) catch |e| panic(@errorReturnTrace(), "Failed to free task PID in errdefer ({}): {}\n", .{ pid, e });
 
-        var k_stack = try allocator.alloc(usize, STACK_SIZE);
-        errdefer allocator.free(k_stack);
+        var k_stack = if (alloc_kernel_stack) try allocator.alloc(usize, STACK_SIZE) else undefined;
+        errdefer if (alloc_kernel_stack) allocator.free(k_stack);
 
         var u_stack = if (kernel) &[_]usize{} else try allocator.alloc(usize, STACK_SIZE);
         errdefer if (!kernel) allocator.free(u_stack);
@@ -92,18 +87,19 @@ pub const Task = struct {
             .pid = pid,
             .kernel_stack = k_stack,
             .user_stack = u_stack,
-            .stack_pointer = @ptrToInt(&k_stack[STACK_SIZE - 1]),
+            .stack_pointer = if (!alloc_kernel_stack) 0 else @ptrToInt(&k_stack[STACK_SIZE - 1]),
             .kernel = kernel,
             .vmm = task_vmm,
         };
 
-        try arch.initTask(task, entry_point, allocator);
+        log.info("alloc_kernel_stack: {s}, kernel: {s}, stack size: {}\n", .{ alloc_kernel_stack, kernel, k_stack.len });
+        try arch.initTask(task, entry_point, allocator, alloc_kernel_stack);
 
         return task;
     }
 
     pub fn createFromElf(program_elf: elf.Elf, kernel: bool, task_vmm: *vmm.VirtualMemoryManager(arch.VmmPayload), allocator: Allocator) (bitmap.BitmapError || vmm.VmmError || Allocator.Error)!*Task {
-        const task = try create(program_elf.header.entry_address, kernel, task_vmm, allocator);
+        const task = try create(program_elf.header.entry_address, kernel, task_vmm, allocator, true);
         errdefer task.destroy(allocator);
 
         // Iterate over sections
@@ -192,8 +188,8 @@ test "create out of memory for task" {
     // Set the global allocator
     var fa = FailingAllocator.init(testing_allocator, 0);
 
-    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, fa.allocator()));
-    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, fa.allocator()));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, fa.allocator(), true));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, fa.allocator(), true));
 
     // Make sure any memory allocated is freed
     try expectEqual(fa.allocated_bytes, fa.freed_bytes);
@@ -208,8 +204,8 @@ test "create out of memory for stack" {
     // Set the global allocator
     var fa = FailingAllocator.init(testing_allocator, 1);
 
-    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, fa.allocator()));
-    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, fa.allocator()));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), true, undefined, fa.allocator(), true));
+    try expectError(error.OutOfMemory, Task.create(@ptrToInt(test_fn1), false, undefined, fa.allocator(), true));
 
     // Make sure any memory allocated is freed
     try expectEqual(fa.allocated_bytes, fa.freed_bytes);
@@ -221,7 +217,7 @@ test "create out of memory for stack" {
 }
 
 test "create expected setup" {
-    var task = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
+    var task = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator, true);
     defer task.destroy(std.testing.allocator);
 
     // Will allocate the first PID 0
@@ -229,7 +225,7 @@ test "create expected setup" {
     try expectEqual(task.kernel_stack.len, STACK_SIZE);
     try expectEqual(task.user_stack.len, 0);
 
-    var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
+    var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator, true);
     defer user_task.destroy(std.testing.allocator);
     try expectEqual(user_task.pid, 1);
     try expectEqual(user_task.user_stack.len, STACK_SIZE);
@@ -241,8 +237,8 @@ test "destroy cleans up" {
     // So if any alloc were not freed, this will fail the test
     var allocator = std.testing.allocator;
 
-    var task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator);
-    var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, allocator);
+    var task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator, true);
+    var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, allocator, true);
 
     task.destroy(allocator);
     user_task.destroy(allocator);
@@ -254,8 +250,8 @@ test "destroy cleans up" {
 }
 
 test "Multiple create" {
-    var task1 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
-    var task2 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
+    var task1 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator, true);
+    var task2 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator, true);
 
     try expectEqual(task1.pid, 0);
     try expectEqual(task2.pid, 1);
@@ -271,7 +267,7 @@ test "Multiple create" {
         if (i > 0) try expectEqual(bmp, 0);
     }
 
-    var task3 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator);
+    var task3 = try Task.create(@ptrToInt(test_fn1), true, undefined, std.testing.allocator, true);
 
     try expectEqual(task3.pid, 0);
     try expectEqual(all_pids.bitmaps[0], 3);
@@ -282,7 +278,7 @@ test "Multiple create" {
     task2.destroy(std.testing.allocator);
     task3.destroy(std.testing.allocator);
 
-    var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator);
+    var user_task = try Task.create(@ptrToInt(test_fn1), false, undefined, std.testing.allocator, true);
 
     try expectEqual(user_task.pid, 0);
     try expectEqual(all_pids.bitmaps[0], 1);
@@ -377,4 +373,12 @@ test "createFromElf clean-up" {
     // Make the strings section allocatable so createFromElf tries to allocate more than one
     the_elf.section_headers[1].flags |= elf.SECTION_ALLOCATABLE;
     try std.testing.expectError(error.AlreadyAllocated, Task.createFromElf(the_elf, true, &the_vmm, std.testing.allocator));
+}
+
+test "create doesn't allocate kernel stack" {
+    var allocator = std.testing.allocator;
+    const task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator, false);
+    defer task.destroy(allocator);
+    try std.testing.expectEqualSlices(usize, task.kernel_stack, &[_]usize{});
+    try std.testing.expectEqual(task.stack_pointer, 0);
 }
