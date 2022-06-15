@@ -6,7 +6,7 @@ const build_options = @import("build_options");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const log = std.log.scoped(.pci);
-const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("arch_mock") else @import("arch.zig");
 
 /// The port address for selecting a 32bit register in the PCI configuration space.
 const CONFIG_ADDRESS: u16 = 0x0CF8;

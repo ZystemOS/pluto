@@ -8,7 +8,7 @@ const is_test = builtin.is_test;
 const panic = @import("../../panic.zig").panic;
 const build_options = @import("build_options");
 const gdt = if (is_test) @import("../../../../test/mock/kernel/gdt_mock.zig") else @import("gdt.zig");
-const arch = if (builtin.is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
+const arch = if (builtin.is_test) @import("arch_mock") else @import("arch.zig");
 
 /// The structure that contains all the information that each IDT entry needs.
 pub const IdtEntry = packed struct {
