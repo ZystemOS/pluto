@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = std.builtin;
-const arch = @import("arch.zig").internals;
+const builtins = @import("builtin");
+const is_test = builtins.is_test;
+const arch = if (is_test) @import("arch_mock") else @import("arch");
 const mem = @import("mem.zig");
 const build_options = @import("build_options");
 const ArrayList = std.ArrayList;

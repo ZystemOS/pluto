@@ -7,7 +7,7 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_tty);
 const build_options = @import("build_options");
-const vga = if (is_test) @import("../../../../test/mock/kernel/vga_mock.zig") else @import("vga.zig");
+const vga = if (is_test) @import("arch_mock").vga_mock else @import("vga.zig");
 const panic = @import("../../panic.zig").panic;
 
 /// The error set for if there is an error whiles printing.

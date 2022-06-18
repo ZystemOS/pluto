@@ -13,6 +13,7 @@ const File = fs.File;
 const Mode = std.builtin.Mode;
 const TestMode = rt.TestMode;
 const ArrayList = std.ArrayList;
+const Pkg = std.build.Pkg;
 const Fat32 = @import("mkfat32.zig").Fat32;
 
 const x86_i686 = CrossTarget{
@@ -37,7 +38,10 @@ pub fn build(b: *Builder) !void {
     b.default_step.dependOn(&fmt_step.step);
 
     const main_src = "src/kernel/kmain.zig";
+    const pluto_src = "src/kernel/pluto.zig";
     const arch_root = "src/kernel/arch";
+    const arch_mock_src = "test/mock/kernel/arch_mock.zig";
+    const arch_src = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "arch.zig" });
     const linker_script_path = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "link.ld" });
     const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "pluto.iso" });
     const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "iso" });
@@ -67,6 +71,16 @@ pub fn build(b: *Builder) !void {
     exec.setBuildMode(build_mode);
     exec.setLinkerScriptPath(std.build.FileSource{ .path = linker_script_path });
     exec.setTarget(target);
+
+    var pluto_pkg = Pkg{ .name = "pluto", .path = .{ .path = pluto_src } };
+    var arch_pkg = Pkg{ .name = "arch", .path = .{ .path = arch_src } };
+    var arch_mock_pkg = Pkg{ .name = "arch_mock", .path = .{ .path = arch_mock_src } };
+    arch_mock_pkg.dependencies = &[_]Pkg{ arch_pkg, pluto_pkg, exec_options.getPackage("build_options") };
+    pluto_pkg.dependencies = &[_]Pkg{ arch_pkg, arch_mock_pkg, exec_options.getPackage("build_options") };
+    arch_pkg.dependencies = &[_]Pkg{ pluto_pkg, arch_mock_pkg, exec_options.getPackage("build_options") };
+    exec.addPackage(pluto_pkg);
+    exec.addPackage(arch_pkg);
+    exec.addPackage(arch_mock_pkg);
 
     const make_iso = switch (target.getCpuArch()) {
         .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec_output_path, ramdisk_path, output_iso }),
@@ -113,6 +127,9 @@ pub fn build(b: *Builder) !void {
     unit_tests.addOptions("build_options", unit_test_options);
     unit_test_options.addOption(TestMode, "test_mode", test_mode);
     unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
+    unit_tests.addPackage(pluto_pkg);
+    unit_tests.addPackage(arch_pkg);
+    unit_tests.addPackage(arch_mock_pkg);
 
     if (builtin.os.tag != .windows) {
         b.enable_qemu = true;
@@ -123,6 +140,8 @@ pub fn build(b: *Builder) !void {
     mock_gen.setMainPkgPath(".");
     const mock_gen_run = mock_gen.run();
     unit_tests.step.dependOn(&mock_gen_run.step);
+    exec.step.dependOn(&mock_gen_run.step);
+    b.default_step.dependOn(&mock_gen_run.step);
 
     // Create test FAT32 image
     const test_fat32_img_step = Fat32BuilderStep.create(b, .{}, test_fat32_image_path);
