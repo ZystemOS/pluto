@@ -29,7 +29,7 @@ const aarch64_cortexa53 = CrossTarget{
 };
 
 pub fn build(b: *Builder) !void {
-    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{ x86_i686, aarch64_cortexa53 }, .default_target = aarch64_cortexa53 });
+    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{ x86_i686, aarch64_cortexa53 }, .default_target = x86_i686 });
     const arch = switch (target.getCpuArch()) {
         .i386 => "x86",
         .aarch64 => "aarch64",
