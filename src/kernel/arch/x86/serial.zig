@@ -151,21 +151,21 @@ test "lcrValue computes the correct value" {
                         @boolToInt(stop_bit) << 2 |
                         @boolToInt(parity_bit) << 3 |
                         @intCast(u8, msb) << 7;
-                    testing.expectEqual(val, expected);
+                    try testing.expectEqual(val, expected);
                 }
             }
         }
     }
 
     // Check invalid char lengths
-    testing.expectError(SerialError.InvalidCharacterLength, lcrValue(4, false, false, 0));
-    testing.expectError(SerialError.InvalidCharacterLength, lcrValue(9, false, false, 0));
+    try testing.expectError(SerialError.InvalidCharacterLength, lcrValue(4, false, false, 0));
+    try testing.expectError(SerialError.InvalidCharacterLength, lcrValue(9, false, false, 0));
 }
 
 test "baudDivisor" {
     // Check invalid baudrates
     inline for ([_]u32{ 0, BAUD_MAX + 1 }) |baud| {
-        testing.expectError(SerialError.InvalidBaudRate, baudDivisor(baud));
+        try testing.expectError(SerialError.InvalidBaudRate, baudDivisor(baud));
     }
 
     // Check valid baudrates
@@ -173,6 +173,6 @@ test "baudDivisor" {
     while (baud <= BAUD_MAX) : (baud += 1) {
         const val = try baudDivisor(baud);
         const expected = @truncate(u16, BAUD_MAX / baud);
-        testing.expectEqual(val, expected);
+        try testing.expectEqual(val, expected);
     }
 }

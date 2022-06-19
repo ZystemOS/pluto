@@ -7,8 +7,7 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_pit);
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("arch_mock") else @import("arch.zig");
 const panic = @import("../../panic.zig").panic;
 const irq = @import("irq.zig");
 const pic = @import("pic.zig");
@@ -198,7 +197,7 @@ var time_under_1_ns: u32 = undefined;
 /// Arguments:
 ///     IN cmd: u8 - The command to send to the PIT.
 ///
-fn sendCommand(cmd: u8) callconv(.Inline) void {
+inline fn sendCommand(cmd: u8) void {
     arch.out(COMMAND_REGISTER, cmd);
 }
 
@@ -211,7 +210,7 @@ fn sendCommand(cmd: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The mode the counter is operating in. Use the masks above to get each part.
 ///
-fn readBackCommand(counter: CounterSelect) callconv(.Inline) u8 {
+inline fn readBackCommand(counter: CounterSelect) u8 {
     sendCommand(0xC2);
     return 0x3F & arch.in(u8, counter.getRegister());
 }
@@ -223,7 +222,7 @@ fn readBackCommand(counter: CounterSelect) callconv(.Inline) u8 {
 ///     IN counter: CounterSelect - The counter port to send the data to.
 ///     IN data: u8               - The data to send.
 ///
-fn sendDataToCounter(counter: CounterSelect, data: u8) callconv(.Inline) void {
+inline fn sendDataToCounter(counter: CounterSelect, data: u8) void {
     arch.out(counter.getRegister(), data);
 }
 
@@ -368,7 +367,7 @@ pub fn init() void {
 
     // Set up counter 0 at 10000hz in a square wave mode counting in binary
     const freq: u32 = 10000;
-    setupCounter(CounterSelect.Counter0, freq, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY) catch |e| {
+    setupCounter(CounterSelect.Counter0, freq, OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY) catch {
         panic(@errorReturnTrace(), "Invalid frequency: {}\n", .{freq});
     };
 
@@ -412,7 +411,7 @@ test "readBackCommand" {
 
     const actual = readBackCommand(CounterSelect.Counter0);
 
-    expectEqual(@as(u8, 0x20), actual);
+    try expectEqual(@as(u8, 0x20), actual);
 }
 
 test "sendDataToCounter" {
@@ -431,36 +430,14 @@ test "setupCounter lowest frequency" {
     defer arch.freeTest();
 
     const counter = CounterSelect.Counter0;
-    const port = counter.getRegister();
 
     var freq: u32 = 0;
 
-    // Reload value will be 0 (0x10000), the slowest speed for frequency less than 19
-    const expected_reload_value: u16 = 0;
-
-    // Slowest frequency the PIT can run at
-    const expected_freq: u32 = 19;
-
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
-    const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
 
     while (freq <= 18) : (freq += 1) {
-        // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
-        expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
-
-        // expectEqual(u32(0), ticks);
-        // expectEqual(expected_freq, current_freq_0);
-        // expectEqual(expected_freq, getFrequency());
-
-        // // These are the hard coded expected values. Calculated externally to check the internal calculation
-        // expectEqual(u32(52631578), time_ns);
-        // expectEqual(u32(947), time_under_1_ns);
+        try expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
     }
-
-    // Reset globals
-    time_ns = 0;
-    current_freq_0 = 0;
-    ticks = 0;
 }
 
 test "setupCounter highest frequency" {
@@ -468,36 +445,13 @@ test "setupCounter highest frequency" {
     defer arch.freeTest();
 
     const counter = CounterSelect.Counter0;
-    const port = counter.getRegister();
 
     // Set the frequency above the maximum
     const freq = MAX_FREQUENCY + 10;
 
-    // Reload value will be 1, the fastest speed for frequency greater than MAX_FREQUENCY
-    const expected_reload_value = 1;
-
-    // Slowest frequency the PIT can run at
-    const expected_freq = MAX_FREQUENCY;
-
     const mode = OCW_MODE_SQUARE_WAVE_GENERATOR | OCW_BINARY_COUNT_BINARY;
-    const command = mode | OCW_READ_LOAD_DATA | counter.getCounterOCW();
 
-    // arch.addTestParams("out", COMMAND_REGISTER, command, port, @truncate(u8, expected_reload_value), port, @truncate(u8, expected_reload_value >> 8));
-
-    expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
-
-    // expectEqual(u32(0), ticks);
-    // expectEqual(expected_freq, current_freq_0);
-    // expectEqual(expected_freq, getFrequency());
-
-    // // These are the hard coded expected values. Calculated externally to check the internal calculation
-    // expectEqual(u32(838), time_ns);
-    // expectEqual(u32(95), time_under_1_ns);
-
-    // Reset globals
-    time_ns = 0;
-    current_freq_0 = 0;
-    ticks = 0;
+    try expectError(PitError.InvalidFrequency, setupCounter(counter, freq, mode));
 }
 
 test "setupCounter normal frequency" {
@@ -519,13 +473,13 @@ test "setupCounter normal frequency" {
 
     setupCounter(counter, freq, mode) catch unreachable;
 
-    expectEqual(@as(u32, 0), ticks);
-    expectEqual(expected_freq, current_freq_0);
-    expectEqual(expected_freq, getFrequency());
+    try expectEqual(@as(u32, 0), ticks);
+    try expectEqual(expected_freq, current_freq_0);
+    try expectEqual(expected_freq, getFrequency());
 
     // These are the hard coded expected values. Calculated externally to check the internal calculation
-    expectEqual(@as(u32, 99730), time_ns);
-    expectEqual(@as(u32, 727), time_under_1_ns);
+    try expectEqual(@as(u32, 99730), time_ns);
+    try expectEqual(@as(u32, 727), time_under_1_ns);
 
     // Reset globals
     time_ns = 0;

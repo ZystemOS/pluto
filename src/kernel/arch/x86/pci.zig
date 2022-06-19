@@ -3,11 +3,10 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const log = std.log.scoped(.pci);
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("arch_mock") else @import("arch.zig");
 
 /// The port address for selecting a 32bit register in the PCI configuration space.
 const CONFIG_ADDRESS: u16 = 0x0CF8;
@@ -161,7 +160,7 @@ const PciDevice = struct {
 
             // RevisionId is a u8 width, offset 0
             const res = device.configReadData(2, .RevisionId);
-            expectEqual(res, 0x12);
+            try expectEqual(res, 0x12);
         }
 
         {
@@ -175,7 +174,7 @@ const PciDevice = struct {
 
             // ProgrammingInterface is a u8 width, offset 8
             const res = device.configReadData(2, .ProgrammingInterface);
-            expectEqual(res, 0xEF);
+            try expectEqual(res, 0xEF);
         }
 
         {
@@ -189,7 +188,7 @@ const PciDevice = struct {
 
             // Subclass is a u8 width, offset 16
             const res = device.configReadData(2, .Subclass);
-            expectEqual(res, 0xCD);
+            try expectEqual(res, 0xCD);
         }
 
         {
@@ -203,7 +202,7 @@ const PciDevice = struct {
 
             // ClassCode is a u8 width, offset 24
             const res = device.configReadData(2, .ClassCode);
-            expectEqual(res, 0xAB);
+            try expectEqual(res, 0xAB);
         }
     }
 
@@ -226,7 +225,7 @@ const PciDevice = struct {
 
             // VenderId is a u16 width, offset 0
             const res = device.configReadData(2, .VenderId);
-            expectEqual(res, 0xEF12);
+            try expectEqual(res, 0xEF12);
         }
 
         {
@@ -240,7 +239,7 @@ const PciDevice = struct {
 
             // DeviceId is a u16 width, offset 16
             const res = device.configReadData(2, .DeviceId);
-            expectEqual(res, 0xABCD);
+            try expectEqual(res, 0xABCD);
         }
     }
 
@@ -263,7 +262,7 @@ const PciDevice = struct {
 
             // BaseAddr0 is a u32 width, offset 0
             const res = device.configReadData(2, .BaseAddr0);
-            expectEqual(res, 0xABCDEF12);
+            try expectEqual(res, 0xABCDEF12);
         }
     }
 };
@@ -317,7 +316,7 @@ pub const PciDeviceInfo = struct {
 /// Get a list of all the PCI device. The returned list will needed to be freed by the caller.
 ///
 /// Arguments:
-///     IN allocator: *Allocator - An allocator used for creating the list.
+///     IN allocator: Allocator - An allocator used for creating the list.
 ///
 /// Return: []PciDeviceInfo
 ///     The list of PCI devices information.
@@ -325,7 +324,7 @@ pub const PciDeviceInfo = struct {
 /// Error: Allocator.Error
 ///     error.OutOfMemory - If there isn't enough memory to create the info list.
 ///
-pub fn getDevices(allocator: *Allocator) Allocator.Error![]PciDeviceInfo {
+pub fn getDevices(allocator: Allocator) Allocator.Error![]PciDeviceInfo {
     // Create an array list for the devices.
     var pci_device_infos = ArrayList(PciDeviceInfo).init(allocator);
     defer pci_device_infos.deinit();

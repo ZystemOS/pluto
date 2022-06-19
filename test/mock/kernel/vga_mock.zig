@@ -1,7 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
-const arch = @import("arch.zig").internals;
+const arch = @import("arch_mock.zig");
 const mock_framework = @import("mock_framework.zig");
 
 pub const initTest = mock_framework.initTest;
@@ -79,8 +79,8 @@ pub fn orig_entry(uc: u8, c: u8) u16 {
 
 pub fn mock_updateCursor(x: u16, y: u16) void {
     // Here we can do any testing we like with the parameters. e.g. test out of bounds
-    expect(x < WIDTH);
-    expect(y < HEIGHT);
+    expect(x < WIDTH) catch @panic("Cursor x is out of bounds\n");
+    expect(y < HEIGHT) catch @panic("Cursor x is out of bounds\n");
 }
 
 pub fn mock_enableCursor() void {}

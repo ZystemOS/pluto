@@ -74,8 +74,8 @@ export fn exceptionHandler() noreturn {
     exception_handler_depth += 1;
     if (exception_handler_depth > 1) {
         if (exception_handler_depth == 2) {
-            log.emerg("\n", .{});
-            log.emerg("arm exception taken when already active!\n", .{});
+            log.err("\n", .{});
+            log.err("arm exception taken when already active!\n", .{});
         }
         rpi.spinLed(50);
     }
@@ -105,8 +105,8 @@ export fn exceptionHandler() noreturn {
     const esr_elx_class = @intToEnum(ExceptionClass, @truncate(u6, esr_elx >> 26));
     const esr_elx_instruction_is_32_bits = esr_elx & 0x2000000 != 0;
     const esr_elx_iss = esr_elx & 0x1ffffff;
-    log.emerg("\n", .{});
-    log.emerg("arm exception taken to level {}\n", .{currentExceptionLevel()});
+    log.err("\n", .{});
+    log.err("arm exception taken to level {}\n", .{currentExceptionLevel()});
     var seen_previously = false;
     if (currentExceptionLevel() == 3 and exception_entry_offset == 0x200 and esr_elx_instruction_is_32_bits) {
         switch (esr_elx_class) {
@@ -114,27 +114,27 @@ export fn exceptionHandler() noreturn {
                 switch (esr_elx_iss) {
                     0x0 => {
                         seen_previously = true;
-                        log.emerg("this exception has been seen previously in development\n", .{});
-                        log.emerg("    data abort in level {} (while using sp_el{} and not sp_el0)\n", .{ currentExceptionLevel(), currentExceptionLevel() });
-                        log.emerg("    32 bit instruction at 0x{x} accessing 0x{x}\n", .{ elr_elx, far_elx });
+                        log.err("this exception has been seen previously in development\n", .{});
+                        log.err("    data abort in level {} (while using sp_el{} and not sp_el0)\n", .{ currentExceptionLevel(), currentExceptionLevel() });
+                        log.err("    32 bit instruction at 0x{x} accessing 0x{x}\n", .{ elr_elx, far_elx });
                     },
                     0x21 => {
                         if (far_elx == 0x1) {
                             seen_previously = true;
-                            log.emerg("this exception has been seen previously in development\n", .{});
-                            log.emerg("    data abort in level {} (while using sp_el{} and not sp_el0)\n", .{ currentExceptionLevel(), currentExceptionLevel() });
-                            log.emerg("    32 bit instruction at 0x{x} accessing 0x{x}\n", .{ elr_elx, far_elx });
-                            log.emerg("    test 32 bit read of address 0x1\n", .{});
+                            log.err("this exception has been seen previously in development\n", .{});
+                            log.err("    data abort in level {} (while using sp_el{} and not sp_el0)\n", .{ currentExceptionLevel(), currentExceptionLevel() });
+                            log.err("    32 bit instruction at 0x{x} accessing 0x{x}\n", .{ elr_elx, far_elx });
+                            log.err("    test 32 bit read of address 0x1\n", .{});
                         } else {
                             seen_previously = true;
-                            log.emerg("this exception has been seen previously in development\n", .{});
-                            log.emerg("    data abort, read, alignment fault ...\n", .{});
+                            log.err("this exception has been seen previously in development\n", .{});
+                            log.err("    data abort, read, alignment fault ...\n", .{});
                         }
                     },
                     0x61 => {
                         seen_previously = true;
-                        log.emerg("this exception has been seen previously in development\n", .{});
-                        log.emerg("    data abort, write, alignment\n", .{});
+                        log.err("this exception has been seen previously in development\n", .{});
+                        log.err("    data abort, write, alignment\n", .{});
                     },
                     else => {},
                 }
@@ -143,9 +143,9 @@ export fn exceptionHandler() noreturn {
                 switch (esr_elx_iss) {
                     0x0, 0x10 => {
                         seen_previously = true;
-                        log.emerg("this exception has been seen previously in development\n", .{});
-                        log.emerg("    instruction abort (variant: esr_el{}.iss = 0x{x}) in level {} (while using sp_el{} and not sp_el0)\n", .{ currentExceptionLevel(), esr_elx_iss, currentExceptionLevel(), currentExceptionLevel() });
-                        log.emerg("    32 bit instruction at 0x{x} accessing 0x{x}\n", .{ elr_elx, far_elx });
+                        log.err("this exception has been seen previously in development\n", .{});
+                        log.err("    instruction abort (variant: esr_el{}.iss = 0x{x}) in level {} (while using sp_el{} and not sp_el0)\n", .{ currentExceptionLevel(), esr_elx_iss, currentExceptionLevel(), currentExceptionLevel() });
+                        log.err("    32 bit instruction at 0x{x} accessing 0x{x}\n", .{ elr_elx, far_elx });
                     },
                     else => {},
                 }
@@ -154,29 +154,29 @@ export fn exceptionHandler() noreturn {
         }
     }
     if (!seen_previously) {
-        log.emerg("this exception has not been seen previously in development\n", .{});
-        log.emerg("    - please update aarch64/interrupts.zig\n", .{});
+        log.err("this exception has not been seen previously in development\n", .{});
+        log.err("    - please update aarch64/interrupts.zig\n", .{});
     }
-    log.emerg("details\n", .{});
-    log.emerg("    elr_el{} 0x{x}\n", .{ currentExceptionLevel(), elr_elx });
-    log.emerg("    esr_el{} 0x{x}:\n", .{ currentExceptionLevel(), esr_elx });
-    log.emerg("        {}\n", .{esr_elx_class});
-    log.emerg("        32 bit instruction {}\n", .{esr_elx_instruction_is_32_bits});
-    log.emerg("        iss 0x{x}\n", .{esr_elx_iss});
-    log.emerg("    exception entry offset 0x{x}:\n", .{exception_entry_offset});
-    log.emerg("        {}\n", .{@intToEnum(ExceptionTakenFrom, @truncate(u2, exception_entry_offset >> 9))});
-    log.emerg("        {}\n", .{@intToEnum(ExceptionCategory, @truncate(u2, exception_entry_offset >> 7))});
-    log.emerg("    far_el{} 0x{x}\n", .{ currentExceptionLevel(), far_elx });
-    log.emerg("    mair_el{} 0x{x}\n", .{ currentExceptionLevel(), mair_elx });
-    log.emerg("    sctlr_el{} 0x{x}\n", .{ currentExceptionLevel(), sctlr_elx });
-    log.emerg("    spsr_el{} 0x{x}\n", .{ currentExceptionLevel(), spsr_elx });
-    log.emerg("    tcr_el{} 0x{x}\n", .{ currentExceptionLevel(), tcr_elx });
-    log.emerg("    ttbr0_el{} 0x{x}\n", .{ currentExceptionLevel(), ttbr0_elx });
-    log.emerg("    vbar_el{} 0x{x}\n", .{ currentExceptionLevel(), vbar_elx });
-    log.emerg("exception done\n", .{});
+    log.err("details\n", .{});
+    log.err("    elr_el{} 0x{x}\n", .{ currentExceptionLevel(), elr_elx });
+    log.err("    esr_el{} 0x{x}:\n", .{ currentExceptionLevel(), esr_elx });
+    log.err("        {}\n", .{esr_elx_class});
+    log.err("        32 bit instruction {}\n", .{esr_elx_instruction_is_32_bits});
+    log.err("        iss 0x{x}\n", .{esr_elx_iss});
+    log.err("    exception entry offset 0x{x}:\n", .{exception_entry_offset});
+    log.err("        {}\n", .{@intToEnum(ExceptionTakenFrom, @truncate(u2, exception_entry_offset >> 9))});
+    log.err("        {}\n", .{@intToEnum(ExceptionCategory, @truncate(u2, exception_entry_offset >> 7))});
+    log.err("    far_el{} 0x{x}\n", .{ currentExceptionLevel(), far_elx });
+    log.err("    mair_el{} 0x{x}\n", .{ currentExceptionLevel(), mair_elx });
+    log.err("    sctlr_el{} 0x{x}\n", .{ currentExceptionLevel(), sctlr_elx });
+    log.err("    spsr_el{} 0x{x}\n", .{ currentExceptionLevel(), spsr_elx });
+    log.err("    tcr_el{} 0x{x}\n", .{ currentExceptionLevel(), tcr_elx });
+    log.err("    ttbr0_el{} 0x{x}\n", .{ currentExceptionLevel(), ttbr0_elx });
+    log.err("    vbar_el{} 0x{x}\n", .{ currentExceptionLevel(), vbar_elx });
+    log.err("exception done\n", .{});
     rpi.spinLed(100);
 }
 
-pub fn currentExceptionLevel() callconv(.Inline) u2 {
+pub inline fn currentExceptionLevel() u2 {
     return @truncate(u2, Cpu.CurrentEL.read() >> 2);
 }

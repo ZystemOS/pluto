@@ -1,7 +1,8 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const arch = @import("arch.zig").internals;
-const multiboot = @import("multiboot.zig");
+const builtin = std.builtin;
+const builtins = @import("builtin");
+const is_test = builtins.is_test;
+const arch = if (is_test) @import("arch_mock") else @import("arch");
 const mem = @import("mem.zig");
 const build_options = @import("build_options");
 const ArrayList = std.ArrayList;
@@ -32,12 +33,12 @@ const SymbolMap = struct {
     /// Initialise an empty symbol map.
     ///
     /// Arguments:
-    ///     IN allocator: *Allocator - The allocator to use to initialise the array list.
+    ///     IN allocator: Allocator - The allocator to use to initialise the array list.
     ///
     /// Return: SymbolMap
     ///     The symbol map.
     ///
-    pub fn init(allocator: *Allocator) SymbolMap {
+    pub fn init(allocator: Allocator) SymbolMap {
         return SymbolMap{
             .symbols = ArrayList(MapEntry).init(allocator),
         };
@@ -111,7 +112,7 @@ var symbol_map: ?SymbolMap = null;
 ///
 fn logTraceAddress(addr: usize) void {
     const str = if (symbol_map) |syms| syms.search(addr) orelse "?????" else "(no symbols available)";
-    log.emerg("{x}: {s}\n", .{ addr, str });
+    log.err("{x}: {s}\n", .{ addr, str });
 }
 
 ///
@@ -278,7 +279,7 @@ fn parseMapEntry(start: *[*]const u8, end: *const u8) (PanicError || std.fmt.Par
 
 pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
-    log.emerg("Kernel panic: " ++ format ++ "\n", args);
+    log.err("Kernel panic: " ++ format ++ "\n", args);
     if (trace) |trc| {
         var last_addr: u64 = 0;
         for (trc.instruction_addresses) |ret_addr| {
@@ -298,20 +299,20 @@ pub fn panic(trace: ?*builtin.StackTrace, comptime format: []const u8, args: any
 }
 
 ///
-/// Initialise the panic subsystem by looking for a boot module called "kernel.map" and loading the
-/// symbols from it. Exits early if no such module was found.
+/// Initialise the symbol table used by the panic subsystem by looking for a boot module called "kernel.map" and loading the
+/// symbol entries from it. Exits early if no such module was found.
 ///
 /// Arguments:
 ///     IN mem_profile: *const mem.MemProfile - The memory profile from which to get the loaded boot
 ///         modules.
-///     IN allocator: *Allocator - The allocator to use to store the symbol map.
+///     IN allocator: Allocator - The allocator to use to store the symbol map.
 ///
 /// Error: PanicError || Allocator.Error || std.fmt.ParseIntError
 ///     PanicError.InvalidSymbolFile - A terminating whitespace wasn't found before the end address.
 ///     Allocator.Error.OutOfMemory - If there wasn't enough memory.
 ///     std.fmt.ParseIntError - See parseMapEntry.
 ///
-pub fn init(mem_profile: *const mem.MemProfile, allocator: *Allocator) (PanicError || Allocator.Error || std.fmt.ParseIntError)!void {
+pub fn initSymbols(mem_profile: *const mem.MemProfile, allocator: Allocator) (PanicError || Allocator.Error || std.fmt.ParseIntError)!void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
 
@@ -355,91 +356,91 @@ test "parseChar" {
     const str: []const u8 = "plutoisthebest";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var char = try parseChar(str.ptr, end);
-    testing.expectEqual(char, 'p');
+    try testing.expectEqual(char, 'p');
     char = try parseChar(str.ptr + 1, end);
-    testing.expectEqual(char, 'l');
-    testing.expectError(PanicError.InvalidSymbolFile, parseChar(str.ptr + str.len, end));
+    try testing.expectEqual(char, 'l');
+    try testing.expectError(PanicError.InvalidSymbolFile, parseChar(str.ptr + str.len, end));
 }
 
 test "parseWhitespace" {
     const str: []const u8 = "    a";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = try parseWhitespace(str.ptr, end);
-    testing.expectEqual(@ptrToInt(str.ptr) + 4, @ptrToInt(ptr));
+    try testing.expectEqual(@ptrToInt(str.ptr) + 4, @ptrToInt(ptr));
 }
 
 test "parseWhitespace fails without a terminating whitespace" {
     const str: []const u8 = "   ";
     const end = @ptrCast(*const u8, str.ptr + str.len);
-    testing.expectError(PanicError.InvalidSymbolFile, parseWhitespace(str.ptr, end));
+    try testing.expectError(PanicError.InvalidSymbolFile, parseWhitespace(str.ptr, end));
 }
 
 test "parseNonWhitespace" {
     const str: []const u8 = "ab ";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = try parseNonWhitespace(str.ptr, end);
-    testing.expectEqual(@ptrToInt(str.ptr) + 2, @ptrToInt(ptr));
+    try testing.expectEqual(@ptrToInt(str.ptr) + 2, @ptrToInt(ptr));
 }
 
 test "parseNonWhitespace fails without a terminating whitespace" {
     const str: []const u8 = "abc";
     const end = @ptrCast(*const u8, str.ptr + str.len);
-    testing.expectError(PanicError.InvalidSymbolFile, parseNonWhitespace(str.ptr, end));
+    try testing.expectError(PanicError.InvalidSymbolFile, parseNonWhitespace(str.ptr, end));
 }
 
 test "parseNonNewLine" {
     const str: []const u8 = "ab\n";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = try parseNonNewLine(str.ptr, end);
-    testing.expectEqual(@ptrToInt(str.ptr) + 2, @ptrToInt(ptr));
+    try testing.expectEqual(@ptrToInt(str.ptr) + 2, @ptrToInt(ptr));
 }
 
 test "parseNonNewLine fails without a terminating newline" {
     const str: []const u8 = "abc";
     const end = @ptrCast(*const u8, str.ptr + str.len);
-    testing.expectError(PanicError.InvalidSymbolFile, parseNonNewLine(str.ptr, end));
+    try testing.expectError(PanicError.InvalidSymbolFile, parseNonNewLine(str.ptr, end));
 }
 
 test "parseAddr" {
     const str: []const u8 = "1a2b3c4d ";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
-    testing.expectEqual(try parseAddr(&ptr, end), 0x1a2b3c4d);
+    try testing.expectEqual(try parseAddr(&ptr, end), 0x1a2b3c4d);
 }
 
 test "parseAddr fails without a terminating whitespace" {
     const str: []const u8 = "1a2b3c4d";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
-    testing.expectError(PanicError.InvalidSymbolFile, parseAddr(&ptr, end));
+    try testing.expectError(PanicError.InvalidSymbolFile, parseAddr(&ptr, end));
 }
 
 test "parseAddr fails with an invalid integer" {
     const str: []const u8 = "1g2t ";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
-    testing.expectError(error.InvalidCharacter, parseAddr(&ptr, end));
+    try testing.expectError(error.InvalidCharacter, parseAddr(&ptr, end));
 }
 
 test "parseName" {
     const str: []const u8 = "func_name\n";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
-    testing.expectEqualSlices(u8, try parseName(&ptr, end), "func_name");
+    try testing.expectEqualSlices(u8, try parseName(&ptr, end), "func_name");
 }
 
 test "parseName with spaces" {
     const str: []const u8 = "func_name(*const type   )\n";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
-    testing.expectEqualSlices(u8, try parseName(&ptr, end), "func_name(*const type   )");
+    try testing.expectEqualSlices(u8, try parseName(&ptr, end), "func_name(*const type   )");
 }
 
 test "parseName fails without a terminating newline" {
     const str: []const u8 = "func_name";
     const end = @ptrCast(*const u8, str.ptr + str.len);
     var ptr = str.ptr;
-    testing.expectError(PanicError.InvalidSymbolFile, parseName(&ptr, end));
+    try testing.expectError(PanicError.InvalidSymbolFile, parseName(&ptr, end));
 }
 
 test "parseMapEntry" {
@@ -449,37 +450,37 @@ test "parseMapEntry" {
 
     var actual = try parseMapEntry(&ptr, end);
     var expected = MapEntry{ .addr = 0x1a2b3c4d, .func_name = "func_name" };
-    testing.expectEqual(actual.addr, expected.addr);
-    testing.expectEqualSlices(u8, actual.func_name, expected.func_name);
+    try testing.expectEqual(actual.addr, expected.addr);
+    try testing.expectEqualSlices(u8, actual.func_name, expected.func_name);
 
     actual = try parseMapEntry(&ptr, end);
     expected = MapEntry{ .addr = 0x5e6f7a8b, .func_name = "func_name2" };
-    testing.expectEqual(actual.addr, expected.addr);
-    testing.expectEqualSlices(u8, actual.func_name, expected.func_name);
+    try testing.expectEqual(actual.addr, expected.addr);
+    try testing.expectEqualSlices(u8, actual.func_name, expected.func_name);
 }
 
 test "parseMapEntry fails without a terminating newline" {
     const str: []const u8 = "1a2b3c4d func_name";
     var ptr = str.ptr;
-    testing.expectError(PanicError.InvalidSymbolFile, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr + 18)));
+    try testing.expectError(PanicError.InvalidSymbolFile, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr + 18)));
 }
 
 test "parseMapEntry fails without any characters" {
     const str: []const u8 = " ";
     var ptr = str.ptr;
-    testing.expectError(PanicError.InvalidSymbolFile, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr)));
+    try testing.expectError(PanicError.InvalidSymbolFile, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr)));
 }
 
 test "parseMapEntry fails with an invalid address" {
     const str: []const u8 = "xyz func_name";
     var ptr = str.ptr;
-    testing.expectError(error.InvalidCharacter, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr + 13)));
+    try testing.expectError(error.InvalidCharacter, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr + 13)));
 }
 
 test "parseMapEntry fails without a name" {
     const str: []const u8 = "123 ";
     var ptr = str.ptr;
-    testing.expectError(PanicError.InvalidSymbolFile, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr + 4)));
+    try testing.expectError(PanicError.InvalidSymbolFile, parseMapEntry(&ptr, @ptrCast(*const u8, str.ptr + 4)));
 }
 
 test "SymbolMap" {
@@ -490,18 +491,18 @@ test "SymbolMap" {
     try map.addEntry(MapEntry{ .func_name = "def"[0..], .addr = 456 });
     try map.add("ghi"[0..], 789);
     try map.addEntry(MapEntry{ .func_name = "jkl"[0..], .addr = 1010 });
-    testing.expectEqual(map.search(54), null);
-    testing.expectEqual(map.search(122), null);
-    testing.expectEqual(map.search(123), "abc");
-    testing.expectEqual(map.search(234), "abc");
-    testing.expectEqual(map.search(455), "abc");
-    testing.expectEqual(map.search(456), "def");
-    testing.expectEqual(map.search(678), "def");
-    testing.expectEqual(map.search(788), "def");
-    testing.expectEqual(map.search(789), "ghi");
-    testing.expectEqual(map.search(1009), "ghi");
-    testing.expectEqual(map.search(1010), "jkl");
-    testing.expectEqual(map.search(2345), "jkl");
+    try testing.expectEqual(map.search(54), null);
+    try testing.expectEqual(map.search(122), null);
+    try testing.expectEqual(map.search(123), "abc");
+    try testing.expectEqual(map.search(234), "abc");
+    try testing.expectEqual(map.search(455), "abc");
+    try testing.expectEqual(map.search(456), "def");
+    try testing.expectEqual(map.search(678), "def");
+    try testing.expectEqual(map.search(788), "def");
+    try testing.expectEqual(map.search(789), "ghi");
+    try testing.expectEqual(map.search(1009), "ghi");
+    try testing.expectEqual(map.search(1010), "jkl");
+    try testing.expectEqual(map.search(2345), "jkl");
 }
 
 ///

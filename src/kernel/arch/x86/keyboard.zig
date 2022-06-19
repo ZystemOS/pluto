@@ -6,7 +6,7 @@ const testing = std.testing;
 const log = std.log.scoped(.x86_keyboard);
 const irq = @import("irq.zig");
 const pic = @import("pic.zig");
-const arch = if (builtin.is_test) @import(build_options.arch_mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (builtin.is_test) @import("arch_mock") else @import("arch.zig");
 const panic = @import("../../panic.zig").panic;
 const kb = @import("../../keyboard.zig");
 const Keyboard = kb.Keyboard;
@@ -164,7 +164,7 @@ fn onKeyEvent(ctx: *arch.CpuState) usize {
     const scan_code = readKeyboardBuffer();
     if (parseScanCode(scan_code)) |action| {
         if (!keyboard.writeKey(action)) {
-            log.notice("No room for keyboard action {}\n", .{action});
+            log.warn("No room for keyboard action {}\n", .{action});
         }
     }
     return @ptrToInt(ctx);
@@ -174,7 +174,7 @@ fn onKeyEvent(ctx: *arch.CpuState) usize {
 /// Initialise the PS/2 keyboard
 ///
 /// Arguments:
-///     IN allocator: *Allocator - The allocator to use to create the keyboard instance
+///     IN allocator: Allocator - The allocator to use to create the keyboard instance
 ///
 /// Return: *Keyboard
 ///     The keyboard created
@@ -182,7 +182,7 @@ fn onKeyEvent(ctx: *arch.CpuState) usize {
 /// Error: std.mem.Allocator.Error
 ///     OutOfMemory - There isn't enough memory to allocate the keyboard instance
 ///
-pub fn init(allocator: *Allocator) Allocator.Error!*Keyboard {
+pub fn init(allocator: Allocator) Allocator.Error!*Keyboard {
     irq.registerIrq(pic.IRQ_KEYBOARD, onKeyEvent) catch |e| {
         panic(@errorReturnTrace(), "Failed to register keyboard IRQ: {}\n", .{e});
     };
@@ -297,23 +297,23 @@ test "parseScanCode" {
         var res = parseScanCode(scan_code);
         if (key) |k| {
             const r = res orelse unreachable;
-            testing.expectEqual(k, r.position);
-            testing.expectEqual(false, r.released);
-            testing.expectEqual(pressed_keys, 1);
+            try testing.expectEqual(k, r.position);
+            try testing.expectEqual(false, r.released);
+            try testing.expectEqual(pressed_keys, 1);
         }
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, false);
-        testing.expectEqual(expected_releases, 0);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, false);
+        try testing.expectEqual(expected_releases, 0);
         // Test release scan code for key
         if (key) |k| {
             res = parseScanCode(scan_code | 128);
             const r = res orelse unreachable;
-            testing.expectEqual(k, r.position);
-            testing.expectEqual(true, r.released);
-            testing.expectEqual(pressed_keys, 0);
-            testing.expectEqual(on_print_screen, false);
-            testing.expectEqual(special_sequence, false);
-            testing.expectEqual(expected_releases, 0);
+            try testing.expectEqual(k, r.position);
+            try testing.expectEqual(true, r.released);
+            try testing.expectEqual(pressed_keys, 0);
+            try testing.expectEqual(on_print_screen, false);
+            try testing.expectEqual(special_sequence, false);
+            try testing.expectEqual(expected_releases, 0);
         }
         scan_code += 1;
     }
@@ -338,32 +338,32 @@ test "parseScanCode" {
     };
     const simple_special_codes = &[_]u8{ 72, 75, 77, 80, 82, 71, 73, 83, 79, 81, 53, 28, 56, 91 };
     for (simple_special_keys) |key, i| {
-        testing.expectEqual(parseScanCode(128), null);
-        testing.expectEqual(pressed_keys, 0);
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, true);
-        testing.expectEqual(expected_releases, 0);
+        try testing.expectEqual(parseScanCode(128), null);
+        try testing.expectEqual(pressed_keys, 0);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, true);
+        try testing.expectEqual(expected_releases, 0);
 
         var res = parseScanCode(simple_special_codes[i]) orelse unreachable;
-        testing.expectEqual(false, res.released);
-        testing.expectEqual(key, res.position);
-        testing.expectEqual(pressed_keys, 1);
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, true);
-        testing.expectEqual(expected_releases, 1);
+        try testing.expectEqual(false, res.released);
+        try testing.expectEqual(key, res.position);
+        try testing.expectEqual(pressed_keys, 1);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, true);
+        try testing.expectEqual(expected_releases, 1);
 
-        testing.expectEqual(parseScanCode(128), null);
-        testing.expectEqual(pressed_keys, 1);
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, true);
-        testing.expectEqual(expected_releases, 0);
+        try testing.expectEqual(parseScanCode(128), null);
+        try testing.expectEqual(pressed_keys, 1);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, true);
+        try testing.expectEqual(expected_releases, 0);
 
         res = parseScanCode(simple_special_codes[i] | 128) orelse unreachable;
-        testing.expectEqual(true, res.released);
-        testing.expectEqual(key, res.position);
-        testing.expectEqual(pressed_keys, 0);
-        testing.expectEqual(on_print_screen, false);
-        testing.expectEqual(special_sequence, false);
-        testing.expectEqual(expected_releases, 0);
+        try testing.expectEqual(true, res.released);
+        try testing.expectEqual(key, res.position);
+        try testing.expectEqual(pressed_keys, 0);
+        try testing.expectEqual(on_print_screen, false);
+        try testing.expectEqual(special_sequence, false);
+        try testing.expectEqual(expected_releases, 0);
     }
 }

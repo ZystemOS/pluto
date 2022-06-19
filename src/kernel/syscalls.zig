@@ -2,56 +2,12 @@ const std = @import("std");
 const scheduler = @import("scheduler.zig");
 const panic = @import("panic.zig").panic;
 const log = std.log.scoped(.syscalls);
+const builtin = @import("builtin");
+const is_test = builtin.is_test;
+const arch = if (is_test) @import("arch_mock") else @import("arch");
 
 /// A compilation of all errors that syscall handlers could return.
 pub const Error = error{OutOfMemory};
-
-///
-/// Convert an error code to an instance of Error. The conversion must be synchronised with toErrorCode
-///
-/// Arguments:
-///     IN code: usize - The erorr code to convert
-///
-/// Return: Error
-///     The error corresponding to the error code
-///
-pub fn fromErrorCode(code: usize) Error {
-    return switch (code) {
-        1 => Error.OutOfMemory,
-        else => unreachable,
-    };
-}
-
-///
-/// Convert an instance of Error to an error code. The conversion must be synchronised with fromErrorCode
-///
-/// Arguments:
-///     IN err: Error - The erorr to convert
-///
-/// Return: usize
-///     The error code corresponding to the error
-///
-pub fn toErrorCode(err: Error) usize {
-    return switch (err) {
-        Error.OutOfMemory => 1,
-    };
-}
-
-comptime {
-    // Make sure toErrorCode and fromErrorCode are synchronised, and that no errors share the same error code
-    inline for (@typeInfo(Error).ErrorSet.?) |err| {
-        const error_instance = @field(Error, err.name);
-        if (fromErrorCode(toErrorCode(error_instance)) != error_instance) {
-            @compileError("toErrorCode and fromErrorCode are not synchronised for syscall error '" ++ err.name ++ "'\n");
-        }
-        inline for (@typeInfo(Error).ErrorSet.?) |err2| {
-            const error2_instance = @field(Error, err2.name);
-            if (error_instance != error2_instance and toErrorCode(error_instance) == toErrorCode(error2_instance)) {
-                @compileError("Syscall errors '" ++ err.name ++ "' and '" ++ err2.name ++ "' share the same error code\n");
-            }
-        }
-    }
-}
 
 /// All implemented syscalls
 pub const Syscall = enum {
@@ -75,10 +31,52 @@ pub const Syscall = enum {
             .Test3 => handleTest3,
         };
     }
+
+    ///
+    /// Check if the syscall is just used for testing, and therefore shouldn't be exposed at runtime
+    ///
+    /// Arguments:
+    ///     IN self: Syscall - The syscall to check
+    ///
+    /// Return: bool
+    ///     true if the syscall is only to be used for testing, else false
+    ///
+    pub fn isTest(self: @This()) bool {
+        return switch (self) {
+            .Test1, .Test2, .Test3 => true,
+        };
+    }
 };
 
 /// A function that can handle a syscall and return a result or an error
-pub const Handler = fn (arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize;
+pub const Handler = fn (ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize;
+
+///
+/// Convert an error code to an instance of Error. The conversion must be synchronised with toErrorCode
+/// Passing an error code that does not correspond to an error results in safety-protected undefined behaviour
+///
+/// Arguments:
+///     IN code: u16 - The erorr code to convert
+///
+/// Return: Error
+///     The error corresponding to the error code
+///
+pub fn fromErrorCode(code: u16) anyerror {
+    return @intToError(code);
+}
+
+///
+/// Convert an instance of Error to an error code. The conversion must be synchronised with fromErrorCode
+///
+/// Arguments:
+///     IN err: Error - The erorr to convert
+///
+/// Return: u16
+///     The error code corresponding to the error
+///
+pub fn toErrorCode(err: anyerror) u16 {
+    return @errorToInt(err);
+}
 
 ///
 /// Handle a syscall and return a result or error
@@ -93,30 +91,46 @@ pub const Handler = fn (arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5
 /// Error: Error
 ///     The error raised by the handler
 ///
-pub fn handle(syscall: Syscall, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
-    return try syscall.getHandler()(arg1, arg2, arg3, arg4, arg5);
+pub fn handle(syscall: Syscall, ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    return try syscall.getHandler()(ctx, arg1, arg2, arg3, arg4, arg5);
 }
 
-pub fn handleTest1(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+pub fn handleTest1(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    // Suppress unused variable warnings
+    _ = ctx;
+    _ = arg1;
+    _ = arg2;
+    _ = arg3;
+    _ = arg4;
+    _ = arg5;
     return 0;
 }
 
-pub fn handleTest2(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+pub fn handleTest2(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    _ = ctx;
     return arg1 + arg2 + arg3 + arg4 + arg5;
 }
 
-pub fn handleTest3(arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+pub fn handleTest3(ctx: *const arch.CpuState, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) Error!usize {
+    // Suppress unused variable warnings
+    _ = ctx;
+    _ = arg1;
+    _ = arg2;
+    _ = arg3;
+    _ = arg4;
+    _ = arg5;
     return std.mem.Allocator.Error.OutOfMemory;
 }
 
 test "getHandler" {
-    std.testing.expectEqual(Syscall.Test1.getHandler(), handleTest1);
-    std.testing.expectEqual(Syscall.Test2.getHandler(), handleTest2);
-    std.testing.expectEqual(Syscall.Test3.getHandler(), handleTest3);
+    try std.testing.expectEqual(Syscall.Test1.getHandler(), handleTest1);
+    try std.testing.expectEqual(Syscall.Test2.getHandler(), handleTest2);
+    try std.testing.expectEqual(Syscall.Test3.getHandler(), handleTest3);
 }
 
 test "handle" {
-    std.testing.expectEqual(@as(usize, 0), try handle(.Test1, 0, 0, 0, 0, 0));
-    std.testing.expectEqual(@as(usize, 1 + 2 + 3 + 4 + 5), try handle(.Test2, 1, 2, 3, 4, 5));
-    std.testing.expectError(Error.OutOfMemory, handle(.Test3, 0, 0, 0, 0, 0));
+    const state = arch.CpuState.empty();
+    try std.testing.expectEqual(@as(usize, 0), try handle(.Test1, &state, 0, 0, 0, 0, 0));
+    try std.testing.expectEqual(@as(usize, 1 + 2 + 3 + 4 + 5), try handle(.Test2, &state, 1, 2, 3, 4, 5));
+    try std.testing.expectError(Error.OutOfMemory, handle(.Test3, &state, 0, 0, 0, 0, 0));
 }

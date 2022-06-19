@@ -99,7 +99,7 @@ pub fn getInterruptStub(comptime interrupt_num: u32) idt.InterruptHandler {
                 \\ pushl %[nr]
                 \\ jmp commonStub
                 :
-                : [nr] "n" (interrupt_num)
+                : [nr] "n" (interrupt_num),
             );
         }
     }.func;

@@ -99,7 +99,7 @@ pub const RuntimeStep = struct {
         while (true) {
             const msg = self.get_msg() catch return true;
             defer self.builder.allocator.free(msg);
-            std.debug.warn("{s}\n", .{msg});
+            std.debug.print("{s}\n", .{msg});
         }
     }
 
@@ -117,7 +117,7 @@ pub const RuntimeStep = struct {
             const msg = self.get_msg() catch return false;
             defer self.builder.allocator.free(msg);
             // Print the line to see what is going on
-            std.debug.warn("{s}\n", .{msg});
+            std.debug.print("{s}\n", .{msg});
             if (std.mem.indexOf(u8, msg, "FAILURE")) |_| {
                 return false;
             } else if (std.mem.indexOf(u8, msg, "Kernel panic")) |_| {
@@ -142,8 +142,8 @@ pub const RuntimeStep = struct {
             const msg = self.get_msg() catch return false;
             defer self.builder.allocator.free(msg);
             // Print the line to see what is going on
-            std.debug.warn("{s}\n", .{msg});
-            if (std.mem.eql(u8, msg, "[emerg] (panic): Kernel panic: integer overflow")) {
+            std.debug.print("{s}\n", .{msg});
+            if (std.mem.eql(u8, msg, "[err] (panic): Kernel panic: integer overflow")) {
                 return true;
             }
         }
@@ -164,7 +164,7 @@ pub const RuntimeStep = struct {
             const msg = self.get_msg() catch return false;
             defer self.builder.allocator.free(msg);
 
-            std.debug.warn("{s}\n", .{msg});
+            std.debug.print("{s}\n", .{msg});
 
             // Make sure `[INFO] Switched` then `[INFO] SUCCESS: Scheduler variables preserved` are logged in this order
             if (std.mem.eql(u8, msg, "[info] (scheduler): Switched") and state == 0) {
@@ -206,7 +206,7 @@ pub const RuntimeStep = struct {
         try self.os_proc.spawn();
 
         // Start up the read thread
-        var thread = try Thread.spawn(read_logs, self);
+        var thread = try Thread.spawn(Thread.SpawnConfig{}, read_logs, .{self});
 
         // Call the testing function
         const res = self.test_func(self);
@@ -215,7 +215,7 @@ pub const RuntimeStep = struct {
         _ = try self.os_proc.kill();
 
         // Join the thread
-        thread.wait();
+        thread.join();
 
         // Free the rest of the queue
         while (self.msg_queue.get()) |node| {
@@ -248,7 +248,7 @@ pub const RuntimeStep = struct {
                     return;
                 },
                 else => {
-                    std.debug.warn("Unexpected error: {}\n", .{e});
+                    std.debug.print("Unexpected error: {}\n", .{e});
                     unreachable;
                 },
             };
@@ -299,7 +299,7 @@ pub const RuntimeStep = struct {
     pub fn create(builder: *Builder, test_mode: TestMode, qemu_args: [][]const u8) *RuntimeStep {
         const runtime_step = builder.allocator.create(RuntimeStep) catch unreachable;
         runtime_step.* = RuntimeStep{
-            .step = Step.init(.Custom, builder.fmt("Runtime {s}", .{@tagName(test_mode)}), builder.allocator, make),
+            .step = Step.init(.custom, builder.fmt("Runtime {s}", .{@tagName(test_mode)}), builder.allocator, make),
             .builder = builder,
             .msg_queue = Queue.init(),
             .os_proc = undefined,

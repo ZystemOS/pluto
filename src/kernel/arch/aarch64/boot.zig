@@ -21,10 +21,7 @@ export fn _start() linksection(".text.boot") callconv(.Naked) noreturn {
         \\ ldr x1, =kernel_stack
         \\ add x0, x0, x1
         \\ mov sp, x0
-        :
-        :
-        : "x0", "x1"
-    );
+        ::: "x0", "x1");
 
     start(); // must start a proper zig function to get x29 (frame pointer) initialized!
 }

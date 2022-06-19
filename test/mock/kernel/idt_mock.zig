@@ -1,4 +1,4 @@
-const src_idt = @import("../../../src/kernel/arch/x86/idt.zig");
+const src_idt = @import("arch").idt;
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;

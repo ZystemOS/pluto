@@ -3,7 +3,9 @@ const fmt = std.fmt;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.tty);
 const build_options = @import("build_options");
-const arch = @import("arch.zig").internals;
+const builtin = @import("builtin");
+const is_test = builtin.is_test;
+const arch = if (is_test) @import("arch_mock") else @import("arch");
 const panic = @import("panic.zig").panic;
 
 /// The OutStream for the format function
@@ -24,7 +26,7 @@ pub const TTY = struct {
 
 /// The current tty stream
 var tty: TTY = undefined;
-var allocator: *Allocator = undefined;
+var allocator: Allocator = undefined;
 
 ///
 /// A call back function for use in the formation of a string. This calls the architecture's print function.
@@ -37,6 +39,8 @@ var allocator: *Allocator = undefined;
 ///     The number of characters printed
 ///
 fn printCallback(ctx: void, str: []const u8) !usize {
+    // Suppress unused var warning
+    _ = ctx;
     tty.print(str) catch |e| panic(@errorReturnTrace(), "Failed to print to tty: {}\n", .{e});
     return str.len;
 }
@@ -52,7 +56,7 @@ fn printCallback(ctx: void, str: []const u8) !usize {
 pub fn print(comptime format: []const u8, args: anytype) void {
     // Printing can't error because of the scrolling, if it does, we have a big problem
     fmt.format(Writer{ .context = {} }, format, args) catch |e| {
-        log.emerg("Error printing. Error: {}\n", .{e});
+        log.err("Error printing. Error: {}\n", .{e});
     };
 }
 
@@ -98,10 +102,10 @@ pub fn clear() void {
 /// Initialise the TTY. The details of which are up to the architecture
 ///
 /// Arguments:
-///     IN alloc: *std.mem.Allocator - The allocator to use when requiring memory
+///     IN alloc: Allocator - The allocator to use when requiring memory
 ///     IN boot_payload: arch.BootPayload - The payload passed to the kernel on boot
 ///
-pub fn init(alloc: *Allocator, boot_payload: arch.BootPayload) void {
+pub fn init(alloc: Allocator, boot_payload: arch.BootPayload) void {
     log.info("Init\n", .{});
     defer log.info("Done\n", .{});
     tty = arch.initTTY(boot_payload);

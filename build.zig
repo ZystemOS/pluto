@@ -10,9 +10,10 @@ const Target = std.Target;
 const CrossTarget = std.zig.CrossTarget;
 const fs = std.fs;
 const File = fs.File;
-const Mode = builtin.Mode;
+const Mode = std.builtin.Mode;
 const TestMode = rt.TestMode;
 const ArrayList = std.ArrayList;
+const Pkg = std.build.Pkg;
 const Fat32 = @import("mkfat32.zig").Fat32;
 
 const x86_i686 = CrossTarget{
@@ -28,7 +29,7 @@ const aarch64_cortexa53 = CrossTarget{
 };
 
 pub fn build(b: *Builder) !void {
-    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{ x86_i686, aarch64_cortexa53 }, .default_target = x86_i686 });
+    const target = b.standardTargetOptions(.{ .whitelist = &[_]CrossTarget{ x86_i686, aarch64_cortexa53 }, .default_target = aarch64_cortexa53 });
     const arch = switch (target.getCpuArch()) {
         .i386 => "x86",
         .aarch64 => "aarch64",
@@ -44,12 +45,17 @@ pub fn build(b: *Builder) !void {
     b.default_step.dependOn(&fmt_step.step);
 
     const main_src = "src/kernel/kmain.zig";
+    const pluto_src = "src/kernel/pluto.zig";
     const arch_root = "src/kernel/arch";
+    const arch_mock_src = "test/mock/kernel/arch_mock.zig";
+    const elf_name = "pluto.elf";
+    const arch_src = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "arch.zig" });
     const linker_script_path = try fs.path.join(b.allocator, &[_][]const u8{ arch_root, arch, "link.ld" });
-    const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "pluto.iso" });
-    const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso" });
-    const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "boot" });
-    const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.exe_dir, "iso", "modules" });
+    const output_iso = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "pluto.iso" });
+    const output_elf = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, elf_name });
+    const iso_dir_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "iso" });
+    const boot_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "iso", "boot" });
+    const modules_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "iso", "modules" });
     const ramdisk_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "initrd.ramdisk" });
     const fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "fat32.img" });
     const test_fat32_image_path = try fs.path.join(b.allocator, &[_][]const u8{ "test", "fat32", "test_fat32.img" });
@@ -65,21 +71,35 @@ pub fn build(b: *Builder) !void {
     const test_mode = b.option(TestMode, "test-mode", "Run a specific runtime test. This option is for the rt-test step. Available options: " ++ test_mode_desc) orelse .None;
     const disable_display = b.option(bool, "disable-display", "Disable the qemu window") orelse false;
 
-    const exec = b.addExecutable("pluto.elf", main_src);
-    exec.setOutputDir(b.cache_root);
-    exec.addBuildOption(TestMode, "test_mode", test_mode);
+    const exec = b.addExecutable(elf_name, main_src);
+    const exec_output_path = try fs.path.join(b.allocator, &[_][]const u8{ b.install_path, "pluto.elf" });
+    exec.setOutputDir(b.install_path);
+    const exec_options = b.addOptions();
+    exec.addOptions("build_options", exec_options);
+    exec_options.addOption(TestMode, "test_mode", test_mode);
     exec.setBuildMode(build_mode);
-    exec.setLinkerScriptPath(linker_script_path);
+    exec.setLinkerScriptPath(std.build.FileSource{ .path = linker_script_path });
     exec.setTarget(target);
 
+    var pluto_pkg = Pkg{ .name = "pluto", .path = .{ .path = pluto_src } };
+    var arch_pkg = Pkg{ .name = "arch", .path = .{ .path = arch_src } };
+    var arch_mock_pkg = Pkg{ .name = "arch_mock", .path = .{ .path = arch_mock_src } };
+    arch_mock_pkg.dependencies = &[_]Pkg{ arch_pkg, pluto_pkg, exec_options.getPackage("build_options") };
+    pluto_pkg.dependencies = &[_]Pkg{ arch_pkg, arch_mock_pkg, exec_options.getPackage("build_options") };
+    arch_pkg.dependencies = &[_]Pkg{ pluto_pkg, arch_mock_pkg, exec_options.getPackage("build_options") };
+    exec.addPackage(pluto_pkg);
+    exec.addPackage(arch_pkg);
+    exec.addPackage(arch_mock_pkg);
+
     const make_iso = switch (target.getCpuArch()) {
-        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, exec.getOutputPath(), ramdisk_path, output_iso }),
+        .i386 => b.addSystemCommand(&[_][]const u8{ "./makeiso.sh", boot_path, modules_path, iso_dir_path, output_elf, ramdisk_path, output_iso }),
         .aarch64 => makeRpiImage: {
             const elf = try fs.path.join(b.allocator, &[_][]const u8{ exec.output_dir.?, "pluto.elf" });
+            _ = elf;
             const kernel_image = "kernel8.img";
             const sdcard_image = try fs.path.join(b.allocator, &[_][]const u8{ b.cache_root, "rpi-sdcard.img" });
 
-            const install_raw = b.addInstallRaw(exec, kernel_image);
+            const install_raw = b.addInstallBinFile(exec.getOutputSource(), kernel_image);
             install_raw.step.dependOn(&exec.step);
 
             const allocate_sdcard_image = b.addSystemCommand(&[_][]const u8{
@@ -129,7 +149,7 @@ pub fn build(b: *Builder) !void {
                 "mcopy",
                 "-i",
                 sdcard_image,
-                b.getInstallPath(.Bin, kernel_image),
+                b.getInstallPath(.bin, kernel_image),
                 "::kernel8.img",
             });
             copy_kernel.step.dependOn(&copy_fixup.step);
@@ -160,17 +180,19 @@ pub fn build(b: *Builder) !void {
         try ramdisk_files_al.append("test/ramdisk_test1.txt");
         try ramdisk_files_al.append("test/ramdisk_test2.txt");
     } else if (test_mode == .Scheduler) {
-        // Add some test files for the user mode runtime tests
-        const user_program = b.addAssemble("user_program", "test/user_program.s");
-        user_program.setOutputDir(b.cache_root);
-        user_program.setTarget(target);
-        user_program.setBuildMode(build_mode);
-        user_program.strip = true;
-
-        const copy_user_program = b.addSystemCommand(&[_][]const u8{ "objcopy", "-O", "binary", "zig-cache/user_program.o", "zig-cache/user_program" });
-        copy_user_program.step.dependOn(&user_program.step);
-        try ramdisk_files_al.append("zig-cache/user_program");
-        exec.step.dependOn(&copy_user_program.step);
+        inline for (&[_][]const u8{ "user_program_data", "user_program" }) |user_program| {
+            // Add some test files for the user mode runtime tests
+            const user_program_step = b.addExecutable(user_program ++ ".elf", null);
+            user_program_step.setLinkerScriptPath(.{ .path = "test/user_program.ld" });
+            user_program_step.addAssemblyFile("test/" ++ user_program ++ ".s");
+            user_program_step.setOutputDir(b.install_path);
+            user_program_step.setTarget(target);
+            user_program_step.setBuildMode(build_mode);
+            user_program_step.strip = true;
+            exec.step.dependOn(&user_program_step.step);
+            const user_program_path = try std.mem.join(b.allocator, "/", &[_][]const u8{ b.install_path, user_program ++ ".elf" });
+            try ramdisk_files_al.append(user_program_path);
+        }
     }
 
     const ramdisk_step = RamdiskStep.create(b, target, ramdisk_files_al.toOwnedSlice(), ramdisk_path);
@@ -179,18 +201,19 @@ pub fn build(b: *Builder) !void {
     b.default_step.dependOn(&make_iso.step);
 
     const test_step = b.step("test", "Run tests");
-    const mock_path = "../../test/mock/kernel/";
-    const arch_mock_path = "../../../../test/mock/kernel/";
     const unit_tests = b.addTest(main_src);
     unit_tests.setBuildMode(build_mode);
     unit_tests.setMainPkgPath(".");
-    unit_tests.addBuildOption(TestMode, "test_mode", test_mode);
-    unit_tests.addBuildOption([]const u8, "mock_path", mock_path);
-    unit_tests.addBuildOption([]const u8, "arch_mock_path", arch_mock_path);
+    const unit_test_options = b.addOptions();
+    unit_tests.addOptions("build_options", unit_test_options);
+    unit_test_options.addOption(TestMode, "test_mode", test_mode);
     unit_tests.setTarget(.{ .cpu_arch = target.cpu_arch });
+    unit_tests.addPackage(pluto_pkg);
+    unit_tests.addPackage(arch_pkg);
+    unit_tests.addPackage(arch_mock_pkg);
 
     if (builtin.os.tag != .windows) {
-        unit_tests.enable_qemu = true;
+        b.enable_qemu = true;
     }
 
     // Run the mock gen
@@ -198,6 +221,8 @@ pub fn build(b: *Builder) !void {
     mock_gen.setMainPkgPath(".");
     const mock_gen_run = mock_gen.run();
     unit_tests.step.dependOn(&mock_gen_run.step);
+    exec.step.dependOn(&mock_gen_run.step);
+    b.default_step.dependOn(&mock_gen_run.step);
 
     // Create test FAT32 image
     const test_fat32_img_step = Fat32BuilderStep.create(b, .{}, test_fat32_image_path);
@@ -225,7 +250,7 @@ pub fn build(b: *Builder) !void {
             try qemu_args_al.append("-cdrom");
             try qemu_args_al.append(output_iso);
         },
-        .aarch64 => try qemu_args_al.appendSlice(&[_][]const u8{ "-kernel", exec.getOutputPath(), "-machine", "raspi3" }),
+        .aarch64 => try qemu_args_al.appendSlice(&[_][]const u8{ "-kernel", exec.output_dir.?, "-machine", "raspi3" }),
         else => unreachable,
     }
     if (disable_display) {
@@ -253,7 +278,7 @@ pub fn build(b: *Builder) !void {
     run_debug_step.dependOn(&qemu_debug_cmd.step);
 
     const debug_step = b.step("debug", "Debug with gdb and connect to a running qemu instance");
-    const symbol_file_arg = try std.mem.join(b.allocator, " ", &[_][]const u8{ "symbol-file", exec.getOutputPath() });
+    const symbol_file_arg = try std.mem.join(b.allocator, " ", &[_][]const u8{ "symbol-file", exec_output_path });
     const debug_cmd = b.addSystemCommand(&[_][]const u8{
         "gdb-multiarch",
         "-ex",
@@ -317,7 +342,7 @@ const Fat32BuilderStep = struct {
     pub fn create(builder: *Builder, options: Fat32.Options, out_file_path: []const u8) *Fat32BuilderStep {
         const fat32_builder_step = builder.allocator.create(Fat32BuilderStep) catch unreachable;
         fat32_builder_step.* = .{
-            .step = Step.init(.Custom, builder.fmt("Fat32BuilderStep", .{}), builder.allocator, make),
+            .step = Step.init(.custom, builder.fmt("Fat32BuilderStep", .{}), builder.allocator, make),
             .builder = builder,
             .options = options,
             .out_file_path = out_file_path,
@@ -433,7 +458,7 @@ const RamdiskStep = struct {
     pub fn create(builder: *Builder, target: CrossTarget, files: []const []const u8, out_file_path: []const u8) *RamdiskStep {
         const ramdisk_step = builder.allocator.create(RamdiskStep) catch unreachable;
         ramdisk_step.* = .{
-            .step = Step.init(.Custom, builder.fmt("Ramdisk", .{}), builder.allocator, make),
+            .step = Step.init(.custom, builder.fmt("Ramdisk", .{}), builder.allocator, make),
             .builder = builder,
             .target = target,
             .files = files,

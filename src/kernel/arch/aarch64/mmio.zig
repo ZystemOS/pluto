@@ -67,6 +67,7 @@ pub const RegisterBitField = struct {
     shifted_data: u32,
 
     pub fn at(f: *RegisterBitField, mmio_base: usize, first_register: Register, data: anytype, field_index: usize) void {
+        _ = mmio_base;
         const field_width = @bitSizeOf(@TypeOf(data));
         const fields_per_register: usize = 32 / field_width;
         const mask = (@as(u32, 1) << field_width) - 1;

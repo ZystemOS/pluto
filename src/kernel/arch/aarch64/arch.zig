@@ -1,10 +1,11 @@
 const assert = std.debug.assert;
 const std = @import("std");
-const vmm = @import("../../vmm.zig");
-const mem = @import("../../mem.zig");
-const Serial = @import("../../serial.zig").Serial;
-const tty = @import("tty.zig");
-const TTY = @import("../../tty.zig").TTY;
+const pluto = @import("pluto");
+const vmm = pluto.vmm;
+const mem = pluto.mem;
+const Serial = pluto.serial.Serial;
+const tty = pluto.tty;
+const TTY = pluto.tty.TTY;
 const rpi = @import("rpi.zig");
 const mmio = @import("mmio.zig");
 const log = std.log.scoped(.aarch64_arch);
@@ -48,6 +49,7 @@ pub fn initMmioAddress(board: *rpi.RaspberryPiBoard) void {
 //  Furthermore uart0 on qemu does not need any initialization.
 //
 pub fn initSerial(board: BootPayload) Serial {
+    _ = board;
     if (!Cpu.isQemu()) {
         // On an actual rpi, initialize uart1 to 115200 baud on pins 14 and 15:
         rpi.pinSetPullUpAndFunction(14, .None, .AlternateFunction5);
@@ -91,23 +93,33 @@ pub fn initMem(payload: BootPayload) std.mem.Allocator.Error!mem.MemProfile {
     const phys_end = @ptrCast([*]u8, &KERNEL_PHYSADDR_END);
     const virt_start = phys_start;
     const virt_end = phys_end;
-    var allocator = &mem.fixed_buffer_allocator.allocator;
+    var allocator = mem.fixed_buffer_allocator.allocator();
+    _ = allocator;
 
     var allocator_region = mem.Map{ .virtual = .{ .start = @ptrToInt(virt_end), .end = @ptrToInt(virt_end) }, .physical = null };
+    _ = allocator_region;
 
     return mem.MemProfile{ .vaddr_end = virt_end, .vaddr_start = virt_start, .physaddr_start = phys_start, .physaddr_end = phys_end, .mem_kb = payload.memoryKB(), .modules = &[_]mem.Module{}, .virtual_reserved = &[_]mem.Map{}, .physical_reserved = &[_]mem.Range{}, .fixed_allocator = mem.fixed_buffer_allocator };
 }
 
 // TODO: implement
-pub fn init(payload: BootPayload, mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) void {}
+pub fn init(payload: BootPayload, mem_profile: *const mem.MemProfile, allocator: *std.mem.Allocator) void {
+    _ = payload;
+    _ = mem_profile;
+    _ = allocator;
+}
 
 // TODO: implement
 pub fn inb(port: u32) u8 {
+    _ = port;
     return 0;
 }
 
 // TODO: implement
-pub fn outb(port: u32, byte: u8) void {}
+pub fn outb(port: u32, byte: u8) void {
+    _ = port;
+    _ = byte;
+}
 
 // TODO: implement
 pub fn halt() noreturn {
@@ -183,23 +195,23 @@ pub const Cpu = struct {
 
     fn cpuRegister(comptime register_name: []const u8) type {
         return struct {
-            pub fn read() callconv(.Inline) usize {
+            pub inline fn read() usize {
                 const data = asm ("mov %[data], " ++ register_name
-                    : [data] "=r" (-> usize)
+                    : [data] "=r" (-> usize),
                 );
                 return data;
             }
-            pub fn write(data: usize) callconv(.Inline) void {
+            pub inline fn write(data: usize) void {
                 asm volatile ("mov " ++ register_name ++ ", %[data]"
                     :
-                    : [data] "r" (data)
+                    : [data] "r" (data),
                 );
             }
         };
     }
     fn systemRegisterPerExceptionLevel(comptime available_levels: AvailableLevels, comptime register_name: []const u8) type {
         return struct {
-            pub fn el(exception_level: u2) callconv(.Inline) type {
+            pub inline fn el(exception_level: u2) type {
                 const level_string = switch (exception_level) {
                     0 => string: {
                         assert(available_levels == .JustLevelZero);
@@ -224,24 +236,24 @@ pub const Cpu = struct {
     }
     fn systemRegister(comptime register_name: []const u8) type {
         return struct {
-            pub fn read() callconv(.Inline) usize {
+            pub inline fn read() usize {
                 const word = asm ("mrs %[word], " ++ register_name
-                    : [word] "=r" (-> usize)
+                    : [word] "=r" (-> usize),
                 );
                 return word;
             }
-            pub fn readSetWrite(bits: usize) callconv(.Inline) void {
+            pub inline fn readSetWrite(bits: usize) void {
                 write(read() | bits);
             }
-            pub fn write(data: usize) callconv(.Inline) void {
+            pub inline fn write(data: usize) void {
                 asm volatile ("msr " ++ register_name ++ ", %[data]"
                     :
-                    : [data] "r" (data)
+                    : [data] "r" (data),
                 );
             }
         };
     }
-    pub fn isb() callconv(.Inline) void {
+    pub inline fn isb() void {
         asm volatile (
             \\ isb
         );
@@ -251,7 +263,7 @@ pub const Cpu = struct {
         return cntfrq.el(0).read() != 0;
     }
 
-    pub fn wfe() callconv(.Inline) void {
+    pub inline fn wfe() void {
         asm volatile (
             \\ wfe
         );

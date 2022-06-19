@@ -6,11 +6,10 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_isr);
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
 const syscalls = @import("syscalls.zig");
 const panic = @import("../../panic.zig").panic;
-const idt = if (is_test) @import(mock_path ++ "idt_mock.zig") else @import("idt.zig");
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const idt = if (is_test) @import("arch_mock").idt_mock else @import("idt.zig");
+const arch = if (is_test) @import("arch_mock") else @import("arch.zig");
 const interrupts = @import("interrupts.zig");
 
 /// The error set for the ISR. This will be from installing a ISR handler.
@@ -256,15 +255,23 @@ pub fn init() void {
 
 fn testFunction0() callconv(.Naked) void {}
 fn testFunction1(ctx: *arch.CpuState) u32 {
+    // Suppress unused var warning
+    _ = ctx;
     return 0;
 }
 fn testFunction2(ctx: *arch.CpuState) u32 {
+    // Suppress unused var warning
+    _ = ctx;
     return 0;
 }
 fn testFunction3(ctx: *arch.CpuState) u32 {
+    // Suppress unused var warning
+    _ = ctx;
     return 0;
 }
 fn testFunction4(ctx: *arch.CpuState) u32 {
+    // Suppress unused var warning
+    _ = ctx;
     return 0;
 }
 
@@ -284,24 +291,24 @@ test "openIsr" {
 test "isValidIsr" {
     comptime var i = 0;
     inline while (i < NUMBER_OF_ENTRIES) : (i += 1) {
-        expectEqual(true, isValidIsr(i));
+        try expectEqual(true, isValidIsr(i));
     }
 
-    expect(isValidIsr(syscalls.INTERRUPT));
+    try expect(isValidIsr(syscalls.INTERRUPT));
 
-    expect(!isValidIsr(200));
+    try expect(!isValidIsr(200));
 }
 
 test "registerIsr re-register syscall handler" {
     // Pre testing
-    expect(null == syscall_handler);
+    try expect(null == syscall_handler);
 
     // Call function
     try registerIsr(syscalls.INTERRUPT, testFunction3);
-    expectError(IsrError.IsrExists, registerIsr(syscalls.INTERRUPT, testFunction4));
+    try expectError(IsrError.IsrExists, registerIsr(syscalls.INTERRUPT, testFunction4));
 
     // Post testing
-    expectEqual(testFunction3, syscall_handler.?);
+    try expectEqual(testFunction3, syscall_handler.?);
 
     // Clean up
     syscall_handler = null;
@@ -309,13 +316,13 @@ test "registerIsr re-register syscall handler" {
 
 test "registerIsr register syscall handler" {
     // Pre testing
-    expect(null == syscall_handler);
+    try expect(null == syscall_handler);
 
     // Call function
     try registerIsr(syscalls.INTERRUPT, testFunction3);
 
     // Post testing
-    expectEqual(testFunction3, syscall_handler.?);
+    try expectEqual(testFunction3, syscall_handler.?);
 
     // Clean up
     syscall_handler = null;
@@ -324,19 +331,19 @@ test "registerIsr register syscall handler" {
 test "registerIsr re-register isr handler" {
     // Pre testing
     for (isr_handlers) |h| {
-        expect(null == h);
+        try expect(null == h);
     }
 
     // Call function
     try registerIsr(0, testFunction1);
-    expectError(IsrError.IsrExists, registerIsr(0, testFunction2));
+    try expectError(IsrError.IsrExists, registerIsr(0, testFunction2));
 
     // Post testing
     for (isr_handlers) |h, i| {
         if (i != 0) {
-            expect(null == h);
+            try expect(null == h);
         } else {
-            expectEqual(testFunction1, h.?);
+            try expectEqual(testFunction1, h.?);
         }
     }
 
@@ -347,7 +354,7 @@ test "registerIsr re-register isr handler" {
 test "registerIsr register isr handler" {
     // Pre testing
     for (isr_handlers) |h| {
-        expect(null == h);
+        try expect(null == h);
     }
 
     // Call function
@@ -356,9 +363,9 @@ test "registerIsr register isr handler" {
     // Post testing
     for (isr_handlers) |h, i| {
         if (i != 0) {
-            expect(null == h);
+            try expect(null == h);
         } else {
-            expectEqual(testFunction1, h.?);
+            try expectEqual(testFunction1, h.?);
         }
     }
 
@@ -367,7 +374,7 @@ test "registerIsr register isr handler" {
 }
 
 test "registerIsr invalid isr index" {
-    expectError(IsrError.InvalidIsr, registerIsr(200, testFunction1));
+    try expectError(IsrError.InvalidIsr, registerIsr(200, testFunction1));
 }
 
 ///

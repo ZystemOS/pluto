@@ -3,8 +3,7 @@ const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const expectEqual = std.testing.expectEqual;
 const build_options = @import("build_options");
-const mock_path = build_options.arch_mock_path;
-const arch = if (is_test) @import(mock_path ++ "arch_mock.zig") else @import("arch.zig");
+const arch = if (is_test) @import("arch_mock") else @import("arch.zig");
 
 /// The current year to be used for calculating the 4 digit year, as the CMOS return the last two
 /// digits of the year.
@@ -137,7 +136,7 @@ pub const RtcRegister = enum {
 ///     IN reg: u8                    - The register index to select in the CMOS chip.
 ///     IN comptime disable_nmi: bool - Whether to disable NMI when selecting a register.
 ///
-fn selectRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) void {
+inline fn selectRegister(reg: u8, comptime disable_nmi: bool) void {
     if (disable_nmi) {
         arch.out(ADDRESS, reg | NMI_BIT);
     } else {
@@ -151,7 +150,7 @@ fn selectRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) void {
 /// Arguments:
 ///     IN data: u8 - The data to write to the selected register.
 ///
-fn writeRegister(data: u8) callconv(.Inline) void {
+inline fn writeRegister(data: u8) void {
     arch.out(DATA, data);
 }
 
@@ -161,7 +160,7 @@ fn writeRegister(data: u8) callconv(.Inline) void {
 /// Return: u8
 ///     The value in the selected register.
 ///
-fn readRegister() callconv(.Inline) u8 {
+inline fn readRegister() u8 {
     return arch.in(u8, DATA);
 }
 
@@ -176,7 +175,7 @@ fn readRegister() callconv(.Inline) u8 {
 /// Return: u8
 ///     The value in the selected register.
 ///
-fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) u8 {
+inline fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) u8 {
     selectRegister(reg, disable_nmi);
     arch.ioWait();
     return readRegister();
@@ -191,7 +190,7 @@ fn selectAndReadRegister(reg: u8, comptime disable_nmi: bool) callconv(.Inline) 
 ///     IN data: u8                   - The data to write to the selected register.
 ///     IN comptime disable_nmi: bool - Whether to disable NMI when selecting a register.
 ///
-fn selectAndWriteRegister(reg: u8, data: u8, comptime disable_nmi: bool) callconv(.Inline) void {
+inline fn selectAndWriteRegister(reg: u8, data: u8, comptime disable_nmi: bool) void {
     selectRegister(reg, disable_nmi);
     arch.ioWait();
     writeRegister(data);
@@ -278,7 +277,7 @@ test "readRegister" {
     const expected = @as(u8, 0x55);
     const actual = readRegister();
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "selectAndReadRegister NMI" {
@@ -294,7 +293,7 @@ test "selectAndReadRegister NMI" {
     const expected = @as(u8, 0x44);
     const actual = selectAndReadRegister(reg, false);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "selectAndReadRegister no NMI" {
@@ -310,7 +309,7 @@ test "selectAndReadRegister no NMI" {
     const expected = @as(u8, 0x44);
     const actual = selectAndReadRegister(reg, true);
 
-    expectEqual(expected, actual);
+    try expectEqual(expected, actual);
 }
 
 test "selectAndWriteRegister NMI" {
@@ -364,7 +363,7 @@ test "readRtcRegister" {
         const expected = @as(u8, 0x44);
         const actual = readRtcRegister(reg);
 
-        expectEqual(expected, actual);
+        try expectEqual(expected, actual);
     }
 }
 
@@ -389,7 +388,7 @@ test "readStatusRegister NMI" {
         const expected = @as(u8, 0x78);
         const actual = readStatusRegister(reg, false);
 
-        expectEqual(expected, actual);
+        try expectEqual(expected, actual);
     }
 }
 
@@ -414,7 +413,7 @@ test "readStatusRegister no NMI" {
         const expected = @as(u8, 0x78);
         const actual = readStatusRegister(reg, true);
 
-        expectEqual(expected, actual);
+        try expectEqual(expected, actual);
     }
 }
 
