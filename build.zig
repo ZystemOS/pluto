@@ -19,7 +19,7 @@ const Fat32 = @import("mkfat32.zig").Fat32;
 const x86_i686 = CrossTarget{
     .cpu_arch = .i386,
     .os_tag = .freestanding,
-    .cpu_model = .{ .explicit = &Target.x86.cpu._i686 },
+    .cpu_model = .{ .explicit = &Target.x86.cpu.i686 },
 };
 
 pub fn build(b: *Builder) !void {
@@ -72,9 +72,9 @@ pub fn build(b: *Builder) !void {
     exec.setLinkerScriptPath(std.build.FileSource{ .path = linker_script_path });
     exec.setTarget(target);
 
-    var pluto_pkg = Pkg{ .name = "pluto", .path = .{ .path = pluto_src } };
-    var arch_pkg = Pkg{ .name = "arch", .path = .{ .path = arch_src } };
-    var arch_mock_pkg = Pkg{ .name = "arch_mock", .path = .{ .path = arch_mock_src } };
+    var pluto_pkg = Pkg{ .name = "pluto", .source = .{ .path = pluto_src } };
+    var arch_pkg = Pkg{ .name = "arch", .source = .{ .path = arch_src } };
+    var arch_mock_pkg = Pkg{ .name = "arch_mock", .source = .{ .path = arch_mock_src } };
     arch_mock_pkg.dependencies = &[_]Pkg{ arch_pkg, pluto_pkg, exec_options.getPackage("build_options") };
     pluto_pkg.dependencies = &[_]Pkg{ arch_pkg, arch_mock_pkg, exec_options.getPackage("build_options") };
     arch_pkg.dependencies = &[_]Pkg{ pluto_pkg, arch_mock_pkg, exec_options.getPackage("build_options") };

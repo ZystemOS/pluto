@@ -351,6 +351,6 @@ pub fn init(allocator: Allocator) Allocator.Error!?*Keyboard {
     return arch.initKeyboard(allocator);
 }
 
-test "" {
+test {
     _ = Keyboard.init();
 }

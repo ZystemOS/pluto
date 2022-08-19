@@ -158,7 +158,7 @@ export fn isrHandler(ctx: *arch.CpuState) usize {
                 // Regular ISR exception, if there is one registered.
                 ret_esp = handler(ctx);
             } else {
-                log.info("State: {X}\n", .{ctx});
+                log.info("State: {}\n", .{ctx});
                 panic(@errorReturnTrace(), "ISR {s} ({}) triggered with error code 0x{X} but not registered\n", .{ exception_msg[isr_num], isr_num, ctx.error_code });
             }
         }

@@ -354,7 +354,7 @@ pub const Fat32 = struct {
     fn createSerialNumber() u32 {
         // TODO: Get the actual date. Currently there is no std lib for human readable date.
         const year = 2020;
-        const month = 09;
+        const month = 9;
         const day = 27;
         const hour = 13;
         const minute = 46;

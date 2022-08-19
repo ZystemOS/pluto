@@ -666,6 +666,6 @@ pub fn runtimeTestCheckUserTaskState(ctx: *const CpuState) bool {
     return ctx.eax == 0xCAFE and ctx.ebx == 0xBEEF;
 }
 
-test "" {
+test {
     std.testing.refAllDecls(@This());
 }

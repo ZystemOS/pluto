@@ -422,7 +422,7 @@ pub fn unmap(virtual_start: usize, virtual_end: usize, allocator: Allocator, dir
 ///     IN state: *arch.CpuState - The CPU's state when the fault occurred.
 ///
 fn pageFault(state: *arch.CpuState) u32 {
-    log.info("State: {X}\n", .{state});
+    log.info("State: {}\n", .{state});
     var cr0 = asm volatile ("mov %%cr0, %[cr0]"
         : [cr0] "=r" (-> u32),
     );

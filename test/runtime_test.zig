@@ -196,8 +196,7 @@ pub const RuntimeStep = struct {
         const self = @fieldParentPtr(RuntimeStep, "step", step);
 
         // Create the qemu process
-        self.os_proc = try ChildProcess.init(self.argv, self.builder.allocator);
-        defer self.os_proc.deinit();
+        self.os_proc.* = ChildProcess.init(self.argv, self.builder.allocator);
 
         self.os_proc.stdout_behavior = .Pipe;
         self.os_proc.stdin_behavior = .Inherit;

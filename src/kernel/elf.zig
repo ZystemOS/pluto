@@ -561,7 +561,7 @@ test "init" {
     const section_name = "some_section";
     const string_section_name = "strings";
     const is_32_bit = @bitSizeOf(usize) == 32;
-    var data = try testInitData(testing.allocator, section_name, string_section_name, .Executable, 0, 0, 123, 789, 456, 012);
+    var data = try testInitData(testing.allocator, section_name, string_section_name, .Executable, 0, 0, 123, 789, 456, 12);
     defer testing.allocator.free(data);
     const elf = try Elf.init(data, builtin.cpu.arch, testing.allocator);
     defer elf.deinit();
@@ -590,7 +590,7 @@ test "init" {
     try testing.expectEqual(section_name.len + 1, section_two.name_offset);
     try testing.expectEqual(SectionType.StringTable, section_two.section_type);
     try testing.expectEqual(@as(usize, 789), section_two.flags);
-    try testing.expectEqual(@as(usize, 012), section_two.virtual_address);
+    try testing.expectEqual(@as(usize, 12), section_two.virtual_address);
 
     try testing.expectEqual(@as(usize, 2), elf.section_data.len);
     try testing.expectEqual(elf.section_headers[0].size, elf.section_data[0].?.len);

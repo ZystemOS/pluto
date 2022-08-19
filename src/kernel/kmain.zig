@@ -193,6 +193,6 @@ fn initStage2() noreturn {
     arch.spinWait();
 }
 
-test "" {
+test {
     _ = @import("filesystem/fat32.zig");
 }
