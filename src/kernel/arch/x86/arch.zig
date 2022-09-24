@@ -552,7 +552,7 @@ pub fn initTask(task: *Task, entry_point: usize, allocator: Allocator, set_up_st
     task.vmm.payload = &paging.kernel_directory;
 
     var stack = &task.kernel_stack;
-    const kernel_stack_bottom = if (task.kernel) task.kernel_stack.len - 18 else task.kernel_stack.len - 20;
+    const kernel_stack_bottom = if (!set_up_stack) 0 else if (task.kernel) task.kernel_stack.len - 18 else task.kernel_stack.len - 20;
     if (set_up_stack) {
         const data_offset = if (task.kernel) gdt.KERNEL_DATA_OFFSET else gdt.USER_DATA_OFFSET | 0b11;
         // Setting the bottom two bits of the code offset designates that this is a ring 3 task

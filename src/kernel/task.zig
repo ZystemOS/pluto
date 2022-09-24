@@ -92,7 +92,6 @@ pub const Task = struct {
             .vmm = task_vmm,
         };
 
-        log.info("alloc_kernel_stack: {s}, kernel: {s}, stack size: {}\n", .{ alloc_kernel_stack, kernel, k_stack.len });
         try arch.initTask(task, entry_point, allocator, alloc_kernel_stack);
 
         return task;
@@ -141,7 +140,7 @@ pub const Task = struct {
         freePid(self.pid) catch |e| panic(@errorReturnTrace(), "Failed to free task's PID ({}): {}\n", .{ self.pid, e });
         // We need to check that the the stack has been allocated as task 0 (init) won't have a
         // stack allocated as this in the linker script
-        if (@ptrToInt(self.kernel_stack.ptr) != @ptrToInt(&KERNEL_STACK_START)) {
+        if (@ptrToInt(self.kernel_stack.ptr) != @ptrToInt(&KERNEL_STACK_START) and self.kernel_stack.len > 0) {
             allocator.free(self.kernel_stack);
         }
         if (!self.kernel) {
