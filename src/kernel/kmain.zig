@@ -151,6 +151,8 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to schedule init stage 2 task: {}\n", .{e});
     };
 
+    kmain_log.info("Kernel heap free: {} KB / {} KB\n", .{ kernel_heap.bytesFree() / 1024, heap_size / 1024 });
+
     // Can't return for now, later this can return maybe
     // TODO: Maybe make this the idle task
     arch.spinWait();
