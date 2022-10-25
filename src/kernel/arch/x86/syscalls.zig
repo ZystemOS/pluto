@@ -3,13 +3,12 @@ const log = std.log.scoped(.x86_syscalls);
 const builtin = @import("builtin");
 const is_test = builtin.is_test;
 const build_options = @import("build_options");
-const arch = if (is_test) @import("arch_mock") else @import("arch.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 const testing = std.testing;
 const expect = std.testing.expect;
 const isr = @import("isr.zig");
-const pluto = @import("pluto");
-const panic = pluto.panic_root.panic;
-const syscalls = pluto.syscalls;
+const panic = @import("../../panic.zig").panic;
+const syscalls = @import("../../syscalls.zig");
 
 /// The isr number associated with syscalls
 pub const INTERRUPT: u16 = 0x80;

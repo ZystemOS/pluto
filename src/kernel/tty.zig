@@ -3,9 +3,7 @@ const fmt = std.fmt;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.tty);
 const build_options = @import("build_options");
-const builtin = @import("builtin");
-const is_test = builtin.is_test;
-const arch = if (is_test) @import("arch_mock") else @import("arch");
+const arch = @import("arch.zig").internals;
 const panic = @import("panic.zig").panic;
 
 /// The OutStream for the format function
