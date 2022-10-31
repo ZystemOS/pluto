@@ -498,7 +498,12 @@ pub fn VirtualMemoryManager(comptime Payload: type) type {
                 } else {
                     std.mem.copy(u8, data, data_copy);
                 }
-                // TODO Unmap and freee virtual blocks from self so they can be used in the future
+                // Unmap and free virtual blocks from self so they can be used in the future
+                var i: usize = 0;
+                while (i < blocks.items.len) : (i += 1) {
+                    self.bmp.clearEntry(entry + i) catch |e| panic(@errorReturnTrace(), "Failed to free temporary virtual memory at 0x{X}: {}\n", .{ entry * BLOCK_SIZE + self.start, e });
+                    self.mapper.unmapFn(entry * BLOCK_SIZE + self.start, entry * BLOCK_SIZE + BLOCK_SIZE + self.start, self.allocator, self.payload) catch unreachable;
+                }
             } else {
                 return VmmError.OutOfMemory;
             }
@@ -1029,7 +1034,7 @@ fn rt_correctMapping(comptime Payload: type, vmm: *VirtualMemoryManager(Payload)
 ///     IN vmm: *VirtualMemoryManager() - The active VMM to test
 ///
 fn rt_copyData(vmm: *VirtualMemoryManager(arch.VmmPayload)) void {
-    const expected_free_entries = vmm.bmp.num_free_entries - 1;
+    const expected_free_entries = vmm.bmp.num_free_entries;
     // Mirror the VMM
     var vmm2 = vmm.copy() catch |e| {
         panic(@errorReturnTrace(), "Failed to mirror VMM: {}\n", .{e});
