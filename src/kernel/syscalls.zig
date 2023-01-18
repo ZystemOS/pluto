@@ -2,9 +2,7 @@ const std = @import("std");
 const scheduler = @import("scheduler.zig");
 const panic = @import("panic.zig").panic;
 const log = std.log.scoped(.syscalls);
-const builtin = @import("builtin");
-const is_test = builtin.is_test;
-const arch = if (is_test) @import("arch_mock") else @import("arch");
+const arch = @import("arch.zig").internals;
 
 /// A compilation of all errors that syscall handlers could return.
 pub const Error = error{OutOfMemory};
