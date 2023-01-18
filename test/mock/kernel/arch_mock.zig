@@ -213,11 +213,12 @@ pub fn initMem(payload: BootPayload) Allocator.Error!mem.MemProfile {
     };
 }
 
-pub fn initTask(t: *Task, entry_point: usize, allocator: Allocator) Allocator.Error!void {
+pub fn initTask(t: *Task, entry_point: usize, allocator: Allocator, set_up_stack: bool) Allocator.Error!void {
     // Suppress unused variable warnings
     _ = t;
     _ = entry_point;
     _ = allocator;
+    _ = set_up_stack;
 }
 
 pub fn initKeyboard(allocator: Allocator) Allocator.Error!?*Keyboard {

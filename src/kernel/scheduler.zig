@@ -137,15 +137,13 @@ pub fn init(allocator: Allocator, mem_profile: *const mem.MemProfile) Allocator.
     // Init the task list for round robin
     tasks = TailQueue(*Task){};
 
-    // Set up the init task to continue execution
-    current_task = try allocator.create(Task);
+    // Set up the init task to continue execution.
+    // The kernel stack will point to the stack section rather than the heap
+    current_task = try Task.create(0, true, &vmm.kernel_vmm, allocator, false);
     errdefer allocator.destroy(current_task);
-    // PID 0
-    current_task.pid = 0;
+
     const kernel_stack_size = @ptrToInt(&KERNEL_STACK_END) - @ptrToInt(&KERNEL_STACK_START);
     current_task.kernel_stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..kernel_stack_size];
-    current_task.user_stack = &[_]usize{};
-    current_task.kernel = true;
     // ESP will be saved on next schedule
 
     // Run the runtime tests here
@@ -155,7 +153,7 @@ pub fn init(allocator: Allocator, mem_profile: *const mem.MemProfile) Allocator.
     }
 
     // Create the idle task when there are no more tasks left
-    var idle_task = try Task.create(@ptrToInt(idle), true, &vmm.kernel_vmm, allocator);
+    var idle_task = try Task.create(@ptrToInt(idle), true, &vmm.kernel_vmm, allocator, true);
     errdefer idle_task.destroy(allocator);
 
     try scheduleTask(idle_task, allocator);
@@ -195,21 +193,21 @@ test "pickNextTask" {
     tasks = TailQueue(*Task){};
 
     // Set up a current task
-    var first = try allocator.create(Task);
+    var first = try Task.create(0, true, &vmm.kernel_vmm, allocator, false);
     // We use an intermediary variable to avoid a double-free.
     // Deferring freeing current_task will free whatever current_task points to at the end
-    defer allocator.destroy(first);
+    defer first.destroy(allocator);
     current_task = first;
     current_task.pid = 0;
     current_task.kernel_stack = @intToPtr([*]u32, @ptrToInt(&KERNEL_STACK_START))[0..4096];
     current_task.stack_pointer = @ptrToInt(&KERNEL_STACK_START);
 
     // Create two tasks and schedule them
-    var test_fn1_task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator);
+    var test_fn1_task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator, true);
     defer test_fn1_task.destroy(allocator);
     try scheduleTask(test_fn1_task, allocator);
 
-    var test_fn2_task = try Task.create(@ptrToInt(test_fn2), true, undefined, allocator);
+    var test_fn2_task = try Task.create(@ptrToInt(test_fn2), true, undefined, allocator, true);
     defer test_fn2_task.destroy(allocator);
     try scheduleTask(test_fn2_task, allocator);
 
@@ -254,7 +252,7 @@ test "createNewTask add new task" {
     // Init the task list
     tasks = TailQueue(*Task){};
 
-    var test_fn1_task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator);
+    var test_fn1_task = try Task.create(@ptrToInt(test_fn1), true, undefined, allocator, true);
     defer test_fn1_task.destroy(allocator);
     try scheduleTask(test_fn1_task, allocator);
 
@@ -309,7 +307,7 @@ fn rt_variable_preserved(allocator: Allocator) void {
     defer allocator.destroy(is_set);
     is_set.* = true;
 
-    var test_task = Task.create(@ptrToInt(task_function), true, &vmm.kernel_vmm, allocator) catch |e| panic(@errorReturnTrace(), "Failed to create task in rt_variable_preserved: {}\n", .{e});
+    var test_task = Task.create(@ptrToInt(task_function), true, &vmm.kernel_vmm, allocator, true) catch |e| panic(@errorReturnTrace(), "Failed to create task in rt_variable_preserved: {}\n", .{e});
     scheduleTask(test_task, allocator) catch |e| panic(@errorReturnTrace(), "Failed to schedule a task in rt_variable_preserved: {}\n", .{e});
     // TODO: Need to add the ability to remove tasks
 

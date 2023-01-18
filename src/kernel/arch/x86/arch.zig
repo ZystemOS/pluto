@@ -531,8 +531,8 @@ pub fn initKeyboard(allocator: Allocator) Allocator.Error!*Keyboard {
 }
 
 ///
-/// Initialise a stack used for creating a task.
-/// Currently only support fn () noreturn functions for the entry point.
+/// Initialise a stack and vmm payload used for creating a task.
+/// Currently only supports fn () noreturn functions for the entry point.
 ///
 /// Arguments:
 ///     IN task: *Task           - The task to be initialised. The function will only modify whatever
@@ -541,62 +541,66 @@ pub fn initKeyboard(allocator: Allocator) Allocator.Error!*Keyboard {
 ///     IN entry_point: usize    - The pointer to the entry point of the function. Functions only
 ///                                supported is fn () noreturn
 ///     IN allocator: Allocator - The allocator use for allocating a stack.
+///     IN set_up_stack: bool   - Set up the kernel and user stacks (register values, PC etc.) for task entry
 ///
 /// Error: Allocator.Error
 ///     OutOfMemory - Unable to allocate space for the stack.
 ///
-pub fn initTask(task: *Task, entry_point: usize, allocator: Allocator) Allocator.Error!void {
-    const data_offset = if (task.kernel) gdt.KERNEL_DATA_OFFSET else gdt.USER_DATA_OFFSET | 0b11;
-    // Setting the bottom two bits of the code offset designates that this is a ring 3 task
-    const code_offset = if (task.kernel) gdt.KERNEL_CODE_OFFSET else gdt.USER_CODE_OFFSET | 0b11;
-    // Ring switches push and pop two extra values on interrupt: user_esp and user_ss
-    const kernel_stack_bottom = if (task.kernel) task.kernel_stack.len - 18 else task.kernel_stack.len - 20;
-
-    var stack = &task.kernel_stack;
-
+pub fn initTask(task: *Task, entry_point: usize, allocator: Allocator, set_up_stack: bool) Allocator.Error!void {
     // TODO Will need to add the exit point
     // Set up everything as a kernel task
     task.vmm.payload = &paging.kernel_directory;
-    stack.*[kernel_stack_bottom] = mem.virtToPhys(@ptrToInt(&paging.kernel_directory));
-    stack.*[kernel_stack_bottom + 1] = data_offset; // gs
-    stack.*[kernel_stack_bottom + 2] = data_offset; // fs
-    stack.*[kernel_stack_bottom + 3] = data_offset; // es
-    stack.*[kernel_stack_bottom + 4] = data_offset; // ds
 
-    stack.*[kernel_stack_bottom + 5] = 0; // edi
-    stack.*[kernel_stack_bottom + 6] = 0; // esi
-    // End of the stack
-    stack.*[kernel_stack_bottom + 7] = @ptrToInt(&stack.*[stack.len - 1]); // ebp
-    stack.*[kernel_stack_bottom + 8] = 0; // esp (temp) this won't be popped by popa bc intel is dump XD
+    var stack = &task.kernel_stack;
+    const kernel_stack_bottom = if (!set_up_stack) 0 else if (task.kernel) task.kernel_stack.len - 18 else task.kernel_stack.len - 20;
+    if (set_up_stack) {
+        const data_offset = if (task.kernel) gdt.KERNEL_DATA_OFFSET else gdt.USER_DATA_OFFSET | 0b11;
+        // Setting the bottom two bits of the code offset designates that this is a ring 3 task
+        const code_offset = if (task.kernel) gdt.KERNEL_CODE_OFFSET else gdt.USER_CODE_OFFSET | 0b11;
+        // Ring switches push and pop two extra values on interrupt: user_esp and user_ss
 
-    stack.*[kernel_stack_bottom + 9] = 0; // ebx
-    stack.*[kernel_stack_bottom + 10] = 0; // edx
-    stack.*[kernel_stack_bottom + 11] = 0; // ecx
-    stack.*[kernel_stack_bottom + 12] = 0; // eax
+        stack.*[kernel_stack_bottom] = mem.virtToPhys(@ptrToInt(&paging.kernel_directory));
+        stack.*[kernel_stack_bottom + 1] = data_offset; // gs
+        stack.*[kernel_stack_bottom + 2] = data_offset; // fs
+        stack.*[kernel_stack_bottom + 3] = data_offset; // es
+        stack.*[kernel_stack_bottom + 4] = data_offset; // ds
 
-    stack.*[kernel_stack_bottom + 13] = 0; // int_num
-    stack.*[kernel_stack_bottom + 14] = 0; // error_code
+        stack.*[kernel_stack_bottom + 5] = 0; // edi
+        stack.*[kernel_stack_bottom + 6] = 0; // esi
+        // End of the stack
+        stack.*[kernel_stack_bottom + 7] = @ptrToInt(&stack.*[stack.len - 1]); // ebp
+        stack.*[kernel_stack_bottom + 8] = 0; // esp (temp) this won't be popped by popa bc intel is dump XD
 
-    stack.*[kernel_stack_bottom + 15] = entry_point; // eip
-    stack.*[kernel_stack_bottom + 16] = code_offset; // cs
-    stack.*[kernel_stack_bottom + 17] = 0x202; // eflags
+        stack.*[kernel_stack_bottom + 9] = 0; // ebx
+        stack.*[kernel_stack_bottom + 10] = 0; // edx
+        stack.*[kernel_stack_bottom + 11] = 0; // ecx
+        stack.*[kernel_stack_bottom + 12] = 0; // eax
 
-    if (!task.kernel) {
-        // Put the extra values on the kernel stack needed when chaning privilege levels
-        stack.*[kernel_stack_bottom + 18] = @ptrToInt(&task.user_stack[task.user_stack.len - 1]); // user_esp
-        stack.*[kernel_stack_bottom + 19] = data_offset; // user_ss
+        stack.*[kernel_stack_bottom + 13] = 0; // int_num
+        stack.*[kernel_stack_bottom + 14] = 0; // error_code
 
-        if (!builtin.is_test) {
-            // Create a new page directory for the user task by mirroring the kernel directory
-            // We need kernel mem mapped so we don't get a page fault when entering kernel code from an interrupt
-            task.vmm.payload = &(try allocator.allocAdvanced(paging.Directory, paging.PAGE_SIZE_4KB, 1, .exact))[0];
-            task.vmm.payload.* = paging.kernel_directory.copy();
+        stack.*[kernel_stack_bottom + 15] = entry_point; // eip
+        stack.*[kernel_stack_bottom + 16] = code_offset; // cs
+        stack.*[kernel_stack_bottom + 17] = 0x202; // eflags
+        if (!task.kernel) {
+            // Put the extra values on the kernel stack needed when chaning privilege levels
+            stack.*[kernel_stack_bottom + 18] = @ptrToInt(&task.user_stack[task.user_stack.len - 1]); // user_esp
+            stack.*[kernel_stack_bottom + 19] = data_offset; // user_ss
+        }
+        task.stack_pointer = @ptrToInt(&stack.*[kernel_stack_bottom]);
+    }
+
+    if (!task.kernel and !builtin.is_test) {
+        // Create a new page directory for the user task by mirroring the kernel directory
+        // We need kernel mem mapped so we don't get a page fault when entering kernel code from an interrupt
+        task.vmm.payload = &(try allocator.allocAdvanced(paging.Directory, paging.PAGE_SIZE_4KB, 1, .exact))[0];
+        task.vmm.payload.* = paging.kernel_directory.copy();
+        if (set_up_stack) {
             stack.*[kernel_stack_bottom] = vmm.kernel_vmm.virtToPhys(@ptrToInt(task.vmm.payload)) catch |e| {
                 panic(@errorReturnTrace(), "Failed to get the physical address of the user task's page directory: {}\n", .{e});
             };
         }
     }
-    task.stack_pointer = @ptrToInt(&stack.*[kernel_stack_bottom]);
 }
 
 ///
