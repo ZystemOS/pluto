@@ -3,14 +3,7 @@ const is_test = @import("builtin").is_test;
 const scheduler = @import("scheduler.zig");
 const panic = @import("panic.zig").panic;
 const log = std.log.scoped(.syscalls);
-const arch = if (is_test) @import("arch_mock") else @import("arch");
-const vfs = @import("filesystem/vfs.zig");
-const vmm = @import("vmm.zig");
-const bitmap = @import("bitmap.zig");
-const task = @import("task.zig");
-const mem = @import("mem.zig");
-const pmm = @import("pmm.zig");
-const testing = std.testing;
+const arch = @import("arch.zig").internals;
 
 var allocator: std.mem.Allocator = undefined;
 

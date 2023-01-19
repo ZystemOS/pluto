@@ -1,24 +1,23 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const arch = if (is_test) @import("arch_mock") else @import("arch");
-const pluto = @import("pluto");
-const build_options = @import("build_options");
-const is_test = builtin.is_test;
 const kmain_log = std.log.scoped(.kmain);
+const builtin = @import("builtin");
+const is_test = builtin.is_test;
+const build_options = @import("build_options");
+const arch = @import("arch.zig").internals;
+const tty = @import("tty.zig");
+const log_root = @import("log.zig");
+const pmm = @import("pmm.zig");
+const serial = @import("serial.zig");
+const vmm = @import("vmm.zig");
+const mem = @import("mem.zig");
+const panic_root = @import("panic.zig");
+const task = @import("task.zig");
+const heap = @import("heap.zig");
+const scheduler = @import("scheduler.zig");
+const vfs = @import("filesystem/vfs.zig");
+const initrd = @import("filesystem/initrd.zig");
+const keyboard = @import("keyboard.zig");
 const Allocator = std.mem.Allocator;
-const tty = pluto.tty;
-const panic_root = pluto.panic_root;
-const log_root = pluto.log_root;
-const heap = pluto.heap;
-const serial = pluto.serial;
-const pmm = pluto.pmm;
-const vmm = pluto.vmm;
-const keyboard = pluto.keyboard;
-const initrd = pluto.initrd;
-const vfs = pluto.vfs;
-const scheduler = pluto.scheduler;
-const task = pluto.task;
-const syscalls = pluto.syscalls;
 
 comptime {
     if (!is_test) {
