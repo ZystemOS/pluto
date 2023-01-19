@@ -2,9 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
-const builtin = @import("builtin");
-const is_test = builtin.is_test;
-const arch = if (is_test) @import("arch_mock") else @import("arch");
+const arch = @import("arch.zig").internals;
 
 /// An arbitrary number of keys to remember before dropping any more that arrive. Is a power of two so we can use nice overflowing addition
 pub const QUEUE_SIZE = 32;

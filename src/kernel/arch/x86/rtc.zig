@@ -6,11 +6,11 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const log = std.log.scoped(.x86_rtc);
 const build_options = @import("build_options");
-const arch = if (is_test) @import("arch_mock") else @import("arch.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 const pic = @import("pic.zig");
 const pit = @import("pit.zig");
 const irq = @import("irq.zig");
-const cmos = if (is_test) @import("arch_mock").cmos_mock else @import("cmos.zig");
+const cmos = if (is_test) @import("../../../../test/mock/kernel/cmos_mock.zig") else @import("cmos.zig");
 const panic = @import("../../panic.zig").panic;
 const scheduler = @import("../../scheduler.zig");
 

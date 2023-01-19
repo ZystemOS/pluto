@@ -1,4 +1,6 @@
-const src_gdt = @import("arch").gdt;
+// Can't do: TODO: https://github.com/SamTebbs33/pluto/issues/77
+//const src_gdt = @import("arch").gdt;
+const src_gdt = @import("../../../src/kernel/arch/x86/gdt.zig");
 
 const mock_framework = @import("mock_framework.zig");
 pub const initTest = mock_framework.initTest;

@@ -1,5 +1,7 @@
 const build_options = @import("build_options");
 const mock_path = build_options.mock_path;
+const builtin = std.builtin;
+const is_test = builtin.is_test;
 const std = @import("std");
 const log = std.log.scoped(.vmm);
 const bitmap = @import("bitmap.zig");
@@ -7,9 +9,7 @@ const pmm = @import("pmm.zig");
 const mem = @import("mem.zig");
 const tty = @import("tty.zig");
 const panic = @import("panic.zig").panic;
-const builtins = @import("builtin");
-const is_test = builtins.is_test;
-const arch = if (is_test) @import("arch_mock") else @import("arch");
+const arch = @import("arch.zig").internals;
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 

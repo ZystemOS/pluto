@@ -8,8 +8,8 @@ const log = std.log.scoped(.x86_isr);
 const build_options = @import("build_options");
 const syscalls = @import("syscalls.zig");
 const panic = @import("../../panic.zig").panic;
-const idt = if (is_test) @import("arch_mock").idt_mock else @import("idt.zig");
-const arch = if (is_test) @import("arch_mock") else @import("arch.zig");
+const idt = if (is_test) @import("../../../../test/mock/kernel/idt_mock.zig") else @import("idt.zig");
+const arch = if (is_test) @import("../../../../test/mock/kernel/arch_mock.zig") else @import("arch.zig");
 const interrupts = @import("interrupts.zig");
 
 /// The error set for the ISR. This will be from installing a ISR handler.

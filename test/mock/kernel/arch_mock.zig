@@ -1,25 +1,18 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const pluto = @import("pluto");
-const arch = @import("arch");
+const Allocator = std.mem.Allocator;
+const mem = @import("../../../src/kernel/mem.zig");
+const MemProfile = mem.MemProfile;
 const pci = @import("pci_mock.zig");
 const gdt = @import("gdt_mock.zig");
 const idt = @import("idt_mock.zig");
+const vmm = @import("../../../src/kernel/vmm.zig");
 const paging = @import("paging_mock.zig");
-pub const cmos_mock = @import("cmos_mock.zig");
-pub const vga_mock = @import("vga_mock.zig");
-pub const pic_mock = @import("pic_mock.zig");
-pub const idt_mock = @import("idt_mock.zig");
-pub const pci_mock = @import("pci_mock.zig");
-const x86_paging = arch.paging;
-const vmm = pluto.vmm;
-const mem = pluto.mem;
-const Serial = pluto.serial.Serial;
-const TTY = pluto.tty.TTY;
-const Keyboard = pluto.keyboard.Keyboard;
-const task = pluto.task;
-const Allocator = std.mem.Allocator;
-const MemProfile = mem.MemProfile;
+const Serial = @import("../../../src/kernel/serial.zig").Serial;
+const TTY = @import("../../../src/kernel/tty.zig").TTY;
+const Keyboard = @import("../../../src/kernel/keyboard.zig").Keyboard;
+const task = @import("../../../src/kernel/task.zig");
+const x86_paging = @import("../../../src/kernel/arch/x86/paging.zig");
 
 pub const Device = pci.PciDeviceInfo;
 pub const DateTime = struct {
@@ -213,11 +206,12 @@ pub fn initMem(payload: BootPayload) Allocator.Error!mem.MemProfile {
     };
 }
 
-pub fn initTask(t: *Task, entry_point: usize, allocator: Allocator) Allocator.Error!void {
+pub fn initTask(t: *Task, entry_point: usize, allocator: Allocator, set_up_stack: bool) Allocator.Error!void {
     // Suppress unused variable warnings
     _ = t;
     _ = entry_point;
     _ = allocator;
+    _ = set_up_stack;
 }
 
 pub fn initKeyboard(allocator: Allocator) Allocator.Error!?*Keyboard {
