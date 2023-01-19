@@ -1,9 +1,16 @@
 const std = @import("std");
+const testing = std.testing;
 const is_test = @import("builtin").is_test;
 const scheduler = @import("scheduler.zig");
 const panic = @import("panic.zig").panic;
 const log = std.log.scoped(.syscalls);
 const arch = @import("arch.zig").internals;
+const vfs = @import("filesystem/vfs.zig");
+const task = @import("task.zig");
+const vmm = @import("vmm.zig");
+const mem = @import("mem.zig");
+const pmm = @import("pmm.zig");
+const bitmap = @import("bitmap.zig");
 
 var allocator: std.mem.Allocator = undefined;
 
@@ -477,7 +484,7 @@ test "handleOpen" {
     var buffer_allocator = fixed_buffer_allocator.allocator();
     defer testDeinitMem(allocator, fixed_buffer_allocator);
 
-    scheduler.current_task = try task.Task.create(0, true, undefined, allocator);
+    scheduler.current_task = try task.Task.create(0, true, undefined, allocator, true);
     defer scheduler.current_task.destroy(allocator);
     var current_task = scheduler.current_task;
 
@@ -539,7 +546,7 @@ test "handleRead" {
     var fixed_buffer_allocator = try testInitMem(1, allocator, true);
     var buffer_allocator = fixed_buffer_allocator.allocator();
     defer testDeinitMem(allocator, fixed_buffer_allocator);
-    scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+    scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator, true);
     defer scheduler.current_task.destroy(allocator);
     _ = scheduler.current_task;
 
@@ -605,7 +612,7 @@ test "handleRead errors" {
         var buffer_allocator = fixed_buffer_allocator.allocator();
         defer testDeinitMem(allocator, fixed_buffer_allocator);
 
-        scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+        scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator, true);
         defer scheduler.current_task.destroy(allocator);
 
         // Invalid file handle
@@ -644,7 +651,7 @@ test "handleWrite" {
     var buffer_allocator = fixed_buffer_allocator.allocator();
     defer testDeinitMem(allocator, fixed_buffer_allocator);
 
-    scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+    scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator, true);
     defer scheduler.current_task.destroy(allocator);
 
     const empty = arch.CpuState.empty();
@@ -688,7 +695,7 @@ test "handleWrite errors" {
         var buffer_allocator = fixed_buffer_allocator.allocator();
         defer testDeinitMem(allocator, fixed_buffer_allocator);
 
-        scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+        scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator, true);
         defer scheduler.current_task.destroy(allocator);
 
         // Invalid file handle
@@ -732,7 +739,7 @@ test "handleOpen errors" {
         var buffer_allocator = fixed_buffer_allocator.allocator();
         defer testDeinitMem(allocator, fixed_buffer_allocator);
 
-        scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator);
+        scheduler.current_task = try task.Task.create(0, true, &vmm.kernel_vmm, allocator, true);
         defer scheduler.current_task.destroy(allocator);
 
         // Check opening with no free file handles left

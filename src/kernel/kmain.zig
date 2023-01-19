@@ -17,6 +17,7 @@ const scheduler = @import("scheduler.zig");
 const vfs = @import("filesystem/vfs.zig");
 const initrd = @import("filesystem/initrd.zig");
 const keyboard = @import("keyboard.zig");
+const syscalls = @import("syscalls.zig");
 const Allocator = std.mem.Allocator;
 
 comptime {
