@@ -173,14 +173,48 @@ pub const Task = struct {
         allocator.destroy(self);
     }
 
+    ///
+    /// Get the VFS node associated with a VFS handle.
+    ///
+    /// Arguments:
+    ///     IN self: *Self - The pointer to self.
+    ///     IN handle: Handle - The handle to get the node for. Must have been returned from addVFSHandle.
+    ///
+    /// Return: *vfs.Node
+    ///     The node associated with the handle.
+    ///
+    /// Error: bitmap.BitmapError
+    ///     See Bitmap.
+    ///
     pub fn getVFSHandle(self: Self, handle: Handle) bitmap.BitmapError!?*vfs.Node {
         return self.file_handle_mapping.get(handle);
     }
 
+    ///
+    /// Check if the task has free handles to allocate.
+    ///
+    /// Arguments:
+    ///     IN self: Self - The self.
+    ///
+    /// Return: bool
+    ///     True if there are free handles, else false.
+    ///
     pub fn hasFreeVFSHandle(self: Self) bool {
         return self.file_handles.num_free_entries > 0;
     }
 
+    ///
+    /// Add a handle associated with a node. The node can later be retrieved with getVFSHandle.
+    ///
+    /// Arguments:
+    ///     IN self: *Self - The pointer to self.
+    ///     IN node: *vfs.Node - The node to associate with the returned handle.
+    ///
+    /// Return: Handle
+    ///     The handle now associated with the vfs node.
+    ///
+    /// Error: std.mem.Allocator.Error
+    ///
     pub fn addVFSHandle(self: *Self, node: *vfs.Node) std.mem.Allocator.Error!?Handle {
         if (self.file_handles.setFirstFree()) |handle| {
             const real_handle = @intCast(Handle, handle);
@@ -190,10 +224,34 @@ pub const Task = struct {
         return null;
     }
 
+    ///
+    /// Check if the task has a certain handle registered.
+    ///
+    /// Arguments:
+    ///     IN self: Self - The self.
+    ///     IN handle: Handle - The handle to check.
+    ///
+    /// Return: bool
+    ///     True if the handle has been registered to this task, else false.
+    ///
+    /// Error: bitmap.BitmapError
+    ///     See Bitmap.
+    ///
     pub fn hasVFSHandle(self: Self, handle: Handle) bitmap.BitmapError!bool {
         return self.file_handles.isSet(handle);
     }
 
+    ///
+    /// Clear a registered handle and de-associate the node from it.
+    ///
+    /// Arguments:
+    ///     IN self: *Self - The pointer to self.
+    ///     IN handle: Handle - The handle to clear. Must have been registered before.
+    ///
+    /// Error: bitmap.BitmapError || Error
+    ///     bitmap.BitmapError.* - See bitmap.BitmapError
+    ///     Error.VFSHandleNotSet - The handle has not previously been registered
+    ///
     pub fn clearVFSHandle(self: *Self, handle: Handle) (bitmap.BitmapError || Error)!void {
         if (try self.hasVFSHandle(handle)) {
             try self.file_handles.clearEntry(handle);
