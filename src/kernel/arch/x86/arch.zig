@@ -681,7 +681,7 @@ pub fn runtimeTestChecksMem(the_vmm: *const vmm.VirtualMemoryManager(VmmPayload)
         addr += vmm.BLOCK_SIZE;
     }
     const should_fault = @intToPtr(*usize, addr).*;
-    _ = should_fault;
+    log.debug("This should not be printed: {x}\n", .{should_fault});
 }
 
 test "" {
