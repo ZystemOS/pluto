@@ -416,13 +416,20 @@ pub fn unmap(virtual_start: usize, virtual_end: usize, allocator: Allocator, dir
 }
 
 ///
-/// Called when a page fault occurs. This will log the CPU state and control registers.
+/// Called when a page fault occurs.
+/// This will log the CPU state and control registers as well as some human-readable information.
 ///
 /// Arguments:
 ///     IN state: *arch.CpuState - The CPU's state when the fault occurred.
 ///
 fn pageFault(state: *arch.CpuState) u32 {
-    log.info("State: {X}\n", .{state});
+    const err = state.error_code;
+    const diag_present = if (err & 0b1 != 0) "present" else "non-present";
+    const diag_rw = if (err & 0b10 != 0) "writing to" else "reading from";
+    const diag_ring = if (err & 0b100 != 0) "user" else "kernel";
+    const diag_reserved = if (err & 0b1000 != 0) " with reserved bit set" else "";
+    const diag_fetch = if (err & 0b10000 != 0) "instruction" else "data";
+    log.info("Page fault: {s} process {s} a {s} page during {s} fetch{s}\n", .{ diag_ring, diag_rw, diag_present, diag_fetch, diag_reserved });
     var cr0 = asm volatile ("mov %%cr0, %[cr0]"
         : [cr0] "=r" (-> u32),
     );
@@ -435,7 +442,8 @@ fn pageFault(state: *arch.CpuState) u32 {
     var cr4 = asm volatile ("mov %%cr4, %[cr4]"
         : [cr4] "=r" (-> u32),
     );
-    log.info("CR0: 0x{X}, CR2: 0x{X}, CR3: 0x{X}, CR4: 0x{X}\n", .{ cr0, cr2, cr3, cr4 });
+    log.info("CR0: 0x{X}, CR2/address: 0x{X}, CR3: 0x{X}, CR4: 0x{X}, EIP: 0x{X}\n", .{ cr0, cr2, cr3, cr4, state.eip });
+    log.info("State: {X}\n", .{state});
     @panic("Page fault");
 }
 

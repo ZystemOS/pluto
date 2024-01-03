@@ -81,9 +81,10 @@ export fn kmain(boot_payload: arch.BootPayload) void {
         panic_root.panic(@errorReturnTrace(), "Failed to initialise panic symbols: {}\n", .{e});
     };
 
-    // The VMM runtime tests can't happen until the architecture has initialised itself
+    // The VMM and mem runtime tests can't happen until the architecture has initialised itself
     switch (build_options.test_mode) {
         .Initialisation => vmm.runtimeTests(arch.VmmPayload, kernel_vmm, &mem_profile),
+        .Memory => arch.runtimeTestChecksMem(kernel_vmm),
         else => {},
     }
 

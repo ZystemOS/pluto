@@ -669,6 +669,21 @@ pub fn runtimeTestCheckUserTaskState(ctx: *const CpuState) bool {
     return ctx.eax == 0xCAFE and ctx.ebx == 0xBEEF;
 }
 
+///
+/// Trigger a page fault to test paging and its diagnostics
+///
+/// Arguments:
+///     IN the_vmm: The VMM to get an unallocated test address from
+///
+pub fn runtimeTestChecksMem(the_vmm: *const vmm.VirtualMemoryManager(VmmPayload)) void {
+    var addr = the_vmm.start;
+    while (addr < the_vmm.end and (the_vmm.isSet(addr) catch unreachable)) {
+        addr += vmm.BLOCK_SIZE;
+    }
+    const should_fault = @intToPtr(*usize, addr).*;
+    log.debug("This should not be printed: {x}\n", .{should_fault});
+}
+
 test "" {
     std.testing.refAllDecls(@This());
 }

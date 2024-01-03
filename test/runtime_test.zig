@@ -30,6 +30,9 @@ pub const TestMode = enum {
     /// Run the scheduler runtime test.
     Scheduler,
 
+    /// Run the memory runtime test.
+    Memory,
+
     ///
     /// Return a string description for the test mode provided.
     ///
@@ -45,6 +48,7 @@ pub const TestMode = enum {
             .Initialisation => "Initialisation runtime tests",
             .Panic => "Panic runtime tests",
             .Scheduler => "Scheduler runtime tests",
+            .Memory => "Memory runtime tests",
         };
     }
 };
@@ -173,6 +177,28 @@ pub const RuntimeStep = struct {
                 state = 2;
             }
             if (state == 2) {
+                return true;
+            }
+        }
+    }
+
+    ///
+    /// This tests the kernel's memory system and makes sure the expected diagnostics are printed.
+    ///
+    /// Arguments:
+    ///     IN/OUT self: *RuntimeStep - Self.
+    ///
+    /// Return: bool
+    ///     Whether the test has passed or failed.
+    ///
+    fn test_mem(self: *RuntimeStep) bool {
+        while (true) {
+            const msg = self.get_msg() catch return false;
+            defer self.builder.allocator.free(msg);
+
+            std.debug.print("{s}\n", .{msg});
+
+            if (std.mem.eql(u8, msg, "[info] (x86_paging): Page fault: kernel process reading from a non-present page during data fetch")) {
                 return true;
             }
         }
@@ -309,6 +335,7 @@ pub const RuntimeStep = struct {
                 .Initialisation => test_init,
                 .Panic => test_panic,
                 .Scheduler => test_scheduler,
+                .Memory => test_mem,
             },
         };
         return runtime_step;
